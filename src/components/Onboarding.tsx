@@ -1773,7 +1773,17 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
               <p className="text-[11px] text-white/50 leading-relaxed">
                 Nuestra aplicación utiliza IA avanzada para analizar tus fotos de comida, estimar tu porcentaje de grasa y estructurar rutinas en tiempo real. 
                 <br/><br/>
-                Para operar de forma personalizada e independiente de cuotas, es necesario que ingreses tu propia clave de Google AI Studio. <b>Esta clave es obligatoria para poder continuar con el onboarding.</b>
+                Para operar de forma personalizada e independiente de cuotas, es necesario que ingreses tu propia clave de Google AI Studio. <b>Esta clave es obligatoria para poder continuar.</b>
+                <br/><br/>
+                Puedes obtener tu clave completamente gratis ingresando aquí:{" "}
+                <a 
+                  href="https://aistudio.google.com/" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-emerald-400 font-bold hover:underline inline-flex items-center gap-0.5"
+                >
+                  Obtener API Key de Gemini
+                </a>
               </p>
 
               <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
