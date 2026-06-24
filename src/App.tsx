@@ -55,6 +55,9 @@ export default function App() {
 
           if (profileData) {
             setProfile(profileData);
+            if (profileData.apiKey) {
+              localStorage.setItem("trophia_api_key", profileData.apiKey);
+            }
           } else {
             // First time user, profile will be set after Onboarding
             setProfile(null);
@@ -86,6 +89,9 @@ export default function App() {
     try {
       await saveUserProfile(user.uid, completedProfile);
       setProfile(completedProfile);
+      if (completedProfile.apiKey) {
+        localStorage.setItem("trophia_api_key", completedProfile.apiKey);
+      }
       setActiveTab("dashboard");
     } catch (e) {
       console.error("Error saving onboarding profile:", e);
@@ -97,6 +103,11 @@ export default function App() {
     try {
       await saveUserProfile(user.uid, updatedProfile);
       setProfile(updatedProfile);
+      if (updatedProfile.apiKey) {
+        localStorage.setItem("trophia_api_key", updatedProfile.apiKey);
+      } else {
+        localStorage.removeItem("trophia_api_key");
+      }
     } catch (e) {
       console.error("Error updating profile:", e);
     }

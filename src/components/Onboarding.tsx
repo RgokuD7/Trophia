@@ -114,7 +114,10 @@ interface OnboardingProps {
 }
 
 export default function Onboarding({ onComplete, defaultName }: OnboardingProps) {
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(() => {
+    const savedKey = localStorage.getItem("trophia_api_key");
+    return (savedKey && savedKey.trim().length >= 15) ? 2 : 1;
+  });
   const [name, setName] = useState(defaultName || "Richard");
   const [age, setAge] = useState(25);
   const [sex, setSex] = useState<BiologicalSex>("male");
@@ -216,8 +219,15 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
   const [showEducationTutorial, setShowEducationTutorial] = useState(false);
 
   // Step 6 variables (API Key)
-  const [apiKey, setApiKey] = useState("");
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem("trophia_api_key") || "");
   const [showKey, setShowKey] = useState(false);
+
+  // Sync apiKey to localStorage when it changes
+  useEffect(() => {
+    if (apiKey && apiKey.trim().length >= 15) {
+      localStorage.setItem("trophia_api_key", apiKey);
+    }
+  }, [apiKey]);
 
   const availableEquipmentOptions = 
     environment === "gym" 
@@ -1206,6 +1216,13 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
                           <Sparkles className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                           <p className="text-[9.5px] text-white/60 leading-relaxed">
                             Sube fotos de tu fisionomía. <b>Si ingresaste datos de Cinta Métrica o Plicómetro arriba, la IA los utilizará para triangular una exactitud clínica inigualable.</b> Para mejores resultados, sube fotos de <b>Frente</b> y <b>Perfil</b>.
+                          </p>
+                        </div>
+
+                        <div className="bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/10 flex gap-2 items-start">
+                          <Info className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                          <p className="text-[9.5px] text-emerald-400/80 leading-relaxed">
+                            <b>🔒 Privacidad:</b> Tus fotografías <b>no se almacenan</b> en Trophia. Se transmiten de forma encriptada y directa a Google Gemini únicamente para estimar tu grasa corporal.
                           </p>
                         </div>
 

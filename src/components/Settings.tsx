@@ -52,6 +52,11 @@ export default function SettingsView({ profile, onUpdateProfile, onResetApp }: S
     };
 
     onUpdateProfile(updatedProfile);
+    if (apiKey && apiKey.trim().length >= 15) {
+      localStorage.setItem("trophia_api_key", apiKey);
+    } else {
+      localStorage.removeItem("trophia_api_key");
+    }
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2500);
   };
