@@ -116,7 +116,7 @@ export default function SettingsView({ profile, onUpdateProfile, onResetApp }: S
               type={showKey ? "text" : "password"}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Falta configurar (usando clave de demo)..."
+              placeholder="Ingresa tu clave de API de Gemini..."
               className="w-full bg-[#0f101a] border border-gray-800 focus:border-emerald-500/30 rounded-lg py-2 pl-9 pr-10 text-xs font-mono text-white outline-none"
             />
             <button

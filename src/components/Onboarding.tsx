@@ -1766,14 +1766,14 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
               <div className="flex items-center gap-2 text-emerald-400">
                 <Key className="h-5 w-5" />
                 <p className="text-xs font-bold text-white uppercase tracking-wider">
-                  Configura tu clave de API de Gemini (Opcional)
+                  Configura tu clave de API de Gemini
                 </p>
               </div>
 
               <p className="text-[11px] text-white/50 leading-relaxed">
                 Nuestra aplicación utiliza IA avanzada para analizar tus fotos de comida, estimar tu porcentaje de grasa y estructurar rutinas en tiempo real. 
                 <br/><br/>
-                Para operar de forma personalizada e independiente de cuotas, puedes ingresar tu clave de Google AI Studio. <b>Si la dejas en blanco, se utilizará la clave por defecto de nuestro servidor</b> para que puedas comenzar de inmediato.
+                Para operar de forma personalizada e independiente de cuotas, es necesario que ingreses tu propia clave de Google AI Studio. <b>Esta clave es obligatoria para poder continuar con el onboarding.</b>
               </p>
 
               <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
@@ -1783,7 +1783,7 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
                     type={showKey ? "text" : "password"}
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="AIzaSy... (Opcional, dejar en blanco para usar la del servidor)"
+                    placeholder="AIzaSy... (Obligatorio)"
                     className="w-full bg-[#121212] border border-white/10 focus:border-emerald-500/40 rounded-xl py-2.5 px-3 pr-10 text-xs text-white placeholder-white/20 outline-none transition font-mono"
                   />
                   <button
@@ -1889,9 +1889,9 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
           ) : step === 1 ? (
             <button
               onClick={handleNext}
-              disabled={apiKey !== "" && apiKey.trim().length < 15}
+              disabled={apiKey.trim().length < 15}
               className={`flex-1 py-3.5 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-1 hover:scale-[1.02] active:scale-[0.98] ${
-                apiKey === "" || apiKey.trim().length >= 15
+                apiKey.trim().length >= 15
                   ? "bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/15"
                   : "bg-emerald-950/40 text-white/20 cursor-not-allowed border border-white/5 opacity-50"
               }`}
