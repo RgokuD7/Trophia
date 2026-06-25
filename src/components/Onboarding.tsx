@@ -9,6 +9,8 @@ import { calculateBMI, getBMICategory, calculateNavyBodyFat, calculateCaliperBod
 import { analyzeFatByIA, recommendGoalByIA } from "../services/geminiService";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
+import neckMale from "../assets/neck_measurement_male.png";
+import neckFemale from "../assets/neck_measurement_female.png";
 
 const HEALTH_TIPS = [
   {
@@ -1978,32 +1980,12 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
               <div className="grid grid-cols-2 gap-4">
                 {/* Neck Diagram Card */}
                 <div className="bg-white/5 border border-white/5 rounded-2xl p-3 flex flex-col items-center text-center space-y-2">
-                  <div className="w-full aspect-square bg-black/40 rounded-xl border border-white/5 p-1 flex items-center justify-center relative">
-                    <svg className="w-full h-full" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      {/* Base Head & Neck silhouette */}
-                      <path d="M35 15 C 35 25, 42 28, 42 42 L 42 70 C 35 78, 20 85, 20 85" stroke="rgba(255,255,255,0.15)" strokeWidth="2.5" strokeLinecap="round" />
-                      <path d="M65 15 C 65 25, 58 28, 58 42 L 58 70 C 65 78, 80 85, 80 85" stroke="rgba(255,255,255,0.15)" strokeWidth="2.5" strokeLinecap="round" />
-                      {/* Chin */}
-                      <path d="M34 25 C 40 32, 60 32, 66 25" stroke="rgba(255,255,255,0.2)" strokeWidth="2" />
-                      
-                      {/* Adam's Apple */}
-                      <path d="M47 44 Q 50 49 53 44" stroke="#34d399" strokeWidth="2" fill="none" strokeLinecap="round" />
-                      
-                      {/* Tape loop below apple */}
-                      {/* Back part of tape */}
-                      <path d="M42 56 Q 50 53 58 56" stroke="#34d399" strokeWidth="2" opacity="0.3" strokeDasharray="2,2" />
-                      {/* Front part of tape */}
-                      <path d="M41 55 Q 50 60 59 55" stroke="#34d399" strokeWidth="3.5" strokeLinecap="round" />
-                      {/* Tape ticks */}
-                      <path d="M45 56 L45 58 M50 57.5 L50 59.5 M55 56 L55 58" stroke="#000" strokeWidth="1" />
-
-                      {/* Text labels embedded in diagram */}
-                      <text x="50" y="38" fill="rgba(255,255,255,0.4)" fontSize="5.5" textAnchor="middle" fontWeight="bold">MANZANA DE ADÁN</text>
-                      <path d="M50 40 L50 43" stroke="rgba(255,255,255,0.3)" strokeWidth="1" />
-                      
-                      <text x="50" y="73" fill="#34d399" fontSize="7" textAnchor="middle" fontWeight="black" fontFamily="monospace">CUELLO</text>
-                      <text x="50" y="80" fill="rgba(255,255,255,0.5)" fontSize="5" textAnchor="middle">Cinta nivelada sin apretar</text>
-                    </svg>
+                  <div className="w-full aspect-square bg-black/40 rounded-xl border border-white/5 overflow-hidden flex items-center justify-center relative">
+                    <img 
+                      src={sex === "female" ? neckFemale : neckMale} 
+                      alt="Guía de medición de cuello" 
+                      className="w-full h-full object-cover"
+                    />
                   </div>
                   <span className="font-mono font-bold text-emerald-400 uppercase block text-[9px] tracking-wider">1. CUELLO</span>
                   <p className="text-white/70 text-[9px] leading-relaxed">
