@@ -11,6 +11,15 @@ import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import neckMale from "../assets/neck_measurement_male.png";
 import neckFemale from "../assets/neck_measurement_female.png";
+import waistMeasurement from "../assets/waist_measurement.png";
+import hipMeasurement from "../assets/hip_measurement.png";
+import caliperTriceps from "../assets/caliper_triceps.png";
+import caliperAbdomen from "../assets/caliper_abdomen.png";
+import caliperThigh from "../assets/caliper_thigh.png";
+import poseFront from "../assets/pose_front.png";
+import poseSide from "../assets/pose_side.png";
+import poseLegs from "../assets/pose_legs.png";
+import poseFace from "../assets/pose_face.png";
 
 const HEALTH_TIPS = [
   {
@@ -164,6 +173,7 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [showGuideModal, setShowGuideModal] = useState(false);
+  const [guideTab, setGuideTab] = useState<"navy" | "caliper">("navy");
   
   // Custom states for premium Step 2 Flow
   const [showStep2Results, setShowStep2Results] = useState(false);
@@ -1097,7 +1107,10 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
                         )}
                         <button
                           type="button"
-                          onClick={() => setShowGuideModal(true)}
+                          onClick={() => {
+                            setGuideTab("navy");
+                            setShowGuideModal(true);
+                          }}
                           className="w-full text-center py-1.5 bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-bold text-emerald-400 transition cursor-pointer"
                         >
                           📐 Ver guía visual de medición
@@ -1132,8 +1145,20 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
 
                     {showCaliperEstimator && (
                       <div className="p-3.5 bg-black/20 border-t border-white/5 space-y-3 text-left">
-                        <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                          <span className="block text-[10px] font-bold text-amber-400 mb-1">📍 ¿Dónde medir? (Toma pliegues con plicómetro)</span>
+                        <div className="bg-white/5 p-3 rounded-xl border border-white/5 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="block text-[10px] font-bold text-amber-400">📍 ¿Dónde medir? (Toma pliegues con plicómetro)</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setGuideTab("caliper");
+                                setShowGuideModal(true);
+                              }}
+                              className="text-[8.5px] font-bold text-emerald-400 hover:text-emerald-350 px-2 py-0.5 bg-white/5 rounded-lg border border-white/5 hover:bg-white/10 transition cursor-pointer"
+                            >
+                              Ver Guía Visual
+                            </button>
+                          </div>
                           <p className="text-[9.5px] text-white/60 leading-relaxed space-y-1">
                             {sex === "male" ? (
                               <>
@@ -1240,7 +1265,7 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
                         {/* Image slots */}
                         <div className="grid grid-cols-2 gap-3">
                           {/* Front Photo Slot */}
-                          <div className="bg-black/20 border border-white/5 rounded-2xl p-2 flex flex-col space-y-1.5 items-center justify-between text-center min-h-[120px]">
+                          <div className="bg-black/20 border border-white/5 rounded-2xl p-2 flex flex-col space-y-1.5 items-center justify-between text-center min-h-[130px]">
                             <span className="text-[9px] font-bold text-white/70 uppercase tracking-wider flex items-center gap-1">
                               <span className="w-1 h-1 rounded-full bg-emerald-400"></span> Frente *
                             </span>
@@ -1250,16 +1275,19 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
                                 <button type="button" onClick={() => setFrontPhoto(null)} className="mt-1 text-[8px] text-rose-400 hover:underline font-bold">Eliminar</button>
                               </div>
                             ) : (
-                              <label className="cursor-pointer flex-1 w-full flex flex-col items-center justify-center border border-dashed border-white/10 hover:border-emerald-500/20 rounded-xl transition bg-black/40 p-1">
-                                <Camera className="h-4 w-4 text-white/40 mb-1" />
-                                <span className="text-[8px] text-white/50">Subir</span>
+                              <label className="group cursor-pointer flex-1 w-full flex flex-col items-center justify-between border border-dashed border-white/10 hover:border-emerald-500/20 rounded-xl transition bg-black/40 p-1.5 min-h-[90px]">
+                                <img src={poseFront} alt="Pose Frente" className="h-12 w-full object-contain opacity-25 group-hover:opacity-40 transition grayscale" />
+                                <div className="flex items-center gap-1 text-[8px] text-white/50 bg-white/5 px-2 py-0.5 rounded border border-white/5">
+                                  <Camera className="h-3 w-3 text-white/40" />
+                                  <span>Subir</span>
+                                </div>
                                 <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, "front")} className="hidden" />
                               </label>
                             )}
                           </div>
 
                            {/* Side Photo Slot */}
-                          <div className="bg-black/20 border border-white/5 rounded-2xl p-2 flex flex-col space-y-1.5 items-center justify-between text-center min-h-[120px]">
+                          <div className="bg-black/20 border border-white/5 rounded-2xl p-2 flex flex-col space-y-1.5 items-center justify-between text-center min-h-[130px]">
                             <span className="text-[9px] font-bold text-white/70 uppercase tracking-wider flex items-center gap-1">
                               <span className="w-1 h-1 rounded-full bg-emerald-400"></span> Perfil *
                             </span>
@@ -1269,16 +1297,19 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
                                 <button type="button" onClick={() => setSidePhoto(null)} className="mt-1 text-[8px] text-rose-400 hover:underline font-bold">Eliminar</button>
                               </div>
                             ) : (
-                              <label className="cursor-pointer flex-1 w-full flex flex-col items-center justify-center border border-dashed border-white/10 hover:border-emerald-500/20 rounded-xl transition bg-black/40 p-1">
-                                <Camera className="h-4 w-4 text-white/40 mb-1" />
-                                <span className="text-[8px] text-white/50">Subir</span>
+                              <label className="group cursor-pointer flex-1 w-full flex flex-col items-center justify-between border border-dashed border-white/10 hover:border-emerald-500/20 rounded-xl transition bg-black/40 p-1.5 min-h-[90px]">
+                                <img src={poseSide} alt="Pose Perfil" className="h-12 w-full object-contain opacity-25 group-hover:opacity-40 transition grayscale" />
+                                <div className="flex items-center gap-1 text-[8px] text-white/50 bg-white/5 px-2 py-0.5 rounded border border-white/5">
+                                  <Camera className="h-3 w-3 text-white/40" />
+                                  <span>Subir</span>
+                                </div>
                                 <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, "side")} className="hidden" />
                               </label>
                             )}
                           </div>
 
                           {/* Legs Photo Slot */}
-                          <div className="bg-black/20 border border-white/5 rounded-2xl p-2 flex flex-col space-y-1.5 items-center justify-between text-center min-h-[120px]">
+                          <div className="bg-black/20 border border-white/5 rounded-2xl p-2 flex flex-col space-y-1.5 items-center justify-between text-center min-h-[130px]">
                             <span className="text-[9px] font-bold text-white/40 uppercase tracking-wider">Piernas</span>
                             {legsPhoto ? (
                               <div className="relative w-full flex-1 flex flex-col justify-center items-center">
@@ -1286,16 +1317,19 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
                                 <button type="button" onClick={() => setLegsPhoto(null)} className="mt-1 text-[8px] text-rose-400 hover:underline font-bold">Eliminar</button>
                               </div>
                             ) : (
-                              <label className="cursor-pointer flex-1 w-full flex flex-col items-center justify-center border border-dashed border-white/5 hover:border-emerald-500/20 rounded-xl transition bg-black/30 p-1">
-                                <Camera className="h-4 w-4 text-white/30 mb-1" />
-                                <span className="text-[8px] text-white/40">Opcional</span>
+                              <label className="group cursor-pointer flex-1 w-full flex flex-col items-center justify-between border border-dashed border-white/5 hover:border-emerald-500/20 rounded-xl transition bg-black/30 p-1.5 min-h-[90px]">
+                                <img src={poseLegs} alt="Pose Piernas" className="h-12 w-full object-contain opacity-25 group-hover:opacity-40 transition grayscale" />
+                                <div className="flex items-center gap-1 text-[8px] text-white/40 bg-white/5 px-2 py-0.5 rounded border border-white/5">
+                                  <Camera className="h-3 w-3 text-white/30" />
+                                  <span>Opcional</span>
+                                </div>
                                 <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, "legs")} className="hidden" />
                               </label>
                             )}
                           </div>
 
                           {/* Face Photo Slot */}
-                          <div className="bg-black/20 border border-white/5 rounded-2xl p-2 flex flex-col space-y-1.5 items-center justify-between text-center min-h-[120px]">
+                          <div className="bg-black/20 border border-white/5 rounded-2xl p-2 flex flex-col space-y-1.5 items-center justify-between text-center min-h-[130px]">
                             <span className="text-[9px] font-bold text-white/40 uppercase tracking-wider">Cara</span>
                             {facePhoto ? (
                               <div className="relative w-full flex-1 flex flex-col justify-center items-center">
@@ -1303,9 +1337,12 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
                                 <button type="button" onClick={() => setFacePhoto(null)} className="mt-1 text-[8px] text-rose-400 hover:underline font-bold">Eliminar</button>
                               </div>
                             ) : (
-                              <label className="cursor-pointer flex-1 w-full flex flex-col items-center justify-center border border-dashed border-white/5 hover:border-emerald-500/20 rounded-xl transition bg-black/30 p-1">
-                                <Camera className="h-4 w-4 text-white/30 mb-1" />
-                                <span className="text-[8px] text-white/40">Opcional</span>
+                              <label className="group cursor-pointer flex-1 w-full flex flex-col items-center justify-between border border-dashed border-white/5 hover:border-emerald-500/20 rounded-xl transition bg-black/30 p-1.5 min-h-[90px]">
+                                <img src={poseFace} alt="Pose Cara" className="h-12 w-full object-contain opacity-25 group-hover:opacity-40 transition grayscale" />
+                                <div className="flex items-center gap-1 text-[8px] text-white/40 bg-white/5 px-2 py-0.5 rounded border border-white/5">
+                                  <Camera className="h-3 w-3 text-white/30" />
+                                  <span>Opcional</span>
+                                </div>
                                 <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, "face")} className="hidden" />
                               </label>
                             )}
@@ -1962,7 +1999,7 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#0f101a] border border-white/10 rounded-[32px] p-6 max-w-md w-full space-y-5 shadow-2xl relative text-xs"
+              className="bg-[#0f101a] border border-white/10 rounded-[32px] p-6 max-w-md w-full space-y-4 shadow-2xl relative text-xs"
             >
               <div className="flex justify-between items-center">
                 <h3 className="text-sm font-black text-white tracking-tight flex items-center gap-1.5">
@@ -1970,81 +2007,153 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
                 </h3>
                 <button 
                   onClick={() => setShowGuideModal(false)}
-                  className="text-emerald-400 hover:text-emerald-400/80 text-[10px] font-bold px-2.5 py-1 bg-white/5 rounded-lg border border-white/5 hover:bg-white/10 transition"
+                  className="text-emerald-400 hover:text-emerald-400/80 text-[10px] font-bold px-2.5 py-1 bg-white/5 rounded-lg border border-white/5 hover:bg-white/10 transition cursor-pointer"
                 >
                   Cerrar
                 </button>
               </div>
 
-              {/* Two-column responsive card layout */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Neck Diagram Card */}
-                <div className="bg-white/5 border border-white/5 rounded-2xl p-3 flex flex-col items-center text-center space-y-2">
-                  <div className="w-full aspect-square bg-black/40 rounded-xl border border-white/5 overflow-hidden flex items-center justify-center relative">
-                    <img 
-                      src={sex === "female" ? neckFemale : neckMale} 
-                      alt="Guía de medición de cuello" 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <span className="font-mono font-bold text-emerald-400 uppercase block text-[9px] tracking-wider">1. CUELLO</span>
-                  <p className="text-white/70 text-[9px] leading-relaxed">
-                    Mide horizontalmente <b>justo por debajo de la manzana de Adán</b> (laringe). Mantén el cuello relajado.
-                  </p>
-                </div>
-
-                {/* Torso Diagram Card */}
-                <div className="bg-white/5 border border-white/5 rounded-2xl p-3 flex flex-col items-center text-center space-y-2">
-                  <div className="w-full aspect-square bg-black/40 rounded-xl border border-white/5 p-1 flex items-center justify-center relative">
-                    <svg className="w-full h-full" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      {/* Torso Outline */}
-                      <path d="M 30 10 C 33 20, 36 30, 36 45 C 36 55, 39 62, 36 75 C 33 82, 28 90, 28 90" stroke="rgba(255,255,255,0.15)" strokeWidth="2.5" strokeLinecap="round" />
-                      <path d="M 70 10 C 67 20, 64 30, 64 45 C 64 55, 61 62, 64 75 C 67 82, 72 90, 72 90" stroke="rgba(255,255,255,0.15)" strokeWidth="2.5" strokeLinecap="round" />
-                      
-                      {/* Belly Button (Ombligo) */}
-                      <circle cx="50" cy="58" r="1.5" fill="rgba(255,255,255,0.4)" />
-                      
-                      {sex === "male" ? (
-                        <>
-                          {/* Waist Tape at Belly Button level (line 58) */}
-                          <path d="M 37 58 Q 50 56 63 58" stroke="#34d399" strokeWidth="2" opacity="0.3" strokeDasharray="2,2" />
-                          <path d="M 36 57 Q 50 63 64 57" stroke="#34d399" strokeWidth="3.5" strokeLinecap="round" />
-                          {/* Ticks */}
-                          <path d="M 40 58.5 L 40 60.5 M 45 59.5 L 45 61.5 M 50 60 L 50 62 M 55 59.5 L 55 61.5 M 60 58.5 L 60 60.5" stroke="#000" strokeWidth="1" />
-                          
-                          {/* Label */}
-                          <text x="50" y="73" fill="#34d399" fontSize="7" textAnchor="middle" fontWeight="black" fontFamily="monospace">CINTURA</text>
-                          <text x="50" y="80" fill="rgba(255,255,255,0.5)" fontSize="5" textAnchor="middle">A la altura del ombligo</text>
-                        </>
-                      ) : (
-                        <>
-                          {/* Female: Waist tape (higher, narrow section around 45) */}
-                          <path d="M 36 45 Q 50 43 64 45" stroke="#34d399" strokeWidth="1.5" opacity="0.3" strokeDasharray="2,2" />
-                          <path d="M 36 44 Q 50 49 64 44" stroke="#34d399" strokeWidth="3" strokeLinecap="round" />
-                          <text x="50" y="38" fill="#34d399" fontSize="6" textAnchor="middle" fontWeight="black" fontFamily="monospace">CINTURA (Estrecha)</text>
-                          
-                          {/* Hip tape (lower, wider section around 75) */}
-                          <path d="M 36 75 Q 50 73 64 75" stroke="#34d399" strokeWidth="1.5" opacity="0.3" strokeDasharray="2,2" />
-                          <path d="M 36 74 Q 50 79 64 74" stroke="#34d399" strokeWidth="3" strokeLinecap="round" />
-                          <text x="50" y="87" fill="#34d399" fontSize="6" textAnchor="middle" fontWeight="black" fontFamily="monospace">CADERA (Glúteos)</text>
-                        </>
-                      )}
-                    </svg>
-                  </div>
-                  <span className="font-mono font-bold text-emerald-400 uppercase block text-[9px] tracking-wider">
-                    2. {sex === "female" ? "CINTURA / CADERA" : "CINTURA"}
-                  </span>
-                  <p className="text-white/70 text-[9px] leading-relaxed">
-                    {sex === "male" 
-                      ? "Mide horizontalmente a nivel del ombligo. No contraigas el abdomen, respira normal."
-                      : "Cintura en la zona más estrecha. Cadera en el área más prominente de glúteos."}
-                  </p>
-                </div>
+              {/* Tab Selector */}
+              <div className="flex bg-white/5 rounded-xl p-1 border border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setGuideTab("navy")}
+                  className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg transition cursor-pointer ${
+                    guideTab === "navy"
+                      ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/15"
+                      : "text-white/40 hover:text-white"
+                  }`}
+                >
+                  Cinta Métrica
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGuideTab("caliper")}
+                  className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg transition cursor-pointer ${
+                    guideTab === "caliper"
+                      ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/15"
+                      : "text-white/40 hover:text-white"
+                  }`}
+                >
+                  Plicómetro (Caliper)
+                </button>
               </div>
 
+              {/* Scrollable Diagram Cards Grid */}
+              {guideTab === "navy" ? (
+                <div className="grid grid-cols-2 gap-3 max-h-[360px] overflow-y-auto pr-1 no-scrollbar">
+                  {/* Neck Diagram Card */}
+                  <div className="bg-white/5 border border-white/5 rounded-2xl p-2.5 flex flex-col items-center text-center space-y-2">
+                    <div className="w-full aspect-square bg-black/40 rounded-xl border border-white/5 overflow-hidden flex items-center justify-center relative">
+                      <img 
+                        src={sex === "female" ? neckFemale : neckMale} 
+                        alt="Guía de cuello" 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <span className="font-mono font-bold text-emerald-400 uppercase block text-[9px] tracking-wider">1. CUELLO</span>
+                    <p className="text-white/70 text-[9px] leading-relaxed">
+                      Mide horizontalmente <b>justo por debajo de la manzana de Adán</b> (laringe).
+                    </p>
+                  </div>
+
+                  {/* Waist Card */}
+                  <div className="bg-white/5 border border-white/5 rounded-2xl p-2.5 flex flex-col items-center text-center space-y-2">
+                    <div className="w-full aspect-square bg-black/40 rounded-xl border border-white/5 overflow-hidden flex items-center justify-center relative">
+                      <img 
+                        src={waistMeasurement} 
+                        alt="Guía de cintura" 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <span className="font-mono font-bold text-emerald-400 uppercase block text-[9px] tracking-wider">2. CINTURA</span>
+                    <p className="text-white/70 text-[9px] leading-relaxed">
+                      {sex === "male" 
+                        ? "Mide horizontalmente al nivel del ombligo. No metas el abdomen." 
+                        : "Mide en la sección más estrecha del torso (sobre el ombligo)."}
+                    </p>
+                  </div>
+
+                  {/* Hip Card for women */}
+                  {sex === "female" && (
+                    <div className="bg-white/5 border border-white/5 rounded-2xl p-2.5 flex flex-col items-center text-center space-y-2 col-span-2">
+                      <div className="w-full h-32 bg-black/40 rounded-xl border border-white/5 overflow-hidden flex items-center justify-center relative">
+                        <img 
+                          src={hipMeasurement} 
+                          alt="Guía de cadera" 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <span className="font-mono font-bold text-emerald-400 uppercase block text-[9px] tracking-wider">3. CADERA</span>
+                      <p className="text-white/70 text-[9px] leading-relaxed">
+                        Mide horizontalmente en la <b>zona de mayor circunferencia de los glúteos</b>.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 max-h-[360px] overflow-y-auto pr-1 no-scrollbar">
+                  {/* Caliper 1: Chest / Triceps */}
+                  <div className="bg-white/5 border border-white/5 rounded-2xl p-2.5 flex flex-col items-center text-center space-y-2">
+                    <div className="w-full aspect-square bg-black/40 rounded-xl border border-white/5 overflow-hidden flex items-center justify-center relative">
+                      <img 
+                        src={caliperTriceps} 
+                        alt="Caliper 1" 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <span className="font-mono font-bold text-emerald-400 uppercase block text-[8.5px] tracking-wider">
+                      1. {sex === "male" ? "PECHO" : "TRÍCEPS"}
+                    </span>
+                    <p className="text-white/70 text-[9px] leading-relaxed">
+                      {sex === "male" 
+                        ? "Pliegue diagonal a mitad de distancia entre axila y pezón." 
+                        : "Pliegue vertical en la parte trasera del brazo, a mitad de camino."}
+                    </p>
+                  </div>
+
+                  {/* Caliper 2: Abdomen / Suprailiac */}
+                  <div className="bg-white/5 border border-white/5 rounded-2xl p-2.5 flex flex-col items-center text-center space-y-2">
+                    <div className="w-full aspect-square bg-black/40 rounded-xl border border-white/5 overflow-hidden flex items-center justify-center relative">
+                      <img 
+                        src={caliperAbdomen} 
+                        alt="Caliper 2" 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <span className="font-mono font-bold text-emerald-400 uppercase block text-[8.5px] tracking-wider">
+                      2. {sex === "male" ? "ABDOMEN" : "SUPRAILÍAC."}
+                    </span>
+                    <p className="text-white/70 text-[9px] leading-relaxed">
+                      {sex === "male" 
+                        ? "Pliegue vertical a 2 cm al lado del ombligo." 
+                        : "Pliegue diagonal justo encima de la cresta ilíaca."}
+                    </p>
+                  </div>
+
+                  {/* Caliper 3: Thigh */}
+                  <div className="bg-white/5 border border-white/5 rounded-2xl p-2.5 flex flex-col items-center text-center space-y-2 col-span-2">
+                    <div className="w-full h-32 bg-black/40 rounded-xl border border-white/5 overflow-hidden flex items-center justify-center relative">
+                      <img 
+                        src={caliperThigh} 
+                        alt="Caliper 3" 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <span className="font-mono font-bold text-emerald-400 uppercase block text-[9px] tracking-wider">3. MUSLO</span>
+                    <p className="text-white/70 text-[9px] leading-relaxed">
+                      Pliegue vertical en la <b>cara frontal del muslo</b>, a mitad de distancia entre cadera y rótula.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Formula explanation footer */}
               <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-3 text-center">
                 <p className="text-[8.5px] text-white/50 leading-normal">
-                  💡 <b>Fórmula Navy (Marina de EE.UU.):</b> Altísima correlación de precisión promedio (±3%) comparada con escaneos de laboratorio DEXA.
+                  {guideTab === "navy" 
+                    ? "💡 Fórmula Navy (Marina de EE.UU.): Altísima correlación de precisión promedio (±3%) comparada con escaneos de laboratorio DEXA." 
+                    : "💡 Fórmula Jackson-Pollock (3 Pliegues): Método clínico de plicometría estándar para atletas y control antropométrico."}
                 </p>
               </div>
             </motion.div>
