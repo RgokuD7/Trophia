@@ -31,7 +31,8 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         rounded: "rounded-lg",
         textSize: "text-xs",
         py: "py-1.5",
-        px: `${Icon ? "pl-8" : "px-3"} ${isPassword ? "pr-8" : "px-3"}`,
+        pl: Icon ? "pl-8" : "px-3", // Fallback to px if no icon
+        pr: isPassword ? "pr-8" : "px-3",
         iconLeftClass: "left-2.5",
         iconRightClass: "right-2.5"
       },
@@ -39,7 +40,8 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         rounded: "rounded-xl",
         textSize: "text-xs",
         py: "py-2.5",
-        px: `${Icon ? "pl-9" : "px-3.5"} ${isPassword ? "pr-9" : "px-3.5"}`,
+        pl: Icon ? "pl-10" : "px-3.5",
+        pr: isPassword ? "pr-10" : "px-3.5",
         iconLeftClass: "left-3",
         iconRightClass: "right-3"
       },
@@ -47,9 +49,10 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         rounded: "rounded-2xl",
         textSize: "text-sm",
         py: "py-3",
-        px: `${Icon ? "pl-11" : "px-4"} ${isPassword ? "pr-11" : "px-4"}`,
-        iconLeftClass: "left-3.5",
-        iconRightClass: "right-3.5"
+        pl: Icon ? "pl-13" : "px-4",
+        pr: isPassword ? "pr-13" : "px-4",
+        iconLeftClass: "left-4",
+        iconRightClass: "right-4"
       }
     }[size];
 
@@ -62,12 +65,16 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
       
     const roundedClass = className.includes("rounded-") ? "" : sizeConfig.rounded;
     
-    // Separate horizontal and vertical padding checks to prevent wiping out both when overriding one
+    // Separate vertical and horizontal (left/right) paddings to prevent overriding issues
     const pyClass = className.includes("py-") ? "" : sizeConfig.py;
-    const pxClass = (className.includes("px-") || className.includes("pl-") || className.includes("pr-")) ? "" : sizeConfig.px;
+    
+    // Check pl- and pr- independently so left padding works even if right is overridden (like for kg/cm suffixes)
+    const hasPx = className.includes("px-");
+    const plClass = (className.includes("pl-") || hasPx) ? "" : (sizeConfig.pl.startsWith("pl-") ? sizeConfig.pl : sizeConfig.pl.split(" ")[0]);
+    const prClass = (className.includes("pr-") || hasPx) ? "" : (sizeConfig.pr.startsWith("pr-") ? sizeConfig.pr : sizeConfig.pr.split(" ")[1] || sizeConfig.pr.split(" ")[0]);
 
     const baseClasses = "w-full text-white placeholder-white/20 outline-none transition duration-200 border";
-    const combinedClasses = `${baseClasses} ${bgClass} ${borderClass} ${roundedClass} ${sizeConfig.textSize} ${pyClass} ${pxClass} ${className}`.trim();
+    const combinedClasses = `${baseClasses} ${bgClass} ${borderClass} ${roundedClass} ${sizeConfig.textSize} ${pyClass} ${plClass} ${prClass} ${className}`.trim();
 
     return (
       <div className={`relative w-full ${containerClassName}`}>
