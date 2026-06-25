@@ -624,6 +624,39 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   }
 });
 
+// API Route: Proxy USDA FoodData Central search requests
+app.get("/api/usda/search", async (req, res) => {
+  try {
+    const query = req.query.query as string;
+    const clientApiKey = req.query.apiKey as string;
+
+    if (!query || query.trim() === "") {
+      return res.status(400).json({ error: "El parámetro query es obligatorio." });
+    }
+
+    const key = (clientApiKey && clientApiKey.trim() !== "") 
+      ? clientApiKey 
+      : (process.env.USDA_API_KEY || "DEMO_KEY");
+
+    const url = `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(
+      query
+    )}&dataType=Foundation,SR%20Legacy&pageSize=12&api_key=${key}`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`USDA API HTTP error ${response.status}`);
+    }
+    const data = await response.json();
+    return res.json(data);
+  } catch (error: any) {
+    console.error("Error in /api/usda/search proxy:", error);
+    return res.status(500).json({
+      error: error.message || "Error al realizar la búsqueda en la USDA.",
+    });
+  }
+});
+
+
 // Configure Vite middleware or static serving
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {

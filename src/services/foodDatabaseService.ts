@@ -61,15 +61,15 @@ export const searchOpenFoodFacts = async (query: string): Promise<FoodItem[]> =>
 
 /**
  * Queries USDA FoodData Central for generic and natural foods matching the query.
+ * Routes through Trophia's local backend proxy to protect the USDA API Key.
  */
 export const searchUsdaFoods = async (query: string, apiKey?: string): Promise<FoodItem[]> => {
   if (!query || query.trim().length < 2) return [];
 
-  const key = apiKey || getUsdaApiKey();
+  // Pass custom apiKey if configured in settings, otherwise let backend use server key or DEMO_KEY
+  const keyParam = apiKey ? `&apiKey=${encodeURIComponent(apiKey)}` : "";
   try {
-    const url = `${USDA_BASE_URL}/foods/search?query=${encodeURIComponent(
-      query
-    )}&dataType=Foundation,SR%20Legacy&pageSize=12&api_key=${key}`;
+    const url = `/api/usda/search?query=${encodeURIComponent(query)}${keyParam}`;
     
     const response = await fetch(url);
     if (!response.ok) throw new Error(`USDA HTTP error ${response.status}`);
