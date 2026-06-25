@@ -4,6 +4,8 @@ import {
 } from "lucide-react";
 import { UserProfile, BiologicalSex, FitnessGoal, ExperienceLevel, TrainingEnvironment } from "../types";
 import { calculateRequirements, calculateBMI } from "../utils/fitnessUtils";
+import { Button } from "./ui/Button";
+import { Input } from "./ui/Input";
 
 interface SettingsProps {
   profile: UserProfile;
@@ -115,22 +117,15 @@ export default function SettingsView({ profile, onUpdateProfile, onResetApp }: S
             Cambia o actualiza tu clave de API de Gemini de Google AI Studio para mantener tus llamadas independientes de cuotas.
           </p>
           
-          <div className="relative">
-            <Key className="absolute left-3 top-3 h-3.5 w-3.5 text-gray-500" />
-            <input
-              type={showKey ? "text" : "password"}
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Ingresa tu clave de API de Gemini..."
-              className="w-full bg-[#0f101a] border border-gray-800 focus:border-emerald-500/30 rounded-lg py-2 pl-9 pr-10 text-xs font-mono text-white outline-none"
-            />
-            <button
-              onClick={() => setShowKey(!showKey)}
-              className="absolute right-3 top-2.5 text-gray-500 hover:text-gray-300"
-            >
-              <Eye className="h-4 w-4" />
-            </button>
-          </div>
+          <Input
+            type="password"
+            icon={Key}
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="Ingresa tu clave de API de Gemini..."
+            className="bg-[#0f101a] border-gray-800 font-mono"
+            size="md"
+          />
         </div>
 
         {/* Biometric Override Fields */}
@@ -138,24 +133,26 @@ export default function SettingsView({ profile, onUpdateProfile, onResetApp }: S
           <span className="block text-xs font-bold text-gray-400 uppercase">Perfil Físico</span>
 
           <div className="space-y-2.5">
-            <div>
+             <div>
               <label className="block text-[10px] text-gray-400 mb-0.5">Nombre</label>
-              <input
+              <Input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-[#0f101a] border border-gray-800 rounded-lg py-1.5 px-3 text-xs text-white outline-none"
+                className="bg-[#0f101a] border-gray-800"
+                size="sm"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[10px] text-gray-400 mb-0.5">Edad</label>
-                <input
+                <Input
                   type="number"
                   value={age}
                   onChange={(e) => setAge(parseInt(e.target.value) || 0)}
-                  className="w-full bg-[#0f101a] border border-gray-800 rounded-lg py-1.5 px-3 text-xs text-white outline-none"
+                  className="bg-[#0f101a] border-gray-800"
+                  size="sm"
                 />
               </div>
               <div>
@@ -174,21 +171,23 @@ export default function SettingsView({ profile, onUpdateProfile, onResetApp }: S
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[10px] text-gray-400 mb-0.5">Peso (kg)</label>
-                <input
+                <Input
                   type="number"
                   step="0.1"
                   value={weight}
                   onChange={(e) => setWeight(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-[#0f101a] border border-gray-800 rounded-lg py-1.5 px-3 text-xs text-white outline-none"
+                  className="bg-[#0f101a] border-gray-800"
+                  size="sm"
                 />
               </div>
               <div>
                 <label className="block text-[10px] text-gray-400 mb-0.5">Estatura (cm)</label>
-                <input
+                <Input
                   type="number"
                   value={height}
                   onChange={(e) => setHeight(parseInt(e.target.value) || 0)}
-                  className="w-full bg-[#0f101a] border border-gray-800 rounded-lg py-1.5 px-3 text-xs text-white outline-none"
+                  className="bg-[#0f101a] border-gray-800"
+                  size="sm"
                 />
               </div>
             </div>
@@ -266,27 +265,31 @@ export default function SettingsView({ profile, onUpdateProfile, onResetApp }: S
         </div>
 
         {/* Trigger save */}
-        <button
+        <Button
+          variant="primary"
           onClick={handleSave}
-          className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold py-3 rounded-xl transition shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-1.5 active:scale-[0.98]"
+          leftIcon={Check}
+          className="w-full"
+          size="md"
         >
-          <Check className="h-4 w-4" />
-          <span>Guardar Cambios y Recalcular Metas</span>
-        </button>
+          Guardar Cambios y Recalcular Metas
+        </Button>
 
         {/* Reset App */}
         <div className="border-t border-gray-800/80 pt-4">
-          <button
+          <Button
+            variant="danger"
             onClick={() => {
               if (window.confirm("¿Estás seguro de que deseas cerrar la sesión? Se borrará tu historial y volverás al onboarding.")) {
                 onResetApp();
               }
             }}
-            className="w-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-xs text-rose-400 py-3 rounded-xl transition font-extrabold flex items-center justify-center gap-1.5 active:scale-[0.98]"
+            leftIcon={LogOut}
+            className="w-full font-extrabold"
+            size="md"
           >
-            <LogOut className="h-4 w-4" />
-            <span>Cerrar Sesión (Reiniciar Datos)</span>
-          </button>
+            Cerrar Sesión (Reiniciar Datos)
+          </Button>
         </div>
 
       </div>

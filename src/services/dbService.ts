@@ -31,8 +31,17 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
 export const saveUserProfile = async (userId: string, profile: UserProfile): Promise<void> => {
   try {
     const docRef = doc(db, "users", userId);
+    
+    // Clean undefined values to prevent Firestore setDoc errors
+    const cleanedProfile = { ...profile };
+    (Object.keys(cleanedProfile) as Array<keyof UserProfile>).forEach((key) => {
+      if (cleanedProfile[key] === undefined) {
+        delete cleanedProfile[key];
+      }
+    });
+
     await setDoc(docRef, {
-      ...profile,
+      ...cleanedProfile,
       updatedAt: serverTimestamp(),
     }, { merge: true });
   } catch (error) {

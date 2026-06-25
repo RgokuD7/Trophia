@@ -3,6 +3,8 @@ import { Search, Camera, Plus, History, Trash, AlertCircle, Check, X, RefreshCw,
 import { LoggedMeal, FoodItem, MealType } from "../types";
 import { GLOBAL_FOODS_DB } from "../utils/fitnessUtils";
 import { analyzeFoodByIA } from "../services/geminiService";
+import { Button } from "./ui/Button";
+import { Input } from "./ui/Input";
 
 interface FoodLoggerProps {
   apiKey?: string;
@@ -220,26 +222,26 @@ export default function FoodLogger({ apiKey, onAddMeal, loggedMeals, onClose }: 
           
           {activeTab === "search" && (
             <div className="space-y-3">
-              <div className="relative">
-                <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-white/30" />
-                <input
-                  type="text"
-                  placeholder="Buscar comida (ej: pollo, arroz, huevo)..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 focus:border-emerald-500/30 rounded-2xl py-2.5 pl-11 pr-4 text-xs text-white placeholder-white/20 outline-none"
-                />
-              </div>
+              <Input
+                type="text"
+                icon={Search}
+                placeholder="Buscar comida (ej: pollo, arroz, huevo)..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="rounded-2xl"
+                size="md"
+              />
 
               {/* Portion Selector */}
               <div className="flex items-center justify-between bg-white/5 p-3.5 rounded-2xl border border-white/5">
                 <span className="text-xs text-white/60 font-bold">Tamaño de Porción</span>
                 <div className="flex items-center gap-2">
-                  <input
+                  <Input
                     type="number"
                     value={portionGrams}
                     onChange={(e) => setPortionGrams(Math.max(1, Number(e.target.value) || 100))}
-                    className="w-16 bg-black/40 border border-white/10 rounded-xl text-center text-xs py-1.5 text-white font-mono focus:outline-none"
+                    className="w-16 bg-black/40 border-white/10 rounded-xl text-center font-mono px-1"
+                    size="sm"
                   />
                   <span className="text-xs text-white/40">gramos</span>
                 </div>
@@ -419,54 +421,59 @@ export default function FoodLogger({ apiKey, onAddMeal, loggedMeals, onClose }: 
             <div className="space-y-2.5">
               <div>
                 <label className="block text-[10px] text-white/40 mb-1">Nombre del Plato / Alimento</label>
-                <input
+                <Input
                   type="text"
                   value={customName}
                   onChange={(e) => setCustomName(e.target.value)}
                   placeholder="Ej: Pollo desmenuzado con arroz..."
-                  className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs text-white placeholder-white/20 outline-none focus:border-emerald-500/20"
+                  className="bg-black/40 border-white/10 rounded-xl"
+                  size="md"
                 />
               </div>
 
               <div className="grid grid-cols-4 gap-2">
                 <div>
                   <label className="block text-[9px] text-white/40 text-center mb-1">Calorías</label>
-                  <input
+                  <Input
                     type="number"
                     value={customCalories}
                     onChange={(e) => setCustomCalories(e.target.value === "" ? "" : Number(e.target.value))}
                     placeholder="kcal"
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-1.5 text-center text-xs text-emerald-400 font-mono outline-none font-bold"
+                    className="bg-black/40 border-white/10 rounded-xl text-center text-emerald-400 font-mono font-bold px-1"
+                    size="sm"
                   />
                 </div>
                 <div>
                   <label className="block text-[9px] text-white/40 text-center mb-1">Proteínas</label>
-                  <input
+                  <Input
                     type="number"
                     value={customProtein}
                     onChange={(e) => setCustomProtein(e.target.value === "" ? "" : Number(e.target.value))}
                     placeholder="g"
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-1.5 text-center text-xs text-white font-mono outline-none"
+                    className="bg-black/40 border-white/10 rounded-xl text-center font-mono px-1"
+                    size="sm"
                   />
                 </div>
                 <div>
                   <label className="block text-[9px] text-white/40 text-center mb-1">Carbos</label>
-                  <input
+                  <Input
                     type="number"
                     value={customCarbs}
                     onChange={(e) => setCustomCarbs(e.target.value === "" ? "" : Number(e.target.value))}
                     placeholder="g"
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-1.5 text-center text-xs text-white font-mono outline-none"
+                    className="bg-black/40 border-white/10 rounded-xl text-center font-mono px-1"
+                    size="sm"
                   />
                 </div>
                 <div>
                   <label className="block text-[9px] text-white/40 text-center mb-1">Grasas</label>
-                  <input
+                  <Input
                     type="number"
                     value={customFat}
                     onChange={(e) => setCustomFat(e.target.value === "" ? "" : Number(e.target.value))}
                     placeholder="g"
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-1.5 text-center text-xs text-white font-mono outline-none"
+                    className="bg-black/40 border-white/10 rounded-xl text-center font-mono px-1"
+                    size="sm"
                   />
                 </div>
               </div>
@@ -477,24 +484,24 @@ export default function FoodLogger({ apiKey, onAddMeal, loggedMeals, onClose }: 
 
         {/* Footer actions */}
         <div className="p-5 border-t border-white/5 bg-[#050505] flex-shrink-0 flex gap-3">
-          <button
+          <Button
+            variant="secondary"
             onClick={onClose}
-            className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold py-3.5 rounded-xl transition"
+            className="flex-1 rounded-xl"
+            size="md"
           >
             Cancelar
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
             onClick={handleSaveMeal}
             disabled={!customName}
-            className={`flex-1 text-xs font-extrabold py-3.5 rounded-xl transition shadow-lg flex items-center justify-center gap-1.5 ${
-              customName 
-                ? "bg-emerald-500 hover:bg-emerald-500/80 text-white shadow-emerald-500/10" 
-                : "bg-white/5 text-white/20 cursor-not-allowed border border-white/5"
-            }`}
+            leftIcon={Check}
+            className="flex-1 rounded-xl font-extrabold"
+            size="md"
           >
-            <Check className="h-4 w-4" />
-            <span>Registrar</span>
-          </button>
+            Registrar
+          </Button>
         </div>
 
       </div>

@@ -7,6 +7,8 @@ import {
 import { UserProfile, BiologicalSex, FitnessGoal, ExperienceLevel, TrainingEnvironment } from "../types";
 import { calculateBMI, getBMICategory, calculateNavyBodyFat, calculateCaliperBodyFat, calculateRequirements } from "../utils/fitnessUtils";
 import { analyzeFatByIA, recommendGoalByIA } from "../services/geminiService";
+import { Button } from "./ui/Button";
+import { Input } from "./ui/Input";
 
 const HEALTH_TIPS = [
   {
@@ -831,27 +833,25 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
 
               <div>
                 <label className="block text-[10px] font-bold text-white/40 mb-1.5 uppercase tracking-wider">Tu Nombre</label>
-                <div className="relative">
-                  <User className="absolute left-3.5 top-3.5 h-4 w-4 text-white/30" />
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Escribe tu nombre..."
-                    className="w-full bg-white/5 border border-white/10 focus:border-emerald-500/40 rounded-2xl py-3 pl-11 pr-4 text-sm text-white placeholder-white/20 outline-none transition"
-                  />
-                </div>
+                <Input
+                  type="text"
+                  icon={User}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Escribe tu nombre..."
+                  size="lg"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-bold text-white/40 mb-1.5 uppercase tracking-wider">Edad</label>
-                  <input
+                  <Input
                     type="number"
                     value={age || ""}
                     onChange={(e) => setAge(parseInt(e.target.value) || 0)}
                     placeholder="25"
-                    className="w-full bg-white/5 border border-white/10 focus:border-emerald-500/40 rounded-2xl py-3 px-4 text-sm text-white outline-none transition"
+                    size="lg"
                   />
                 </div>
                 <div>
@@ -884,31 +884,33 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
               <div>
                 <label className="block text-[10px] font-bold text-white/40 mb-1.5 uppercase tracking-wider">Peso Actual (kg)</label>
                 <div className="relative">
-                  <Weight className="absolute left-3.5 top-3.5 h-4 w-4 text-white/30" />
-                  <input
+                  <Input
                     type="number"
+                    icon={Weight}
                     step="0.1"
                     value={weight || ""}
                     onChange={(e) => setWeight(parseFloat(e.target.value) || 0)}
                     placeholder="75"
-                    className="w-full bg-white/5 border border-white/10 focus:border-emerald-500/40 rounded-2xl py-3 pl-11 pr-4 text-sm text-white outline-none transition font-mono"
+                    size="lg"
+                    className="pr-10 font-mono"
                   />
-                  <span className="absolute right-4 top-3 text-xs text-white/40">kg</span>
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/40 pointer-events-none">kg</span>
                 </div>
               </div>
 
               <div>
                 <label className="block text-[10px] font-bold text-white/40 mb-1.5 uppercase tracking-wider">Estatura (cm)</label>
                 <div className="relative">
-                  <Ruler className="absolute left-3.5 top-3.5 h-4 w-4 text-white/30" />
-                  <input
+                  <Input
                     type="number"
+                    icon={Ruler}
                     value={height || ""}
                     onChange={(e) => setHeight(parseInt(e.target.value) || 0)}
                     placeholder="175"
-                    className="w-full bg-white/5 border border-white/10 focus:border-emerald-500/40 rounded-2xl py-3 pl-11 pr-4 text-sm text-white outline-none transition font-mono"
+                    size="lg"
+                    className="pr-10 font-mono"
                   />
-                  <span className="absolute right-4 top-3 text-xs text-white/40">cm</span>
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/40 pointer-events-none">cm</span>
                 </div>
               </div>
             </motion.div>
@@ -985,15 +987,16 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
                 >
                   <label className="block text-[10px] text-white/40 font-bold uppercase">Porcentaje de Grasa Corporal (%)</label>
                   <div className="relative">
-                    <input
+                    <Input
                       type="number"
                       step="0.1"
                       value={manualBodyFat}
                       onChange={(e) => setManualBodyFat(e.target.value === "" ? "" : parseFloat(e.target.value))}
                       placeholder="Ej: 15.5"
-                      className="w-full bg-black/40 border border-white/10 focus:border-emerald-500/40 rounded-xl py-2 px-3 text-sm text-white font-mono outline-none transition"
+                      className="bg-black/40 rounded-xl font-mono pr-8"
+                      size="md"
                     />
-                    <span className="absolute right-4 top-2 text-xs text-white/40">%</span>
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/40 pointer-events-none">%</span>
                   </div>
                   <p className="text-[9px] text-white/40 leading-relaxed">
                     💡 Ingresa el valor obtenido de tu examen de bioimpedancia, DEXA scan, pesaje hidrostático o plicometría profesional.
@@ -1052,24 +1055,26 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="block text-[9px] text-white/40 mb-1 font-bold">Cuello (cm)</label>
-                            <input
+                            <Input
                               type="number"
                               step="0.1"
                               value={neck}
                               onChange={(e) => setNeck(e.target.value === "" ? "" : parseFloat(e.target.value))}
                               placeholder="Ej: 38"
-                              className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs text-white outline-none font-mono focus:border-emerald-500/30 transition"
+                              className="bg-black/40 rounded-xl font-mono"
+                              size="md"
                             />
                           </div>
                           <div>
                             <label className="block text-[9px] text-white/40 mb-1 font-bold">Cintura (cm)</label>
-                            <input
+                            <Input
                               type="number"
                               step="0.1"
                               value={waist}
                               onChange={(e) => setWaist(e.target.value === "" ? "" : parseFloat(e.target.value))}
                               placeholder="Ej: 85"
-                              className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs text-white outline-none font-mono focus:border-emerald-500/30 transition"
+                              className="bg-black/40 rounded-xl font-mono"
+                              size="md"
                             />
                           </div>
                         </div>
@@ -1077,13 +1082,14 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
                         {sex === "female" && (
                           <div>
                             <label className="block text-[9px] text-white/40 mb-1 font-bold">Cadera (cm)</label>
-                            <input
+                            <Input
                               type="number"
                               step="0.1"
                               value={hip}
                               onChange={(e) => setHip(e.target.value === "" ? "" : parseFloat(e.target.value))}
                               placeholder="Ej: 95"
-                              className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs text-white outline-none font-mono focus:border-emerald-500/30 transition"
+                              className="bg-black/40 rounded-xl font-mono"
+                              size="md"
                             />
                           </div>
                         )}
@@ -1148,37 +1154,40 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
                             <label className="block text-[9px] text-white/40 mb-1 font-bold">
                               {sex === "male" ? "Pecho" : "Tríceps"} (mm)
                             </label>
-                            <input
+                            <Input
                               type="number"
                               step="0.5"
                               value={caliper1}
                               onChange={(e) => setCaliper1(e.target.value === "" ? "" : parseFloat(e.target.value))}
                               placeholder="Ej: 12"
-                              className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-2 text-xs text-white outline-none font-mono focus:border-emerald-500/30 transition"
+                              className="bg-black/40 rounded-xl font-mono px-2"
+                              size="md"
                             />
                           </div>
                           <div>
                             <label className="block text-[9px] text-white/40 mb-1 font-bold">
                               {sex === "male" ? "Abdomen" : "Suprailíaco"} (mm)
                             </label>
-                            <input
+                            <Input
                               type="number"
                               step="0.5"
                               value={caliper2}
                               onChange={(e) => setCaliper2(e.target.value === "" ? "" : parseFloat(e.target.value))}
                               placeholder="Ej: 18"
-                              className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-2 text-xs text-white outline-none font-mono focus:border-emerald-500/30 transition"
+                              className="bg-black/40 rounded-xl font-mono px-2"
+                              size="md"
                             />
                           </div>
                           <div>
                             <label className="block text-[9px] text-white/40 mb-1 font-bold">Muslo (mm)</label>
-                            <input
+                            <Input
                               type="number"
                               step="0.5"
                               value={caliper3}
                               onChange={(e) => setCaliper3(e.target.value === "" ? "" : parseFloat(e.target.value))}
                               placeholder="Ej: 15"
-                              className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-2 text-xs text-white outline-none font-mono focus:border-emerald-500/30 transition"
+                              className="bg-black/40 rounded-xl font-mono px-2"
+                              size="md"
                             />
                           </div>
                         </div>
@@ -1757,16 +1766,15 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      setShowEducationTutorial(false);
-                      setStep(6);
-                    }}
-                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold py-3 rounded-xl transition mt-2 shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-1.5"
+                  <Button
+                    variant="primary"
+                    onClick={handleSubmit}
+                    rightIcon={Check}
+                    className="w-full mt-2 font-bold"
+                    size="md"
                   >
-                    <span>Entendido, Continuar</span>
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
+                    ¡Comenzar!
+                  </Button>
                 </motion.div>
               )}
             </motion.div>
@@ -1805,21 +1813,14 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
 
               <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
                 <label className="block text-[10px] text-white/40 font-bold uppercase tracking-wider">Clave de API de Gemini</label>
-                <div className="relative">
-                  <input
-                    type={showKey ? "text" : "password"}
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="AIzaSy... (Obligatorio)"
-                    className="w-full bg-[#121212] border border-white/10 focus:border-emerald-500/40 rounded-xl py-2.5 px-3 pr-10 text-xs text-white placeholder-white/20 outline-none transition font-mono"
-                  />
-                  <button
-                    onClick={() => setShowKey(!showKey)}
-                    className="absolute right-3 top-3 text-white/40 hover:text-white"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </button>
-                </div>
+                <Input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="AIzaSy... (Obligatorio)"
+                  className="bg-[#121212] rounded-xl font-mono"
+                  size="md"
+                />
 
                 <div className="flex gap-2 p-3 bg-emerald-500/10 border border-emerald-500/15 rounded-xl text-[9px] text-emerald-400 leading-normal">
                   <AlertCircle className="h-4 w-4 flex-shrink-0" />
@@ -1849,99 +1850,104 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
       {!showEducationTutorial && (
         <div className="px-6 pt-4 pb-6 flex gap-3 border-t border-white/5 mt-auto bg-[#050505]/95 backdrop-blur-xl max-w-md mx-auto w-full sticky bottom-0 z-30 shadow-[0_-15px_30px_rgba(0,0,0,0.6)]">
           {step > 1 && (
-            <button
+            <Button
+              variant="secondary"
               onClick={handlePrev}
-              className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3.5 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-1"
+              leftIcon={ChevronLeft}
+              className="flex-1"
             >
-              <ChevronLeft className="h-4 w-4" />
-              <span>Atrás</span>
-            </button>
+              Atrás
+            </Button>
           )}
 
           {step === 3 ? (
             showStep2Results ? (
-              <button
+              <Button
+                variant="primary"
                 onClick={handleNext}
-                className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-3.5 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-1 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                rightIcon={ChevronRight}
+                className="flex-1 cursor-pointer"
               >
-                <span>Continuar</span>
-                <ChevronRight className="h-4 w-4" />
-              </button>
+                Continuar
+              </Button>
             ) : isCalculatingBF ? (
-              <button
-                disabled
-                className="flex-1 bg-emerald-900/40 text-emerald-300 py-3.5 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-not-allowed opacity-50"
+              <Button
+                variant="primary"
+                isLoading={true}
+                className="flex-1"
               >
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                <span>Calculando...</span>
-              </button>
+                Calculando...
+              </Button>
             ) : knowsBodyFat === "yes" ? (
               manualBodyFat !== "" && manualBodyFat !== undefined ? (
-                <button
+                <Button
+                  variant="primary"
                   onClick={handleNext}
-                  className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-3.5 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-1 hover:scale-[1.02] active:scale-[0.98]"
+                  rightIcon={ChevronRight}
+                  className="flex-1"
                 >
-                  <span>Continuar</span>
-                  <ChevronRight className="h-4 w-4" />
-                </button>
+                  Continuar
+                </Button>
               ) : (
-                <button
+                <Button
+                  variant="secondary"
                   onClick={handleNext}
-                  className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3.5 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-1 hover:scale-[1.02] active:scale-[0.98]"
+                  rightIcon={ChevronRight}
+                  className="flex-1"
                 >
-                  <span>Saltar</span>
-                  <ChevronRight className="h-4 w-4" />
-                </button>
+                  Saltar
+                </Button>
               )
             ) : (
               // knowsBodyFat === "no"
               (hasNavyMeasurements || hasCaliperMeasurements || hasUploadedPhotos) ? (
-                <button
+                <Button
+                  variant="primary"
                   onClick={handleCalculateBodyFat}
-                  className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-3.5 rounded-2xl text-xs font-black transition flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-emerald-500/15"
+                  leftIcon={Sparkles}
+                  className="flex-1 font-black"
                 >
-                  <Sparkles className="h-4 w-4" />
-                  <span>Calcular</span>
-                </button>
+                  Calcular
+                </Button>
               ) : (
-                <button
+                <Button
+                  variant="secondary"
                   onClick={handleNext}
-                  className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3.5 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-1 hover:scale-[1.02] active:scale-[0.98]"
+                  rightIcon={ChevronRight}
+                  className="flex-1"
                 >
-                  <span>Saltar</span>
-                  <ChevronRight className="h-4 w-4" />
-                </button>
+                  Saltar
+                </Button>
               )
             )
           ) : step === 1 ? (
-            <button
+            <Button
+              variant="primary"
               onClick={handleNext}
               disabled={apiKey.trim().length < 15}
-              className={`flex-1 py-3.5 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-1 hover:scale-[1.02] active:scale-[0.98] ${
-                apiKey.trim().length >= 15
-                  ? "bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/15"
-                  : "bg-emerald-950/40 text-white/20 cursor-not-allowed border border-white/5 opacity-50"
-              }`}
+              rightIcon={ChevronRight}
+              className="flex-1"
             >
-              <span>Siguiente</span>
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          ) : step < 6 ? (
-            <button
+              Siguiente
+            </Button>
+          ) : (step < 6 || (step === 6 && nutritionKnowledge === "low")) ? (
+            <Button
+              variant="primary"
               onClick={handleNext}
-              className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-3.5 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-1 hover:scale-[1.02] active:scale-[0.98]"
+              rightIcon={ChevronRight}
+              className="flex-1"
             >
-              <span>Siguiente</span>
-              <ChevronRight className="h-4 w-4" />
-            </button>
+              Siguiente
+            </Button>
           ) : (
-            <button
+            <Button
+              variant="primary"
               onClick={handleSubmit}
-              className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-3.5 rounded-2xl text-xs font-black transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/15 hover:scale-[1.02] active:scale-[0.98]"
+              rightIcon={Check}
+              className="flex-1 font-black"
             >
-              <span>¡Comenzar!</span>
-              <Check className="h-4 w-4" />
-            </button>
+              ¡Comenzar!
+            </Button>
           )}
         </div>
       )}
