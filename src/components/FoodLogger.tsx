@@ -407,11 +407,11 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                               <img
                                 src={food.image}
                                 alt={food.name}
-                                className="w-9 h-9 rounded-xl object-cover border border-white/10 bg-black/20 shrink-0"
+                                className="w-11 h-11 rounded-xl object-cover border border-white/10 bg-black/20 shrink-0 shadow-md"
                               />
                             ) : (
-                              <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                                <span className="text-sm">🍎</span>
+                              <div className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                                <span className="text-base">🍎</span>
                               </div>
                             )}
                             <div className="min-w-0 flex-1">
@@ -585,22 +585,33 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
               </button>
 
               {/* Food Info Header Card */}
-              <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-2 relative overflow-hidden">
-                <div className="flex justify-between items-start gap-2 z-10 relative">
-                  <div className="min-w-0 flex-1">
+              <div className="bg-white/5 p-4 rounded-2xl border border-white/10 flex gap-4 items-center relative overflow-hidden">
+                {selectedFood.image && (
+                  <img
+                    src={selectedFood.image}
+                    alt={customName}
+                    className="w-20 h-20 rounded-xl object-cover border border-white/10 bg-black/20 shrink-0 shadow-lg"
+                  />
+                )}
+                <div className="min-w-0 flex-1 space-y-1 z-10 relative">
+                  <div className="flex justify-between items-start gap-2">
                     <h4 className="text-xs font-black text-white leading-tight uppercase tracking-tight truncate">{customName || "Alimento Personalizado"}</h4>
-                    {selectedFood.brand && (
-                      <span className="text-[9px] text-white/40 font-mono block mt-0.5 truncate">{selectedFood.brand}</span>
-                    )}
+                    {!selectedFood.image && getSourceBadge(selectedFood.source, selectedFood.brand)}
                   </div>
-                  {getSourceBadge(selectedFood.source, selectedFood.brand)}
-                </div>
-
-                <div className="flex items-baseline gap-1 mt-3 z-10 relative">
-                  <span className="text-3xl font-black text-emerald-400 tracking-tight drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]">
-                    {customCalories || 0}
-                  </span>
-                  <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider">kcal</span>
+                  {selectedFood.brand && (
+                    <span className="text-[9px] text-white/40 font-mono block mt-0.5 truncate">{selectedFood.brand}</span>
+                  )}
+                  {selectedFood.image && (
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {getSourceBadge(selectedFood.source, selectedFood.brand)}
+                    </div>
+                  )}
+                  <div className="flex items-baseline gap-1 mt-2">
+                    <span className="text-3xl font-black text-emerald-400 tracking-tight drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]">
+                      {customCalories || 0}
+                    </span>
+                    <span className="text-[9px] text-white/40 font-bold uppercase tracking-wider">kcal</span>
+                  </div>
                 </div>
               </div>
 
