@@ -285,6 +285,7 @@ export default function App() {
         {isFoodLoggerOpen && profile && (
           <FoodLogger
             apiKey={profile.apiKey}
+            usdaApiKey={profile.usdaApiKey}
             loggedMeals={loggedMeals}
             onAddMeal={handleAddMeal}
             onClose={() => setIsFoodLoggerOpen(false)}

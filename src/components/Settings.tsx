@@ -23,6 +23,7 @@ export default function SettingsView({ profile, onUpdateProfile, onResetApp }: S
   const [level, setLevel] = useState<ExperienceLevel>(profile.level);
   const [environment, setEnvironment] = useState<TrainingEnvironment>(profile.environment);
   const [apiKey, setApiKey] = useState(profile.apiKey || "");
+  const [usdaApiKey, setUsdaApiKey] = useState(profile.usdaApiKey || "");
   const [showKey, setShowKey] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(profile.theme || "dark");
   const [takesCreatine, setTakesCreatine] = useState(profile.takesCreatine || false);
@@ -49,6 +50,7 @@ export default function SettingsView({ profile, onUpdateProfile, onResetApp }: S
       carbsTarget: reqs.carbs,
       fatTarget: reqs.fat,
       apiKey: apiKey || undefined,
+      usdaApiKey: usdaApiKey || undefined,
       theme,
       takesCreatine
     };
@@ -58,6 +60,11 @@ export default function SettingsView({ profile, onUpdateProfile, onResetApp }: S
       localStorage.setItem("trophia_api_key", apiKey);
     } else {
       localStorage.removeItem("trophia_api_key");
+    }
+    if (usdaApiKey && usdaApiKey.trim().length >= 10) {
+      localStorage.setItem("trophia_usda_api_key", usdaApiKey);
+    } else {
+      localStorage.removeItem("trophia_usda_api_key");
     }
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2500);
@@ -123,6 +130,24 @@ export default function SettingsView({ profile, onUpdateProfile, onResetApp }: S
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder="Ingresa tu clave de API de Gemini..."
+            className="bg-[#0f101a] border-gray-800 focus:border-emerald-500/30 font-mono"
+            size="md"
+          />
+        </div>
+
+        {/* USDA API Key Configuration */}
+        <div className="bg-[#161824] p-4 rounded-xl border border-gray-800 space-y-3 shadow-lg">
+          <span className="block text-xs font-bold text-gray-400 uppercase">Credencial de USDA FoodData Central</span>
+          <p className="text-[10px] text-gray-400 leading-normal">
+            Configura tu propia clave de API de la USDA para la búsqueda de ingredientes y alimentos naturales. De forma predeterminada se usa una clave pública compartida.
+          </p>
+          
+          <Input
+            type="password"
+            icon={Key}
+            value={usdaApiKey}
+            onChange={(e) => setUsdaApiKey(e.target.value)}
+            placeholder="Ingresa tu clave de API de USDA..."
             className="bg-[#0f101a] border-gray-800 focus:border-emerald-500/30 font-mono"
             size="md"
           />

@@ -25,6 +25,7 @@ export interface UserProfile {
   carbsTarget: number; // in grams
   fatTarget: number; // in grams
   apiKey?: string;
+  usdaApiKey?: string;
   isOnboardingCompleted: boolean;
   theme: "light" | "dark";
   takesCreatine?: boolean;
@@ -99,4 +100,8 @@ export interface FoodItem {
   carbs: number;
   fat: number;
   servingSize: string;
+  source?: "local" | "history" | "usda" | "off";
+  brand?: string;
+  image?: string;
+  barcode?: string;
 }

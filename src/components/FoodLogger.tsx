@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from "react";
-import { Search, Camera, Plus, History, Trash, AlertCircle, Check, X, RefreshCw, Star } from "lucide-react";
+import { Search, Camera, Plus, History, Trash, AlertCircle, Check, X, RefreshCw, Star, Barcode } from "lucide-react";
 import { LoggedMeal, FoodItem, MealType } from "../types";
 import { GLOBAL_FOODS_DB } from "../utils/fitnessUtils";
 import { analyzeFoodByIA } from "../services/geminiService";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
+import { searchAllFoods, getProductByBarcode } from "../services/foodDatabaseService";
+import BarcodeScannerModal from "./BarcodeScannerModal";
 
 interface FoodLoggerProps {
   apiKey?: string;
+  usdaApiKey?: string;
   onAddMeal: (meal: Omit<LoggedMeal, "id" | "timestamp">) => void;
   loggedMeals: LoggedMeal[];
   onClose: () => void;
 }
 
-export default function FoodLogger({ apiKey, onAddMeal, loggedMeals, onClose }: FoodLoggerProps) {
+export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals, onClose }: FoodLoggerProps) {
   const [activeTab, setActiveTab] = useState<"search" | "camera" | "personal">("search");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMealType, setSelectedMealType] = useState<MealType>("lunch");
@@ -34,6 +37,10 @@ export default function FoodLogger({ apiKey, onAddMeal, loggedMeals, onClose }: 
 
   // Favorites / Personal History
   const [personalHistory, setPersonalHistory] = useState<FoodItem[]>([]);
+
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   useEffect(() => {
     // Dynamically suggest meal type based on local time
@@ -72,21 +79,83 @@ export default function FoodLogger({ apiKey, onAddMeal, loggedMeals, onClose }: 
   useEffect(() => {
     if (searchQuery.trim() === "") {
       setFilteredFoods([]);
-    } else {
-      const filtered = GLOBAL_FOODS_DB.filter(food =>
-        food.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      setFilteredFoods(filtered);
+      setIsSearching(false);
+      setSearchError(null);
+      return;
     }
-  }, [searchQuery]);
+
+    setIsSearching(true);
+    setSearchError(null);
+    const delayDebounce = setTimeout(async () => {
+      try {
+        const results = await searchAllFoods(searchQuery, personalHistory, usdaApiKey);
+        setFilteredFoods(results);
+      } catch (err: any) {
+        console.error("Error fetching foods:", err);
+        setSearchError("Error al conectar con las bases de datos de alimentos.");
+      } finally {
+        setIsSearching(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounce);
+  }, [searchQuery, personalHistory, usdaApiKey]);
 
   const handleSelectFood = (food: FoodItem) => {
     const scale = portionGrams / 100;
-    setCustomName(food.name);
+    const displayName = food.brand ? `${food.name} (${food.brand.split(',')[0].trim()})` : food.name;
+    setCustomName(displayName);
     setCustomCalories(Math.round(food.calories * scale));
     setCustomProtein(Math.round(food.protein * scale));
     setCustomCarbs(Math.round(food.carbs * scale));
     setCustomFat(Math.round(food.fat * scale));
+  };
+
+  const handleBarcodeScanSuccess = async (barcode: string) => {
+    setIsSearching(true);
+    setSearchError(null);
+    try {
+      const product = await getProductByBarcode(barcode);
+      if (product) {
+        handleSelectFood(product);
+      } else {
+        setSearchError("Producto no encontrado por código de barras.");
+      }
+    } catch (err: any) {
+      console.error("Error al buscar producto por código de barras:", err);
+      setSearchError("Error al buscar producto por código de barras.");
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const getSourceBadge = (source?: "local" | "history" | "usda" | "off", brand?: string) => {
+    switch (source) {
+      case "history":
+        return (
+          <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wide bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+            Frecuente
+          </span>
+        );
+      case "usda":
+        return (
+          <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wide bg-sky-500/10 text-sky-400 border border-sky-500/20 shrink-0">
+            Natural
+          </span>
+        );
+      case "off":
+        return (
+          <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wide bg-purple-500/10 text-purple-400 border border-purple-500/20 shrink-0 truncate max-w-[80px]">
+            {brand ? brand.split(",")[0] : "Marca"}
+          </span>
+        );
+      default:
+        return (
+          <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wide bg-white/10 text-white/50 border border-white/5 shrink-0">
+            Local
+          </span>
+        );
+    }
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -222,15 +291,25 @@ export default function FoodLogger({ apiKey, onAddMeal, loggedMeals, onClose }: 
           
           {activeTab === "search" && (
             <div className="space-y-3">
-              <Input
-                type="text"
-                icon={Search}
-                placeholder="Buscar comida (ej: pollo, arroz, huevo)..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="rounded-2xl pl-11 focus:border-emerald-500/30"
-                size="md"
-              />
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  icon={Search}
+                  placeholder="Buscar comida (ej: pollo, arroz, huevo)..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="rounded-2xl pl-11 focus:border-emerald-500/30"
+                  size="md"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsScannerOpen(true)}
+                  className="px-3 bg-emerald-500 hover:bg-emerald-600 border border-emerald-500 rounded-2xl flex items-center justify-center text-white transition shrink-0 cursor-pointer"
+                  title="Escanear Código de Barras"
+                >
+                  <Barcode className="h-5 w-5" />
+                </button>
+              </div>
 
               {/* Portion Selector */}
               <div className="flex items-center justify-between bg-white/5 p-3.5 rounded-2xl border border-white/5">
@@ -247,24 +326,53 @@ export default function FoodLogger({ apiKey, onAddMeal, loggedMeals, onClose }: 
                 </div>
               </div>
 
+              {/* Search Error banner */}
+              {searchError && (
+                <div className="bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-xl text-[10.5px] text-rose-400 font-bold flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{searchError}</span>
+                </div>
+              )}
+
               {/* Autocomplete list */}
-              {filteredFoods.length > 0 ? (
-                <div className="border border-white/5 rounded-2xl overflow-hidden bg-black/30 max-h-40 overflow-y-auto no-scrollbar divide-y divide-white/5">
+              {isSearching ? (
+                <div className="text-center py-6 text-xs text-white/40">
+                  <RefreshCw className="h-4 w-4 animate-spin text-emerald-400 mx-auto mb-2" />
+                  Buscando en bases de datos...
+                </div>
+              ) : filteredFoods.length > 0 ? (
+                <div className="border border-white/5 rounded-2xl overflow-hidden bg-black/30 max-h-56 overflow-y-auto no-scrollbar divide-y divide-white/5">
                   {filteredFoods.map((food, idx) => (
                     <button
                       key={idx}
                       onClick={() => handleSelectFood(food)}
-                      className="w-full p-3 text-left hover:bg-white/5 transition flex justify-between items-center"
+                      className="w-full p-3 text-left hover:bg-white/5 transition flex justify-between items-center gap-3 cursor-pointer"
                     >
-                      <div>
-                        <span className="block text-xs font-bold text-white">{food.name}</span>
-                        <span className="block text-[10px] text-white/40">{portionGrams}g ({food.servingSize} base)</span>
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {food.image ? (
+                          <img
+                            src={food.image}
+                            alt={food.name}
+                            className="w-9 h-9 rounded-xl object-cover border border-white/10 bg-black/20 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                            <span className="text-sm">🍎</span>
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <span className="block text-xs font-bold text-white truncate">{food.name}</span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {getSourceBadge(food.source, food.brand)}
+                            <span className="text-[10px] text-white/40">{portionGrams}g ({food.servingSize} base)</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right shrink-0">
                         <span className="block text-xs font-extrabold text-emerald-400">
                           {Math.round(food.calories * (portionGrams / 100))} kcal
                         </span>
-                        <span className="text-[9px] text-white/40">
+                        <span className="text-[9px] text-white/40 block">
                           P: {Math.round(food.protein * (portionGrams / 100))}g · C: {Math.round(food.carbs * (portionGrams / 100))}g
                         </span>
                       </div>
@@ -273,7 +381,7 @@ export default function FoodLogger({ apiKey, onAddMeal, loggedMeals, onClose }: 
                 </div>
               ) : searchQuery.trim() !== "" ? (
                 <div className="text-center py-4 text-xs text-white/30">
-                  No se encontraron alimentos en la base de datos de Strive.
+                  No se encontraron alimentos en la base de datos de Trophia.
                 </div>
               ) : null}
             </div>
@@ -376,7 +484,7 @@ export default function FoodLogger({ apiKey, onAddMeal, loggedMeals, onClose }: 
           {activeTab === "personal" && (
             <div className="space-y-2">
               <p className="text-[11px] text-white/50">
-                Alimentos frecuentes registrados con anterioridad en tu diario Strive:
+                Alimentos frecuentes registrados con anterioridad en tu diario Trophia:
               </p>
 
               {personalHistory.length > 0 ? (
@@ -391,7 +499,7 @@ export default function FoodLogger({ apiKey, onAddMeal, loggedMeals, onClose }: 
                         setCustomCarbs(food.carbs);
                         setCustomFat(food.fat);
                       }}
-                      className="w-full p-3 text-left hover:bg-white/5 transition flex justify-between items-center"
+                      className="w-full p-3 text-left hover:bg-white/5 transition flex justify-between items-center cursor-pointer"
                     >
                       <div className="flex items-center gap-2">
                         <Star className="h-3 w-3 text-amber-400 fill-amber-400/20" />
@@ -505,6 +613,12 @@ export default function FoodLogger({ apiKey, onAddMeal, loggedMeals, onClose }: 
         </div>
 
       </div>
+
+      <BarcodeScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScanSuccess={handleBarcodeScanSuccess}
+      />
     </div>
   );
 }
