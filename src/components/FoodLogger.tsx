@@ -228,7 +228,7 @@ export default function FoodLogger({ apiKey, onAddMeal, loggedMeals, onClose }: 
                 placeholder="Buscar comida (ej: pollo, arroz, huevo)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="rounded-2xl"
+                className="rounded-2xl pl-11 focus:border-emerald-500/30"
                 size="md"
               />
 

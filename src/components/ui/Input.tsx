@@ -25,41 +25,49 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     const isPassword = type === "password";
     const inputType = isPassword ? (showPassword ? "text" : "password") : type;
 
-    // Standard size configs
+    // Standard size configs matching original project values precisely
     const sizeConfig = {
       sm: {
         rounded: "rounded-lg",
-        padding: "py-1.5 px-3 text-xs",
+        textSize: "text-xs",
+        py: "py-1.5",
+        px: `${Icon ? "pl-8" : "px-3"} ${isPassword ? "pr-8" : "px-3"}`,
         iconLeftClass: "left-2.5",
-        iconRightClass: "right-2.5",
-        paddingWithIcons: `${Icon ? "pl-8" : "px-3"} ${isPassword ? "pr-8" : "px-3"}`
+        iconRightClass: "right-2.5"
       },
       md: {
         rounded: "rounded-xl",
-        padding: "py-2.5 px-3.5 text-xs",
+        textSize: "text-xs",
+        py: "py-2.5",
+        px: `${Icon ? "pl-9" : "px-3.5"} ${isPassword ? "pr-9" : "px-3.5"}`,
         iconLeftClass: "left-3",
-        iconRightClass: "right-3",
-        paddingWithIcons: `${Icon ? "pl-9" : "px-3.5"} ${isPassword ? "pr-9" : "px-3.5"}`
+        iconRightClass: "right-3"
       },
       lg: {
         rounded: "rounded-2xl",
-        padding: "py-3 text-sm",
+        textSize: "text-sm",
+        py: "py-3",
+        px: `${Icon ? "pl-11" : "px-4"} ${isPassword ? "pr-11" : "px-4"}`,
         iconLeftClass: "left-3.5",
-        iconRightClass: "right-3.5",
-        paddingWithIcons: `${Icon ? "pl-11" : "px-4"} ${isPassword ? "pr-11" : "px-4"}`
+        iconRightClass: "right-3.5"
       }
     }[size];
 
-    // Smart class overriding to avoid conflicts when custom className overrides bg, borders, or rounded corners
+    // Smart class overriding to avoid conflicts and retain look & feel
     const bgClass = className.includes("bg-") ? "" : "bg-white/5";
-    const borderClass = className.includes("border-") ? "" : (error ? "border-rose-500/40 focus:border-rose-500/60" : "border-white/10 focus:border-emerald-500/40");
+    
+    const borderClass = error
+      ? "border-rose-500/40 focus:border-rose-500/60"
+      : `${className.includes("border-") ? "" : "border-white/10"} ${className.includes("focus:border-") ? "" : "focus:border-emerald-500/40"}`;
+      
     const roundedClass = className.includes("rounded-") ? "" : sizeConfig.rounded;
-    const paddingClass = (className.includes("pl-") || className.includes("pr-") || className.includes("px-") || className.includes("py-")) 
-      ? "" 
-      : sizeConfig.paddingWithIcons;
+    
+    // Separate horizontal and vertical padding checks to prevent wiping out both when overriding one
+    const pyClass = className.includes("py-") ? "" : sizeConfig.py;
+    const pxClass = (className.includes("px-") || className.includes("pl-") || className.includes("pr-")) ? "" : sizeConfig.px;
 
-    const baseClasses = "w-full text-white placeholder-white/20 outline-none transition duration-200 border focus:ring-1 focus:ring-emerald-500/20";
-    const combinedClasses = `${baseClasses} ${bgClass} ${borderClass} ${roundedClass} ${paddingClass} ${className}`.trim();
+    const baseClasses = "w-full text-white placeholder-white/20 outline-none transition duration-200 border";
+    const combinedClasses = `${baseClasses} ${bgClass} ${borderClass} ${roundedClass} ${sizeConfig.textSize} ${pyClass} ${pxClass} ${className}`.trim();
 
     return (
       <div className={`relative w-full ${containerClassName}`}>

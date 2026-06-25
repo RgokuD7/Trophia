@@ -123,7 +123,7 @@ export default function SettingsView({ profile, onUpdateProfile, onResetApp }: S
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder="Ingresa tu clave de API de Gemini..."
-            className="bg-[#0f101a] border-gray-800 font-mono"
+            className="bg-[#0f101a] border-gray-800 focus:border-emerald-500/30 font-mono"
             size="md"
           />
         </div>
