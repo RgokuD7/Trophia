@@ -45,6 +45,124 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
     checkStandalone();
   }, []);
 
+  if (deviceInfo.isMobile && !isStandalone) {
+    return (
+      <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0d0e15] px-6 py-12 justify-between items-center relative overflow-hidden">
+        {/* Decorative Gradients */}
+        <div className="absolute top-[-10%] left-[-10%] w-[150px] h-[150px] rounded-full bg-emerald-500/10 blur-[80px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[180px] h-[180px] rounded-full bg-blue-500/10 blur-[80px]"></div>
+
+        {/* Header section (Logo and App Name) */}
+        <div className="flex flex-col items-center text-center mt-6 space-y-4 z-10 w-full">
+          <div className="relative p-2 rounded-2xl bg-gradient-to-br from-emerald-500/5 to-blue-500/5 border border-emerald-500/10 dark:border-emerald-500/20 shadow-lg dark:shadow-emerald-950/10">
+            <img src={logo} alt="Trophia Logo" className="w-16 h-16 object-contain rounded-xl" />
+          </div>
+
+          <div className="space-y-1">
+            <h1 className="text-3.5xl font-black tracking-tight bg-gradient-to-r from-emerald-600 via-teal-500 to-blue-600 dark:from-emerald-400 dark:via-teal-300 dark:to-blue-400 bg-clip-text text-transparent">
+              Trophia
+            </h1>
+            <p className="text-xs font-semibold uppercase tracking-widest text-emerald-600 dark:text-emerald-500/70">
+              Intelligent Fitness
+            </p>
+          </div>
+        </div>
+
+        {/* Installation Instructions Content */}
+        <div className="w-full space-y-6 z-10 my-auto max-w-sm">
+          <div className="text-center space-y-2">
+            <div className="mx-auto w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20 shadow-lg shadow-amber-500/5">
+              <Smartphone className="h-7 w-7 text-amber-400" />
+            </div>
+            <h2 className="text-lg font-black text-white tracking-tight">Instalación Necesaria</h2>
+            <p className="text-[11px] text-white/50 leading-relaxed px-4">
+              Trophia debe ejecutarse como aplicación web para funcionar. {deviceInfo.isIOS && "iOS aísla los datos del navegador, por lo que "}debes agregar la app a tu pantalla de inicio antes de iniciar sesión.
+            </p>
+          </div>
+
+          <div className="bg-white dark:bg-[#121420]/60 border border-gray-200 dark:border-[#1e2238] rounded-2xl p-4 space-y-3.5 shadow-md">
+            <span className="text-xs font-black text-emerald-400 block uppercase tracking-wider">
+              ¿Cómo instalar en tu {deviceInfo.isIOS ? "iPhone / iPad" : "Android"}?
+            </span>
+
+            {deviceInfo.isIOS && deviceInfo.isSafari && (
+              <div className="space-y-2.5 text-[10px] text-white/70 leading-relaxed font-medium">
+                <div className="flex gap-2.5 items-start">
+                  <span className="bg-white/10 w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">1</span>
+                  <span>Presiona el botón de <b>Compartir</b> (el icono de cuadrado con una flecha hacia arriba 📤) en Safari.</span>
+                </div>
+                <div className="flex gap-2.5 items-start">
+                  <span className="bg-white/10 w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">2</span>
+                  <span>Desplázate hacia abajo y selecciona <b>Agregar a Inicio</b> (el icono con un signo <b>+</b>).</span>
+                </div>
+                <div className="flex gap-2.5 items-start">
+                  <span className="bg-white/10 w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">3</span>
+                  <span>Asegúrate de dejar activada la opción de abrir como app web y pulsa <b>Agregar</b> arriba a la derecha.</span>
+                </div>
+              </div>
+            )}
+
+            {deviceInfo.isIOS && deviceInfo.isChrome && (
+              <div className="space-y-2.5 text-[10px] text-white/70 leading-relaxed font-medium">
+                <div className="flex gap-2.5 items-start">
+                  <span className="bg-white/10 w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">1</span>
+                  <span>Presiona el menú de tres puntos (<b>...</b>) al lado de la barra de direcciones de Chrome.</span>
+                </div>
+                <div className="flex gap-2.5 items-start">
+                  <span className="bg-white/10 w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">2</span>
+                  <span>Selecciona la opción <b>Compartir</b> y luego pulsa <b>Agregar a pantalla de inicio</b>.</span>
+                </div>
+                <div className="flex gap-2.5 items-start">
+                  <span className="bg-white/10 w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">3</span>
+                  <span>Presiona <b>Agregar</b> para confirmar.</span>
+                </div>
+              </div>
+            )}
+
+            {deviceInfo.isIOS && !deviceInfo.isSafari && !deviceInfo.isChrome && (
+              <div className="space-y-2 text-[10px] text-white/70 leading-relaxed font-medium">
+                <p>
+                  En iOS, la instalación de aplicaciones web solo está soportada a través de <span className="font-bold text-white">Safari</span> o <span className="font-bold text-white">Chrome</span>.
+                </p>
+                <p className="bg-white/5 p-2 rounded-xl border border-white/5 text-[9px] font-mono select-all text-center break-all">
+                  {window.location.href}
+                </p>
+                <p className="text-amber-400 text-[9px]">
+                  * Copia el enlace superior, ábrelo en Safari y realiza la instalación.
+                </p>
+              </div>
+            )}
+
+            {deviceInfo.isAndroid && (
+              <div className="space-y-2.5 text-[10px] text-white/70 leading-relaxed font-medium">
+                <div className="flex gap-2.5 items-start">
+                  <span className="bg-white/10 w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">1</span>
+                  <span>Abre el menú del navegador (los tres puntos verticales <b>⋮</b> arriba a la derecha).</span>
+                </div>
+                <div className="flex gap-2.5 items-start">
+                  <span className="bg-white/10 w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">2</span>
+                  <span>Presiona en <b>Instalar aplicación</b> o <b>Agregar a pantalla de inicio</b>.</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Action instruction footer */}
+        <div className="w-full space-y-4 z-10 mb-4 text-center">
+          <p className="text-[10px] text-gray-500 leading-normal px-6">
+            Una vez agregada a tu pantalla de inicio, cierra esta pestaña, abre la aplicación desde tu pantalla de inicio e inicia sesión para comenzar.
+          </p>
+          <div className="text-[9px] text-gray-400 dark:text-white/20 font-mono tracking-wider">
+            <span>by Richard Bouryssieres</span>
+            <span className="mx-1.5">•</span>
+            <span>v0.0.2</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError(null);
@@ -120,69 +238,6 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
           </div>
         </div>
 
-        {!isStandalone && (
-          <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl text-left space-y-3">
-            <div className="flex gap-2 items-start text-amber-400">
-              <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-extrabold text-xs block text-amber-300">⚠️ ¡Instala la App Primero!</span>
-                <p className="text-[10px] text-amber-400/90 leading-relaxed font-medium">
-                  {deviceInfo.isIOS ? (
-                    <>
-                      iOS aísla las sesiones del navegador. Si inicias sesión aquí y la instalas después, <span className="font-bold text-amber-300">se cerrará tu sesión</span> y tendrás que iniciar de nuevo. Por favor, agrega Trophia a tu pantalla de inicio primero y ábrela desde allí.
-                    </>
-                  ) : (
-                    <>
-                      Para disfrutar de una experiencia nativa sin barras de navegación, te recomendamos instalar la aplicación en tu dispositivo antes de iniciar sesión.
-                    </>
-                  )}
-                </p>
-              </div>
-            </div>
-
-            <div className="border-t border-amber-500/10 pt-2.5 space-y-2">
-              <span className="text-[10px] font-extrabold text-emerald-400 block uppercase tracking-wider">
-                Instrucciones de Instalación:
-              </span>
-              
-              {deviceInfo.isIOS && deviceInfo.isSafari && (
-                <div className="space-y-1.5 text-[9.5px] text-gray-300 leading-relaxed font-medium">
-                  <p>1. Presiona el botón de <b>Compartir</b> (icono 📤 en la barra inferior).</p>
-                  <p>2. Desplázate hacia abajo y selecciona <b>Agregar a Inicio</b> (icono con un <b>+</b>).</p>
-                  <p>3. Deja marcado "Abrir como app web" si aparece, y pulsa <b>Agregar</b> arriba a la derecha.</p>
-                </div>
-              )}
-
-              {deviceInfo.isIOS && deviceInfo.isChrome && (
-                <div className="space-y-1.5 text-[9.5px] text-gray-300 leading-relaxed font-medium">
-                  <p>1. Presiona el menú de tres puntos (<b>...</b>) al lado de la barra de direcciones.</p>
-                  <p>2. Selecciona <b>Compartir</b> y luego <b>Agregar a pantalla de inicio</b>.</p>
-                  <p>3. Pulsa <b>Agregar</b> para confirmar.</p>
-                </div>
-              )}
-
-              {deviceInfo.isIOS && !deviceInfo.isSafari && !deviceInfo.isChrome && (
-                <p className="text-[9.5px] text-gray-300 font-medium leading-relaxed">
-                  En iOS la instalación requiere abrir este enlace en <span className="font-bold text-white">Safari</span>. Cópialo y ábrelo allí para poder instalarlo.
-                </p>
-              )}
-
-              {deviceInfo.isAndroid && (
-                <div className="space-y-1.5 text-[9.5px] text-gray-300 leading-relaxed font-medium">
-                  <p>1. Abre el menú del navegador (los tres puntos <b>⋮</b> arriba a la derecha).</p>
-                  <p>2. Selecciona <b>Instalar aplicación</b> o <b>Agregar a pantalla de inicio</b>.</p>
-                </div>
-              )}
-
-              {!deviceInfo.isMobile && (
-                <div className="space-y-1.5 text-[9.5px] text-gray-300 leading-relaxed font-medium">
-                  <p>1. Haz clic en el icono de instalación (pantalla con flecha 📥) en la barra de direcciones.</p>
-                  <p>2. O abre el menú del navegador (<b>⋮</b>) y selecciona <b>Instalar Trophia...</b></p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Google Login Button */}
         <Button
