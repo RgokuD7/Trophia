@@ -130,65 +130,154 @@ export function calculateRequirements(profile: {
   age: number;
   sex: "male" | "female";
   goal: FitnessGoal;
-  level: ExperienceLevel;
+  level?: ExperienceLevel;
+  bodyFat?: number;
+  activityLevel?: "sedentary" | "lightly_active" | "moderately_active" | "highly_active" | "heavy_labor";
+  stepsRange?: "under_4k" | "5k_7k" | "8k_10k" | "12k_15k" | "over_18k";
+  deficitPace?: "conservative" | "moderate" | "aggressive";
+  dietType?: DietType;
 }): { calories: number; protein: number; carbs: number; fat: number } {
-  const { weight, height, age, sex, goal, level } = profile;
+  const { 
+    weight, 
+    height, 
+    age, 
+    sex, 
+    goal, 
+    level = "beginner", 
+    bodyFat, 
+    activityLevel, 
+    stepsRange, 
+    deficitPace = "moderate", 
+    dietType 
+  } = profile;
 
-  // 1. Mifflin-St Jeor BMR
-  let bmr = 10 * weight + 6.25 * height - 5 * age;
-  if (sex === "male") {
-    bmr += 5;
+  // 1. Calculate BMR
+  let bmr = 0;
+  if (bodyFat !== undefined && bodyFat > 0) {
+    // Katch-McArdle formula based on Lean Body Mass (LBM)
+    const lbm = weight * (1 - (bodyFat / 100));
+    bmr = 370 + (21.6 * lbm);
   } else {
-    bmr -= 161;
+    // Mifflin-St Jeor BMR
+    bmr = 10 * weight + 6.25 * height - 5 * age;
+    if (sex === "male") {
+      bmr += 5;
+    } else {
+      bmr -= 161;
+    }
   }
 
-  // 2. Activity Factor based on History Level
+  // 2. Activity Factor (PAL / NEAT)
   let activityFactor = 1.2; // default sedentary
-  if (level === "beginner") {
-    activityFactor = 1.2;
-  } else if (level === "intermediate") {
-    activityFactor = 1.375;
-  } else if (level === "advanced") {
-    activityFactor = 1.55;
+  if (stepsRange) {
+    if (stepsRange === "under_4k") activityFactor = 1.20;
+    else if (stepsRange === "5k_7k") activityFactor = 1.375;
+    else if (stepsRange === "8k_10k") activityFactor = 1.55;
+    else if (stepsRange === "12k_15k") activityFactor = 1.725;
+    else if (stepsRange === "over_18k") activityFactor = 2.05;
+  } else if (activityLevel) {
+    if (activityLevel === "sedentary") activityFactor = 1.20;
+    else if (activityLevel === "lightly_active") activityFactor = 1.375;
+    else if (activityLevel === "moderately_active") activityFactor = 1.55;
+    else if (activityLevel === "highly_active") activityFactor = 1.725;
+    else if (activityLevel === "heavy_labor") activityFactor = 2.05;
+  } else {
+    // Fallback to legacy level check
+    if (level === "beginner") {
+      activityFactor = 1.2;
+    } else if (level === "intermediate") {
+      activityFactor = 1.375;
+    } else if (level === "advanced") {
+      activityFactor = 1.55;
+    }
   }
 
   const tdee = bmr * activityFactor;
 
   // 3. Goal Adjustments
   let targetCalories = Math.round(tdee);
+  
   if (goal === "lose_weight") {
-    targetCalories = Math.round(tdee - 500); // 500 kcal deficit
+    // Dynamic deficit based on adiposity and selected pace
+    // If body fat is not known, estimate based on average ranges
+    const bf = bodyFat || (sex === "male" ? 20 : 28);
+    const isHighAdiposity = sex === "male" ? bf > 25 : bf > 35;
+    const isLean = sex === "male" ? bf < 15 : bf < 25;
+    
+    let weeklyRate = 0.0085; // default moderate (0.85% weight loss per week)
+    
+    if (isHighAdiposity) {
+      if (deficitPace === "conservative") weeklyRate = 0.010;
+      else if (deficitPace === "moderate") weeklyRate = 0.0125;
+      else if (deficitPace === "aggressive") weeklyRate = 0.015;
+    } else if (isLean) {
+      if (deficitPace === "conservative") weeklyRate = 0.003;
+      else if (deficitPace === "moderate") weeklyRate = 0.005;
+      else if (deficitPace === "aggressive") weeklyRate = 0.007;
+    } else {
+      // Moderate adiposity
+      if (deficitPace === "conservative") weeklyRate = 0.007;
+      else if (deficitPace === "moderate") weeklyRate = 0.0085;
+      else if (deficitPace === "aggressive") weeklyRate = 0.010;
+    }
+    
+    // 1kg of fat ~ 7700 kcal. Daily Deficit = (weight * weeklyRate * 7700) / 7
+    const dailyDeficit = (weight * weeklyRate * 7700) / 7;
+    // Safe clamp on deficit (between 250 kcal and 1000 kcal)
+    const clampedDeficit = Math.max(250, Math.min(1000, dailyDeficit));
+    targetCalories = Math.round(tdee - clampedDeficit);
   } else if (goal === "gain_muscle") {
-    targetCalories = Math.round(tdee + 300); // 300 kcal surplus
+    // 10% to 15% surplus over TDEE (beginner gets 15%, advanced gets 10%)
+    const surplusPct = level === "advanced" ? 0.10 : level === "intermediate" ? 0.12 : 0.15;
+    targetCalories = Math.round(tdee * (1 + surplusPct));
   } else if (goal === "aesthetics") {
-    targetCalories = Math.round(tdee - 250); // slight deficit/recomp
+    // slight deficit / recomp (250 kcal deficit)
+    targetCalories = Math.round(tdee - 250);
   } else {
-    targetCalories = Math.round(tdee); // maintenance
+    // maintenance
+    targetCalories = Math.round(tdee);
   }
 
   // Keep calories at a safe minimum (1200 for females, 1500 for males)
   const safeMinimum = sex === "female" ? 1200 : 1500;
   targetCalories = Math.max(safeMinimum, targetCalories);
 
-  // 4. Macronutrient Breakdown
+  // 4. Protein Target
   let proteinPerKg = 1.8;
   if (goal === "gain_muscle") {
-    proteinPerKg = 2.2;
+    proteinPerKg = 2.0;
   } else if (goal === "lose_weight") {
-    proteinPerKg = 2.0; // preserve muscle in deficit
+    // Protein scales with deficit intensity
+    if (deficitPace === "conservative") proteinPerKg = 1.9;
+    else if (deficitPace === "moderate") proteinPerKg = 2.2;
+    else if (deficitPace === "aggressive") proteinPerKg = 2.5;
   } else if (goal === "aesthetics") {
     proteinPerKg = 2.1;
   }
 
-  const proteinGrams = Math.round(weight * proteinPerKg);
+  let proteinGrams = weight * proteinPerKg;
+
+  // Vegan/Vegetarian compensator: +25% protein requirement due to lower bioavailability
+  const isPlantBased = dietType === "vegan" || dietType === "vegetarian";
+  if (isPlantBased) {
+    proteinGrams *= 1.25;
+  }
+
+  // Clamp protein between 1.2g/kg and 3.0g/kg (and absolute max 250g)
+  const minProtein = weight * 1.2;
+  const maxProtein = weight * 3.0;
+  proteinGrams = Math.max(minProtein, Math.min(maxProtein, proteinGrams));
+  proteinGrams = Math.round(Math.min(250, proteinGrams));
+  
   const proteinCalories = proteinGrams * 4;
 
-  // Fat: 25% of total calories
-  const fatCalories = targetCalories * 0.25;
+  // Fat: 25% of total calories (or slightly higher if plant-based diet to accommodate macro pairings)
+  const fatPct = isPlantBased ? 0.28 : 0.25;
+  const fatCalories = targetCalories * fatPct;
   const fatGrams = Math.round(fatCalories / 9);
 
   // Carbs: Remaining calories
-  const remainingCalories = targetCalories - proteinCalories - fatCalories;
+  const remainingCalories = targetCalories - proteinCalories - (fatGrams * 9);
   const carbsGrams = Math.round(Math.max(30, remainingCalories / 4));
 
   return {

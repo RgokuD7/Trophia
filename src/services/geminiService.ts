@@ -405,19 +405,45 @@ export async function generateRoutineByIA(
     level: ExperienceLevel;
     environment: TrainingEnvironment;
     equipment: string[];
+    jointPainAreas?: ("knee" | "back" | "shoulder")[];
+    requiresMedicalClearance?: boolean;
   }
 ): Promise<any> {
-  const { goal, level, environment, equipment } = input;
+  const { goal, level, environment, equipment, jointPainAreas = [], requiresMedicalClearance } = input;
+
+  let safetyInstructions = "";
+  if (requiresMedicalClearance) {
+    safetyInstructions += `\n- ¡CRÍTICO!: El usuario posee alertas cardiovasculares/neurológicas. Genera un entrenamiento de baja intensidad (no exceder el 60% de su capacidad, mantener descripciones suaves y seguras).`;
+  }
+  
+  if (jointPainAreas.length > 0) {
+    safetyInstructions += `\n- Restricciones ortopédicas detectadas (el usuario sufre de dolor en las siguientes zonas: ${jointPainAreas.join(", ")}):`;
+    if (jointPainAreas.includes("knee")) {
+      safetyInstructions += `\n  * Rodilla: PROHIBIR sentadillas libres profundas por debajo del paralelo (deep squats) y extensiones de piernas en máquina con peso libre. SUSTITUIR por sentadillas parciales limitadas a 60-90 grados, peso muerto rumano (donde la rodilla apenas se flexiona), stance de pies ancho (stance ancho) y puentes de glúteo. Evitar saltos/pliometría o torsiones bruscas.`;
+    }
+    if (jointPainAreas.includes("back")) {
+      safetyInstructions += `\n  * Espalda Baja (Lumbar): PROHIBIR peso muerto (deadlift) convencional levantado del suelo y sentadillas traseras libres con barra alta. SUSTITUIR por sentadillas búlgaras divididas (split squats) con mancuernas, estocadas de paso inverso y prensa de piernas inclinada (con coxis fuertemente estabilizado).`;
+    }
+    if (jointPainAreas.includes("shoulder")) {
+      safetyInstructions += `\n  * Hombro: PROHIBIR press militar pesado sobre la cabeza y press de hombros tras nuca. Modular press de banca plano convencional. SUSTITUIR por press plano con agarre estrecho cerrado (codos pegados a los costados) o Floor Press (press en el suelo). Incrementar tracción compensatoria (remos de jalón horizontal, face-pulls).`;
+    }
+  }
 
   const prompt = `Genera una rutina de entrenamiento única y de alta calidad basada en el perfil del usuario:
 - Objetivo: ${goal} (ej: bajar de peso, ganar masa muscular, objetivos estéticos, mantenimiento)
-- Nivel de experiencia: ${level} (principiante, intermedio, avanzado)
+- Nivel de experiencia (Edad de entrenamiento): ${level} (principiante, intermedio, avanzado)
 - Entorno de trabajo: ${environment} (gimnasio, casa, aire libre)
-- Equipamiento disponible: ${Array.isArray(equipment) ? equipment.join(", ") : "Peso corporal"}
+- Equipamiento disponible: ${Array.isArray(equipment) ? equipment.join(", ") : "Peso corporal"}${safetyInstructions}
+
+Lógica de Volumen y Capacidad Física a respetar:
+1. Reglas de series semanales por músculo: Principiante (4-10 series/semana), Intermedio (10-16 series/semana), Avanzado (14-22 series/semana).
+2. Regla de las 11 series: No concentres más de 8-10 series para el mismo grupo muscular en una única sesión para evitar volumen basura. Si es mayor, repártelo.
+3. Tope por sesión: No programes más de 30 series de trabajo total en una única sesión sumando todos los ejercicios.
+4. Escala decimal de compuestos: Un Press de banca cuenta como 1.0 Pecho, 0.5 Deltoides Anterior y 0.5 Tríceps en fatiga acumulada. Ajusta el aislamiento final en consecuencia para evitar sobreentrenamiento local.
 
 La rutina debe estar dividida en tres partes obligatorias:
 1. Calentamiento: 2 o 3 ejercicios de movilidad o activación con breves descripciones de 1 frase.
-2. Rutina Central (Ejercicios de fuerza o resistencia): 3 a 5 ejercicios adaptados estrictamente al equipamiento disponible y nivel de experiencia. Cada ejercicio debe tener series (sets), repeticiones por serie (reps), peso inicial recomendado en kg (0 si es peso corporal) y un gasto calórico por serie estrictamente CONSERVADOR (ajustado a la baja, ej: entre 3 y 8 kcal por serie).
+2. Rutina Central (Ejercicios de fuerza o resistencia): 3 a 5 ejercicios adaptados estrictamente al equipamiento disponible, nivel de experiencia y restricciones de salud. Cada ejercicio debe tener series (sets), repeticiones por serie (reps), peso inicial recomendado en kg (0 si es peso corporal) y un gasto calórico por serie estrictamente CONSERVADOR (ajustado a la baja, ej: entre 3 y 8 kcal por serie).
 3. Enfriamiento: 2 o 3 estiramientos o ejercicios de vuelta a la calma de 1 frase.
 
 Debes responder estrictamente en formato JSON con la siguiente estructura:
@@ -442,27 +468,55 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
     console.warn("Gemini API error in generateRoutineByIA, using smart fallback:", apiError);
     
     let name = "Rutina de Acondicionamiento Físico";
-    let warmup = ["Movilidad articular general de hombros, columna y caderas - 2 min", "Activación cardiovascular suave (saltos de payaso o trote en el sitio) - 2 min"];
+    let warmup = ["Movilidad articular general de hombros, caderas - 2 min", "Activación cardiovascular suave - 2 min"];
     let exercises = [];
-    let cooldown = ["Estiramientos estáticos de los principales grupos musculares trabajados - 2 min", "Respiraciones profundas diafragmáticas de vuelta a la calma - 1 min"];
+    let cooldown = ["Estiramientos estáticos suaves - 2 min", "Respiraciones de vuelta a la calma - 1 min"];
 
     if (environment === "home") {
       name = goal === "gain_muscle" ? "Volumen Muscular en Casa (Alta Densidad)" : "Definición y Cardio en Casa";
+      
+      const pushupEx = jointPainAreas.includes("shoulder") 
+        ? { name: "Flexiones de pecho sobre pared o rodillas (rango controlado)", sets: 3, reps: 10, weight: 0, caloriesBurnedPerSet: 5 }
+        : { name: "Flexiones de pecho (Push-ups) con codos a 45 grados", sets: 3, reps: 12, weight: 0, caloriesBurnedPerSet: 6 };
+      
+      const squatEx = jointPainAreas.includes("knee")
+        ? { name: "Sentadillas parciales de 60-90 grados (stance ancho)", sets: 4, reps: 12, weight: 0, caloriesBurnedPerSet: 5 }
+        : jointPainAreas.includes("back")
+        ? { name: "Sentadillas búlgaras divididas con peso corporal", sets: 3, reps: 10, weight: 0, caloriesBurnedPerSet: 6 }
+        : { name: "Sentadillas libres (Air Squats) profundas", sets: 4, reps: 15, weight: 0, caloriesBurnedPerSet: 7 };
+
+      const lungeEx = jointPainAreas.includes("knee") || jointPainAreas.includes("back")
+        ? { name: "Puentes de glúteos en el suelo (Glute Bridges)", sets: 3, reps: 15, weight: 0, caloriesBurnedPerSet: 5 }
+        : { name: "Zancadas dinámicas alternas (Lunges)", sets: 3, reps: 12, weight: 0, caloriesBurnedPerSet: 6 };
+
       exercises = [
-        { name: "Flexiones de pecho (Push-ups) con codos a 45 grados", sets: 3, reps: 12, weight: 0, caloriesBurnedPerSet: 6 },
-        { name: "Sentadillas libres (Air Squats) profundas", sets: 4, reps: 15, weight: 0, caloriesBurnedPerSet: 7 },
-        { name: "Zancadas dinámicas alternas (Lunges)", sets: 3, reps: 12, weight: 0, caloriesBurnedPerSet: 6 },
+        pushupEx,
+        squatEx,
+        lungeEx,
         { name: "Plancha abdominal isométrica", sets: 3, reps: 45, weight: 0, caloriesBurnedPerSet: 4 },
-        { name: "Fondos en silla para tríceps (Bench Dips)", sets: 3, reps: 10, weight: 0, caloriesBurnedPerSet: 5 },
+        { name: "Fondos en silla para tríceps (rango parcial)", sets: 3, reps: 10, weight: 0, caloriesBurnedPerSet: 5 },
       ];
     } else {
       name = goal === "gain_muscle" ? "Hipertrofia Elite de Cuerpo Completo" : "Fuerza y Gasto Calórico en Gimnasio";
+      
+      const mainSquat = jointPainAreas.includes("knee")
+        ? { name: "Prensa de piernas inclinada a 45 grados (pies altos y separados)", sets: 4, reps: 12, weight: level === "advanced" ? 80 : level === "intermediate" ? 50 : 25, caloriesBurnedPerSet: 7 }
+        : jointPainAreas.includes("back")
+        ? { name: "Sentadilla búlgara con mancuernas (columna erguida)", sets: 3, reps: 10, weight: level === "advanced" ? 18 : level === "intermediate" ? 12 : 6, caloriesBurnedPerSet: 6 }
+        : { name: "Sentadilla libre con barra trasera", sets: 4, reps: 10, weight: level === "advanced" ? 60 : level === "intermediate" ? 40 : 20, caloriesBurnedPerSet: 8 };
+
+      const mainPress = jointPainAreas.includes("shoulder")
+        ? { name: "Press de banca con agarre estrecho cerrado (codos pegados)", sets: 4, reps: 10, weight: level === "advanced" ? 45 : level === "intermediate" ? 25 : 12, caloriesBurnedPerSet: 6 }
+        : { name: "Press de banca plano con barra o mancuernas", sets: 4, reps: 10, weight: level === "advanced" ? 50 : level === "intermediate" ? 30 : 15, caloriesBurnedPerSet: 7 };
+
+      const mainRow = { name: "Remo prono apoyado en banco o polea baja", sets: 3, reps: 12, weight: level === "advanced" ? 45 : level === "intermediate" ? 25 : 12, caloriesBurnedPerSet: 6 };
+      
       exercises = [
-        { name: "Sentadilla libre con barra trasera", sets: 4, reps: 10, weight: level === "advanced" ? 60 : level === "intermediate" ? 40 : 20, caloriesBurnedPerSet: 8 },
-        { name: "Press de banca plano con barra o mancuernas", sets: 4, reps: 10, weight: level === "advanced" ? 50 : level === "intermediate" ? 30 : 15, caloriesBurnedPerSet: 7 },
-        { name: "Remo prono apoyado en banco o polea baja", sets: 3, reps: 12, weight: level === "advanced" ? 45 : level === "intermediate" ? 25 : 12, caloriesBurnedPerSet: 6 },
+        mainSquat,
+        mainPress,
+        mainRow,
         { name: "Curl de bíceps alterno con mancuernas de pie", sets: 3, reps: 12, weight: level === "advanced" ? 14 : level === "intermediate" ? 10 : 6, caloriesBurnedPerSet: 5 },
-        { name: "Elevaciones laterales para hombro lateral", sets: 3, reps: 15, weight: level === "advanced" ? 10 : level === "intermediate" ? 6 : 3, caloriesBurnedPerSet: 5 },
+        { name: "Elevaciones laterales para hombro lateral con polea o mancuerna", sets: 3, reps: 15, weight: level === "advanced" ? 10 : level === "intermediate" ? 6 : 3, caloriesBurnedPerSet: 5 },
       ];
     }
 

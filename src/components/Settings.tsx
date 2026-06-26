@@ -30,7 +30,23 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
   const [theme, setTheme] = useState<"light" | "dark">(profile.theme || "dark");
   const [takesCreatine, setTakesCreatine] = useState(profile.takesCreatine || false);
   const [dietType, setDietType] = useState<DietType>(profile.dietType || "standard");
+  const [activityLevel, setActivityLevel] = useState<"sedentary" | "lightly_active" | "moderately_active" | "highly_active" | "heavy_labor">(profile.activityLevel || "sedentary");
+  const [stepsRange, setStepsRange] = useState<"under_4k" | "5k_7k" | "8k_10k" | "12k_15k" | "over_18k">(profile.stepsRange || "under_4k");
+  const [deficitPace, setDeficitPace] = useState<"conservative" | "moderate" | "aggressive">(profile.deficitPace || "moderate");
+  const [solidMealsCount, setSolidMealsCount] = useState<number>(profile.solidMealsCount || 4);
+  const [jointPainAreas, setJointPainAreas] = useState<("knee" | "back" | "shoulder")[]>(profile.jointPainAreas || []);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const handlePasteApiKey = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        setApiKey(text.trim());
+      }
+    } catch (err) {
+      console.error("Failed to read clipboard:", err);
+    }
+  };
 
   // States for frequent routes
   const [frequentRoutes, setFrequentRoutes] = useState<FrequentRoute[]>(profile.frequentRoutes || []);
@@ -168,7 +184,19 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
 
   const handleSave = () => {
     // Recalculate targets based on updated parameters
-    const reqs = calculateRequirements({ weight, height, age, sex, goal, level });
+    const reqs = calculateRequirements({ 
+      weight, 
+      height, 
+      age, 
+      sex, 
+      goal, 
+      level,
+      bodyFat: profile.bodyFat,
+      activityLevel,
+      stepsRange,
+      deficitPace,
+      dietType
+    });
     const bmi = calculateBMI(weight, height);
 
     // Recalculate frequent routes calories based on new weight!
@@ -182,6 +210,8 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
         caloriesBurned: Math.round(r.distanceKm * weight * multiplier)
       };
     });
+
+    const requiresMedicalClearance = profile.parqAnswers ? (profile.parqAnswers.q1 || profile.parqAnswers.q2 || profile.parqAnswers.q3 || profile.parqAnswers.q7) : false;
 
     const updatedProfile: UserProfile = {
       ...profile,
@@ -203,6 +233,12 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
       theme,
       takesCreatine,
       dietType,
+      activityLevel,
+      stepsRange,
+      deficitPace,
+      solidMealsCount,
+      requiresMedicalClearance,
+      jointPainAreas,
       frequentRoutes: recalculatedRoutes
     };
 
@@ -289,10 +325,10 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
             <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-lg text-left space-y-1.5">
               <span className="text-[10px] font-extrabold text-amber-400 flex items-center gap-1.5">
                 <Info className="h-3.5 w-3.5" />
-                <span>Navegador No Soportado</span>
+                <span>No Soportado</span>
               </span>
               <p className="text-[9px] text-gray-650 dark:text-gray-400 leading-relaxed">
-                Si estás en iOS (Safari), recuerda que para habilitar notificaciones debes guardar esta aplicación en tu pantalla de inicio (Compartir → Guardar en Pantalla de Inicio) y abrirla desde allí.
+                Las notificaciones push no son compatibles con este navegador o dispositivo.
               </p>
             </div>
           ) : (
@@ -339,15 +375,26 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
             Cambia o actualiza tu clave de API de Gemini de Google AI Studio para mantener tus llamadas independientes de cuotas.
           </p>
           
-          <Input
-            type="password"
-            icon={Key}
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="Ingresa tu clave de API de Gemini..."
-            className="bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 focus:border-emerald-500/30 font-mono"
-            size="md"
-          />
+          <div className="flex gap-2 items-center">
+            <div className="flex-1">
+              <Input
+                type="password"
+                icon={Key}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="Ingresa tu clave de API de Gemini..."
+                className="bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 focus:border-emerald-500/30 font-mono"
+                size="md"
+              />
+            </div>
+            <Button
+              variant="secondary"
+              onClick={handlePasteApiKey}
+              className="shrink-0 h-[42px] px-3.5 text-[11px] font-bold rounded-xl"
+            >
+              Pegar
+            </Button>
+          </div>
         </div>
 
         {/* USDA API Key Configuration */}
@@ -494,6 +541,108 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
                   <option value="outdoor">Aire Libre</option>
                 </select>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Actividad Diaria / Laboral (NEAT)</label>
+              <select
+                value={activityLevel}
+                onChange={(e) => setActivityLevel(e.target.value as any)}
+                className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-250 dark:border-gray-800 rounded-lg py-1.5 px-3 text-xs text-gray-900 dark:text-white outline-none"
+              >
+                <option value="sedentary">Actividad Sedentaria (ej. estudio, clases, oficina, escritorio)</option>
+                <option value="lightly_active">Actividad Ligera (ej. estudio/escritorio con caminatas, tareas del hogar)</option>
+                <option value="moderately_active">Actividad Moderada (ej. de pie gran parte del día, caminar frecuente)</option>
+                <option value="highly_active">Actividad Intensa (ej. esfuerzo constante, deporte intensivo diario)</option>
+                <option value="heavy_labor">Trabajo Físico / Labor Pesada (ej. construcción, agricultura, carga)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Promedio de Pasos Diarios (NEAT)</label>
+              <select
+                value={stepsRange}
+                onChange={(e) => setStepsRange(e.target.value as any)}
+                className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-250 dark:border-gray-800 rounded-lg py-1.5 px-3 text-xs text-gray-900 dark:text-white outline-none"
+              >
+                <option value="under_4k">Menos de 4,000 pasos</option>
+                <option value="5k_7k">5,000 - 7,000 pasos</option>
+                <option value="8k_10k">8,000 - 10,000 pasos</option>
+                <option value="12k_15k">12,000 - 15,000 pasos</option>
+                <option value="over_18k">Más de 18,000 pasos</option>
+              </select>
+            </div>
+
+            {goal === "lose_weight" && (
+              <div>
+                <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Ritmo del Déficit (Pérdida de Peso)</label>
+                <select
+                  value={deficitPace}
+                  onChange={(e) => setDeficitPace(e.target.value as any)}
+                  className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-250 dark:border-gray-800 rounded-lg py-1.5 px-3 text-xs text-gray-900 dark:text-white outline-none"
+                >
+                  <option value="conservative">Conservador (lento y seguro, protege músculo)</option>
+                  <option value="moderate">Moderado (ritmo estándar clínico)</option>
+                  <option value="aggressive">Agresivo (rápido, solo si tu porcentaje de grasa es alto)</option>
+                </select>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Cantidad de Comidas al Día</label>
+              <select
+                value={solidMealsCount}
+                onChange={(e) => setSolidMealsCount(parseInt(e.target.value) || 4)}
+                className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-250 dark:border-gray-800 rounded-lg py-1.5 px-3 text-xs text-gray-900 dark:text-white outline-none"
+              >
+                <option value={2}>2 comidas al día</option>
+                <option value={3}>3 comidas al día</option>
+                <option value={4}>4 comidas al día</option>
+                <option value={5}>5 comidas al día</option>
+                <option value={6}>6 comidas al día</option>
+              </select>
+            </div>
+
+            <div className="pt-1.5">
+              <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-1.5">Molestias / Dolores Articulares</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: "knee", label: "Rodilla" },
+                  { id: "back", label: "Espalda Baja" },
+                  { id: "shoulder", label: "Hombro" }
+                ].map((area) => {
+                  const selected = jointPainAreas.includes(area.id as any);
+                  return (
+                    <button
+                      key={area.id}
+                      type="button"
+                      onClick={() => {
+                        const newArea = area.id as any;
+                        if (selected) {
+                          setJointPainAreas(jointPainAreas.filter(a => a !== newArea));
+                        } else {
+                          setJointPainAreas([...jointPainAreas, newArea]);
+                        }
+                      }}
+                      className={`py-1.5 px-2 rounded-lg border text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                        selected
+                          ? "bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400 font-semibold"
+                          : "bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 text-gray-400 dark:text-gray-500"
+                      }`}
+                    >
+                      <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border transition ${
+                        selected ? "bg-amber-500 border-amber-500 text-white" : "border-gray-300 dark:border-gray-700"
+                      }`}>
+                        {selected && <Check className="h-2.5 w-2.5 text-white stroke-[3px]" />}
+                      </div>
+                      <span className="text-[10px]">{area.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-1 leading-normal">
+                Al seleccionar zonas, el generador de rutinas de IA evitará ejercicios contraindicados para las articulaciones afectadas.
+              </p>
             </div>
           </div>
         </div>

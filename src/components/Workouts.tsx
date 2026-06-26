@@ -172,6 +172,8 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
         level: userProfile.level,
         environment: userProfile.environment,
         equipment: userProfile.equipment,
+        jointPainAreas: userProfile.jointPainAreas,
+        requiresMedicalClearance: userProfile.requiresMedicalClearance
       });
       if (data) {
         // Construct the local routine session

@@ -176,45 +176,28 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
     return (savedKey && savedKey.trim().length >= 15) ? 2 : 1;
   });
 
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [isStandalone, setIsStandalone] = useState<boolean>(false);
 
-  useEffect(() => {
-    const checkStandalone = () => {
-      const isStandaloneMode = window.matchMedia("(display-mode: standalone)").matches || 
-                               (navigator as any).standalone === true;
-      setIsStandalone(isStandaloneMode);
-    };
-    
-    checkStandalone();
-    
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    };
-  }, []);
-
-  const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === "accepted") {
-      setDeferredPrompt(null);
-      setIsStandalone(true);
-    }
-  };
   const [name, setName] = useState(defaultName || "Richard");
   const [age, setAge] = useState(25);
   const [sex, setSex] = useState<BiologicalSex>("male");
   const [weight, setWeight] = useState<number>(75);
   const [height, setHeight] = useState<number>(175);
   const [dietType, setDietType] = useState<DietType>("standard");
+  const [activityLevel, setActivityLevel] = useState<"sedentary" | "lightly_active" | "moderately_active" | "highly_active" | "heavy_labor">("sedentary");
+  const [stepsRange, setStepsRange] = useState<"under_4k" | "5k_7k" | "8k_10k" | "12k_15k" | "over_18k">("under_4k");
+  const [deficitPace, setDeficitPace] = useState<"conservative" | "moderate" | "aggressive">("moderate");
+  const [solidMealsCount, setSolidMealsCount] = useState<number>(4);
+  const [parqAnswers, setParqAnswers] = useState({
+    q1: false,
+    q2: false,
+    q3: false,
+    q4: false,
+    q5: false,
+    q6: false,
+    q7: false
+  });
+  const [jointPainAreas, setJointPainAreas] = useState<("knee" | "back" | "shoulder")[]>([]);
+  const requiresMedicalClearance = parqAnswers.q1 || parqAnswers.q2 || parqAnswers.q3 || parqAnswers.q7;
   
   // Step 2 variables (Navy & Caliper & IA body fat)
   const [knowsBodyFat, setKnowsBodyFat] = useState<"yes" | "no" | null>(null);
@@ -322,7 +305,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   };
 
   useEffect(() => {
-    if (step === 8) {
+    if (step === 9) {
       checkPushSubscription();
     }
   }, [step]);
@@ -456,6 +439,17 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
     }
   }, [apiKey]);
 
+  const handlePasteApiKey = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        setApiKey(text.trim());
+      }
+    } catch (err) {
+      console.error("Failed to read clipboard:", err);
+    }
+  };
+
   const availableEquipmentOptions = React.useMemo(() => {
     const opts = new Set<string>();
     HYBRID_EQUIPMENT.forEach(x => opts.add(x));
@@ -499,7 +493,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
   // Fetch AI Goal Recommendation on Step 4 mount/reset
   useEffect(() => {
-    if (step === 5 && !aiGoalRecommendation && !isRecommendingGoal && !recommendGoalError) {
+    if (step === 4 && !aiGoalRecommendation && !isRecommendingGoal && !recommendGoalError) {
       const fetchGoalRecommendation = async () => {
         setIsRecommendingGoal(true);
         setRecommendGoalError(null);
@@ -758,7 +752,19 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   };
 
   const handleSubmit = () => {
-    const reqs = calculateRequirements({ weight, height, age, sex, goal, level });
+    const reqs = calculateRequirements({ 
+      weight, 
+      height, 
+      age, 
+      sex, 
+      goal, 
+      level, 
+      bodyFat,
+      activityLevel,
+      stepsRange,
+      deficitPace,
+      dietType
+    });
     
     const finalProfile: UserProfile = {
       name: name || "Usuario",
@@ -786,7 +792,15 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
       apiKey: apiKey || undefined,
       isOnboardingCompleted: true,
       theme: "dark",
-      takesCreatine: takesCreatine === true
+      takesCreatine: takesCreatine === true,
+      activityLevel,
+      stepsRange,
+      deficitPace,
+      solidMealsCount,
+      parqAnswers,
+      requiresMedicalClearance,
+      jointPainAreas,
+      trainingAge: level
     };
 
     onComplete(finalProfile);
@@ -1037,23 +1051,24 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
       <div className="p-6 pb-4 flex items-center justify-between border-b border-white/5 z-10 bg-[#050505]/80 backdrop-blur-xl sticky top-0">
         <div>
           <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-widest">
-            Paso {step} de 8
+            Paso {step} de 9
           </span>
           <h2 className="text-xl font-black text-white tracking-tight italic">
             {step === 1 && "Asistente Inteligente"}
-            {step === 2 && "Instalar Aplicación"}
-            {step === 3 && "Datos Básicos"}
+            {step === 2 && "Datos Básicos"}
+            {step === 3 && "Actividad & Movimiento"}
             {step === 4 && "Análisis Biométrico"}
             {step === 5 && "Tus Objetivos"}
             {step === 6 && "Entrenamiento"}
             {step === 7 && "Perfil Nutricional"}
-            {step === 8 && "Recordatorios"}
+            {step === 8 && "Evaluación de Salud"}
+            {step === 9 && "Recordatorios"}
           </h2>
         </div>
         
         {/* Step Indicator dots */}
         <div className="flex gap-1.5">
-          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
             <div 
               key={i} 
               className={`h-1 rounded-full transition-all duration-300 ${
@@ -1070,156 +1085,6 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
           {step === 2 && (
             <motion.div
               key="step2"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-6 text-center py-4"
-            >
-              <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shadow-lg shadow-emerald-500/5">
-                <Smartphone className="h-8 w-8 text-emerald-400" />
-              </div>
-
-              <div className="space-y-2">
-                <h3 className="text-base font-black text-white tracking-tight">Instala Trophia en tu Pantalla de Inicio</h3>
-                <p className="text-[11px] text-white/50 leading-relaxed max-w-sm mx-auto">
-                  Trophia está diseñada para usarse como una aplicación nativa. Instalarla te dará una experiencia a pantalla completa sin barras de navegación del navegador, más rápida y cómoda.
-                </p>
-              </div>
-
-              {isStandalone ? (
-                <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl flex items-center justify-center gap-2 text-emerald-400 font-bold text-xs max-w-sm mx-auto">
-                  <Check className="h-5 w-5" />
-                  <span>¡Ya estás usando la versión PWA! 🎉</span>
-                </div>
-              ) : (
-                <div className="max-w-sm mx-auto space-y-4 text-left">
-                  {/* Warning banner for iOS users */}
-                  {deviceInfo.isIOS && (
-                    <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl text-amber-400 space-y-1.5">
-                      <div className="flex gap-2 items-start">
-                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
-                        <div>
-                          <span className="font-extrabold text-[11px] block text-amber-300">⚠️ ¡Acción Recomendada!</span>
-                          <p className="text-[10px] text-amber-400/90 leading-relaxed font-medium">
-                            iOS aísla la sesión de Safari/Chrome de la PWA de pantalla de inicio. Si completas la introducción en esta pestaña y la instalas después, <span className="font-bold text-amber-300">perderás tu sesión</span> y tendrás que repetir los pasos. Te recomendamos instalar la app ahora, abrirla desde el inicio y continuar desde allí.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {deferredPrompt ? (
-                    <div className="space-y-3">
-                      <Button
-                        variant="primary"
-                        onClick={handleInstallClick}
-                        className="w-full py-4 text-xs font-black shadow-lg"
-                        size="md"
-                        leftIcon={Download}
-                      >
-                        Instalar Aplicación Directamente
-                      </Button>
-                      <p className="text-[9px] text-white/40 text-center">
-                        * Haz clic en el botón para instalar de forma instantánea en tu dispositivo.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {/* iOS Safari Instructions */}
-                      {deviceInfo.isIOS && deviceInfo.isSafari && (
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
-                          <span className="text-xs font-extrabold text-emerald-400 block uppercase tracking-wider">Cómo instalar en iOS (Safari)</span>
-                          <div className="space-y-2 text-[10px] text-white/70 leading-relaxed font-medium">
-                            <div className="flex gap-2 items-start">
-                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">1</span>
-                              <span>Presiona el botón de <b>Compartir</b> (el cuadrado con la flecha hacia arriba 📤) en la barra inferior de Safari.</span>
-                            </div>
-                            <div className="flex gap-2 items-start">
-                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">2</span>
-                              <span>Desplázate hacia abajo y selecciona la opción <b>Agregar a Inicio</b> (un icono de un cuadrado con un <span className="font-bold">+</span>).</span>
-                            </div>
-                            <div className="flex gap-2 items-start">
-                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">3</span>
-                              <span>Asegúrate de dejar marcado "Abrir como app web" si aparece la opción, y pulsa <b>Agregar</b> en la esquina superior derecha.</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* iOS Chrome Instructions */}
-                      {deviceInfo.isIOS && deviceInfo.isChrome && (
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
-                          <span className="text-xs font-extrabold text-emerald-400 block uppercase tracking-wider">Cómo instalar en iOS (Chrome)</span>
-                          <div className="space-y-2 text-[10px] text-white/70 leading-relaxed font-medium">
-                            <div className="flex gap-2 items-start">
-                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">1</span>
-                              <span>Presiona el menú de los tres puntos (<b>...</b>) al lado de la barra de direcciones de Chrome.</span>
-                            </div>
-                            <div className="flex gap-2 items-start">
-                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">2</span>
-                              <span>Selecciona la opción <b>Compartir</b> (o menú Compartir) y luego busca y pulsa <b>Agregar a pantalla de inicio</b>.</span>
-                            </div>
-                            <div className="flex gap-2 items-start">
-                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">3</span>
-                              <span>Asegúrate de dejar marcado "Abrir como app web" si aparece, y presiona <b>Agregar</b> para confirmar.</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* iOS Other Browsers Instructions */}
-                      {deviceInfo.isIOS && !deviceInfo.isSafari && !deviceInfo.isChrome && (
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
-                          <span className="text-xs font-extrabold text-amber-400 block uppercase tracking-wider">Usa Safari para Instalar</span>
-                          <p className="text-[10px] text-white/70 leading-relaxed font-medium">
-                            En iOS, la instalación de aplicaciones web solo está soportada completamente a través de Safari. Copia el enlace de esta página y ábrelo en <span className="font-bold text-white">Safari</span> para poder agregar Trophia a tu pantalla de inicio.
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Android Instructions */}
-                      {deviceInfo.isAndroid && (
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
-                          <span className="text-xs font-extrabold text-emerald-400 block uppercase tracking-wider">Cómo instalar en Android</span>
-                          <div className="space-y-2 text-[10px] text-white/70 leading-relaxed font-medium">
-                            <div className="flex gap-2 items-start">
-                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">1</span>
-                              <span>Abre el menú del navegador (los tres puntos en la parte superior derecha).</span>
-                            </div>
-                            <div className="flex gap-2 items-start">
-                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">2</span>
-                              <span>Presiona en <b>Instalar aplicación</b> o <b>Agregar a pantalla de inicio</b>.</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Desktop Instructions */}
-                      {!deviceInfo.isMobile && (
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
-                          <span className="text-xs font-extrabold text-emerald-400 block uppercase tracking-wider">Cómo instalar en Computadora</span>
-                          <div className="space-y-2 text-[10px] text-white/70 leading-relaxed font-medium">
-                            <div className="flex gap-2 items-start">
-                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">1</span>
-                              <span>Haz clic en el icono de instalación (una pequeña computadora o una flecha hacia abajo 📥) en el extremo derecho de tu barra de direcciones.</span>
-                            </div>
-                            <div className="flex gap-2 items-start">
-                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">2</span>
-                              <span>O abre el menú del navegador (los tres puntos en la esquina superior) y selecciona <b>Instalar Trophia...</b></span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </motion.div>
-          )}
-
-          {step === 3 && (
-            <motion.div
-              key="step3"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
@@ -1311,6 +1176,79 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                     className="pr-10 font-mono"
                   />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/40 pointer-events-none">cm</span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {step === 3 && (
+            <motion.div
+              key="step3"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-5 text-left animate-in fade-in slide-in-from-bottom-2 duration-300"
+            >
+              <p className="text-xs text-white/50 leading-relaxed font-medium">
+                Tu actividad física diaria no relacionada con el entrenamiento (NEAT) determina una parte fundamental de tus requerimientos calóricos diarios.
+              </p>
+
+              {/* NEAT - Actividad Diaria */}
+              <div className="space-y-3">
+                <label className="block text-[10px] font-bold text-white/40 mb-1 uppercase tracking-wider">
+                  ¿Cómo describirías tu actividad diaria o laboral típica?
+                </label>
+                <div className="grid grid-cols-1 gap-2">
+                  {[
+                    { id: "sedentary", label: "Actividad Sedentaria", desc: "Sentado la mayor parte del tiempo (ej. estudio, clases, oficina, escritorio)." },
+                    { id: "lightly_active", label: "Actividad Ligera", desc: "Estudio/escritorio con caminatas esporádicas, tareas del hogar o traslados ligeros." },
+                    { id: "moderately_active", label: "Actividad Moderada", desc: "De pie la mayor parte del día, caminar frecuente o clases/trabajo dinámico." },
+                    { id: "highly_active", label: "Actividad Intensa", desc: "Esfuerzo físico constante, locomoción activa o deporte intensivo diario." },
+                    { id: "heavy_labor", label: "Trabajo Físico / Labor Pesada", desc: "Esfuerzo y carga física muy pesada (ej. construcción, agricultura, carga manual)." }
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setActivityLevel(item.id as any)}
+                      className={`px-4 py-3 rounded-2xl border text-left transition flex flex-col justify-center cursor-pointer ${
+                        activityLevel === item.id
+                          ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
+                          : "bg-white/5 border-white/10 text-white/40"
+                      }`}
+                    >
+                      <span className="block text-xs font-bold leading-tight">{item.label}</span>
+                      <span className="text-[9px] opacity-60 font-normal block leading-tight mt-0.5">{item.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* NEAT - Pasos Diarios */}
+              <div className="border-t border-white/5 pt-4 space-y-3">
+                <label className="block text-[10px] font-bold text-white/40 mb-1 uppercase tracking-wider">
+                  Promedio de pasos diarios (estimado por tu reloj o teléfono)
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: "under_4k", label: "< 4,000 pasos" },
+                    { id: "5k_7k", label: "5,000 - 7,000" },
+                    { id: "8k_10k", label: "8,000 - 10,000" },
+                    { id: "12k_15k", label: "12,000 - 15,000" },
+                    { id: "over_18k", label: "> 18,000 pasos" }
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setStepsRange(item.id as any)}
+                      className={`p-3 rounded-xl border text-center transition flex flex-col justify-center items-center cursor-pointer ${
+                        stepsRange === item.id
+                          ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
+                          : "bg-white/5 border-white/10 text-white/40 text-xs"
+                      }`}
+                    >
+                      <span className="block text-xs font-bold leading-tight">{item.label}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             </motion.div>
@@ -1857,126 +1795,261 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             </motion.div>
           )}
 
-          {step === 5 && (
-            <motion.div
-              key="step5"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-4"
-            >
-              <p className="text-xs text-white/50 leading-relaxed">
-                Selecciona tu objetivo primordial. Esto adaptará tus macronutrientes recomendados (proteínas, carbohidratos y grasas) y el tipo de entrenamiento sugerido.
-              </p>
+          {step === 5 && (() => {
+            const currentBF = bodyFat || (sex === "male" ? 20 : 28);
+            const targetBF = sex === "male" ? 12 : 22;
+            
+            // LBM and weight target calculation
+            const lbm = weight * (1 - (currentBF / 100));
+            const targetWeight = lbm / (1 - (targetBF / 100));
+            const weightToLose = Math.max(0.5, weight - targetWeight);
 
-              {/* AI Goal Recommendation Box */}
-              <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-2xl p-4 space-y-2.5 text-left">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
-                    <Sparkles className="h-4 w-4 animate-pulse" />
-                    <span>Recomendación de Meta por IA</span>
-                  </div>
-                  {isRecommendingGoal && (
-                    <div className="flex items-center gap-1 text-[10px] text-white/50">
-                      <RefreshCw className="h-3 w-3 animate-spin" />
-                      <span>Analizando composición...</span>
+            // Deficit rate logic matching fitnessUtils
+            const isHighAdiposity = sex === "male" ? currentBF > 25 : currentBF > 35;
+            const isLean = sex === "male" ? currentBF < 15 : currentBF < 25;
+            
+            let weeklyRate = 0.0085;
+            if (isHighAdiposity) {
+              if (deficitPace === "conservative") weeklyRate = 0.010;
+              else if (deficitPace === "moderate") weeklyRate = 0.0125;
+              else if (deficitPace === "aggressive") weeklyRate = 0.015;
+            } else if (isLean) {
+              if (deficitPace === "conservative") weeklyRate = 0.003;
+              else if (deficitPace === "moderate") weeklyRate = 0.005;
+              else if (deficitPace === "aggressive") weeklyRate = 0.007;
+            } else {
+              if (deficitPace === "conservative") weeklyRate = 0.007;
+              else if (deficitPace === "moderate") weeklyRate = 0.0085;
+              else if (deficitPace === "aggressive") weeklyRate = 0.010;
+            }
+
+            const weeklyLossKg = weight * weeklyRate;
+            const weeks = Math.ceil(weightToLose / weeklyLossKg);
+
+            // Muscle rate
+            let monthlyRate = 0.0075;
+            if (level === "beginner") monthlyRate = 0.0125;
+            else if (level === "advanced") monthlyRate = 0.0035;
+            const monthlyGainKg = weight * monthlyRate;
+            const months = Math.ceil(4 / monthlyGainKg);
+
+            return (
+              <motion.div
+                key="step5"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-4 text-left"
+              >
+                <p className="text-xs text-white/50 leading-relaxed">
+                  Selecciona tu objetivo primordial. Esto adaptará tus macronutrientes recomendados (proteínas, carbohidratos y grasas) y el tipo de entrenamiento sugerido.
+                </p>
+
+                {/* AI Goal Recommendation Box */}
+                <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-2xl p-4 space-y-2.5 text-left">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                      <Sparkles className="h-4 w-4 animate-pulse" />
+                      <span>Recomendación de Meta por IA</span>
                     </div>
+                    {isRecommendingGoal && (
+                      <div className="flex items-center gap-1 text-[10px] text-white/50">
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                        <span>Analizando composición...</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {isRecommendingGoal && (
+                    <div className="space-y-2 py-1">
+                      <div className="h-3 w-3/4 bg-white/10 rounded animate-pulse"></div>
+                      <div className="h-3 w-1/2 bg-white/10 rounded animate-pulse"></div>
+                    </div>
+                  )}
+
+                  {recommendGoalError && (
+                    <div className="space-y-2">
+                      <p className="text-[10.5px] text-rose-400 leading-relaxed">
+                        ⚠️ {recommendGoalError}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setRecommendGoalError(null)}
+                        className="text-[10px] bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer active:scale-[0.98]"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        <span>Reintentar Recomendación</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {aiGoalRecommendation && (
+                    <div className="space-y-1">
+                      <div className="text-[10px] text-white/40 font-bold uppercase tracking-wider">
+                        Objetivo Sugerido:{" "}
+                        <span className="text-emerald-400 font-black">
+                          {aiGoalRecommendation.recommendedGoal === "lose_weight" && "Bajar de Peso / Definición"}
+                          {aiGoalRecommendation.recommendedGoal === "gain_muscle" && "Ganar Masa Muscular / Volumen"}
+                          {aiGoalRecommendation.recommendedGoal === "aesthetics" && "Recomposición Estética"}
+                          {aiGoalRecommendation.recommendedGoal === "maintenance" && "Mantenimiento / Salud"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-white/80 leading-relaxed">
+                        {formatAnalysisText(aiGoalRecommendation.reason)}
+                      </p>
+                    </div>
+                  )}
+
+                  {!isRecommendingGoal && !aiGoalRecommendation && !recommendGoalError && (
+                    <p className="text-[11px] text-white/50 leading-relaxed">
+                      Sube tus fotos o ingresa tus medidas en el paso anterior para que Gemini analice tu composición corporal y te recomiende la meta perfecta.
+                    </p>
                   )}
                 </div>
 
-                {isRecommendingGoal && (
-                  <div className="space-y-2 py-1">
-                    <div className="h-3 w-3/4 bg-white/10 rounded animate-pulse"></div>
-                    <div className="h-3 w-1/2 bg-white/10 rounded animate-pulse"></div>
-                  </div>
-                )}
-
-                {recommendGoalError && (
-                  <div className="space-y-2">
-                    <p className="text-[10.5px] text-rose-400 leading-relaxed">
-                      ⚠️ {recommendGoalError}
-                    </p>
+                <div className="space-y-2.5">
+                  {[
+                    {
+                      id: "lose_weight",
+                      title: "Bajar de Peso / Definición",
+                      desc: "Déficit calórico controlado. Alta ingesta de proteínas para mantener masa muscular mientras pierdes grasa.",
+                      icon: "🔥"
+                    },
+                    {
+                      id: "gain_muscle",
+                      title: "Ganar Masa Muscular / Volumen",
+                      desc: "Superávit calórico optimizado. Foco en fuerza progresiva y carbohidratos complejos para el desarrollo de masa muscular.",
+                      icon: "💪"
+                    },
+                    {
+                      id: "aesthetics",
+                      title: "Recomposición Estética",
+                      desc: "Ligero déficit o calorías de mantenimiento. Pérdida de grasa y tonificación muscular simultánea.",
+                      icon: "✨"
+                    },
+                    {
+                      id: "maintenance",
+                      title: "Mantenimiento / Salud",
+                      desc: "Calorías balanceadas. Mantener tu peso actual, mejorar tu energía diaria y tu rendimiento general.",
+                      icon: "⚖️"
+                    }
+                  ].map((option) => (
                     <button
-                      type="button"
-                      onClick={() => setRecommendGoalError(null)}
-                      className="text-[10px] bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer active:scale-[0.98]"
+                      key={option.id}
+                      onClick={() => setGoal(option.id as FitnessGoal)}
+                      className={`w-full p-4 rounded-2xl border text-left transition flex items-start gap-3 cursor-pointer ${
+                        goal === option.id
+                          ? "bg-emerald-500/10 border-emerald-500/40 text-white"
+                          : "bg-white/5 border-white/10 text-white/60 hover:border-white/20"
+                      }`}
                     >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                      <span>Reintentar Recomendación</span>
+                      <span className="text-2xl mt-0.5">{option.icon}</span>
+                      <div className="flex-1">
+                        <span className="block font-extrabold text-xs text-white leading-tight">{option.title}</span>
+                        <span className="block text-[10px] text-white/40 leading-relaxed mt-1">{option.desc}</span>
+                      </div>
                     </button>
-                  </div>
-                )}
+                  ))}
+                </div>
 
-                {aiGoalRecommendation && (
-                  <div className="space-y-1">
-                    <div className="text-[10px] text-white/40 font-bold uppercase tracking-wider">
-                      Objetivo Sugerido:{" "}
-                      <span className="text-emerald-400 font-black">
-                        {aiGoalRecommendation.recommendedGoal === "lose_weight" && "Bajar de Peso / Definición"}
-                        {aiGoalRecommendation.recommendedGoal === "gain_muscle" && "Ganar Masa Muscular / Volumen"}
-                        {aiGoalRecommendation.recommendedGoal === "aesthetics" && "Recomposición Estética"}
-                        {aiGoalRecommendation.recommendedGoal === "maintenance" && "Mantenimiento / Salud"}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-white/80 leading-relaxed">
-                      {formatAnalysisText(aiGoalRecommendation.reason)}
-                    </p>
-                  </div>
-                )}
-
-                {!isRecommendingGoal && !aiGoalRecommendation && !recommendGoalError && (
-                  <p className="text-[11px] text-white/50 leading-relaxed">
-                    Sube tus fotos o ingresa tus medidas en el paso anterior para que Gemini analice tu composición corporal y te recomiende la meta perfecta.
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2.5">
-                {[
-                  {
-                    id: "lose_weight",
-                    title: "Bajar de Peso / Definición",
-                    desc: "Déficit calórico controlado. Alta ingesta de proteínas para mantener masa muscular mientras pierdes grasa.",
-                    icon: "🔥"
-                  },
-                  {
-                    id: "gain_muscle",
-                    title: "Ganar Masa Muscular / Volumen",
-                    desc: "Superávit calórico optimizado. Foco en fuerza progresiva y carbohidratos complejos para el desarrollo de masa muscular.",
-                    icon: "💪"
-                  },
-                  {
-                    id: "aesthetics",
-                    title: "Recomposición Estética",
-                    desc: "Ligero déficit o calorías de mantenimiento. Pérdida de grasa y tonificación muscular simultánea.",
-                    icon: "✨"
-                  },
-                  {
-                    id: "maintenance",
-                    title: "Mantenimiento / Salud",
-                    desc: "Calorías balanceadas. Mantener tu peso actual, mejorar tu energía diaria y tu rendimiento general.",
-                    icon: "⚖️"
-                  }
-                ].map((option) => (
-                  <button
-                    key={option.id}
-                    onClick={() => setGoal(option.id as FitnessGoal)}
-                    className={`w-full p-4 rounded-2xl border text-left transition flex items-start gap-3 ${
-                      goal === option.id
-                        ? "bg-emerald-500/10 border-emerald-500/40 text-white"
-                        : "bg-white/5 border-white/10 text-white/60 hover:border-white/20"
-                    }`}
+                {/* Dynamic Deficit Pace Selector */}
+                {goal === "lose_weight" && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    className="border-t border-white/5 pt-4 mt-2 space-y-3"
                   >
-                    <span className="text-2xl mt-0.5">{option.icon}</span>
-                    <div className="flex-1">
-                      <span className="block font-extrabold text-xs text-white leading-tight">{option.title}</span>
-                      <span className="block text-[10px] text-white/40 leading-relaxed mt-1">{option.desc}</span>
+                    <label className="block text-[10px] font-bold text-white/40 mb-1 uppercase tracking-wider">
+                      ¿A qué ritmo deseas alcanzar este déficit?
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: "conservative", label: "Conservador", desc: "Sostenible" },
+                        { id: "moderate", label: "Moderado", desc: "Clínico" },
+                        { id: "aggressive", label: "Agresivo", desc: "Rápido" }
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setDeficitPace(item.id as any)}
+                          className={`p-3 rounded-xl border text-center transition flex flex-col justify-between items-center h-[52px] cursor-pointer ${
+                            deficitPace === item.id
+                              ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
+                              : "bg-white/5 border-white/10 text-white/40 text-xs"
+                          }`}
+                        >
+                          <span className="block text-[11px] font-bold leading-tight">{item.label}</span>
+                          <span className="text-[8px] opacity-60 font-normal block leading-tight mt-0.5">{item.desc}</span>
+                        </button>
+                      ))}
                     </div>
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          )}
+                    <p className="text-[9px] text-white/30 italic leading-normal">
+                      * Un ritmo agresivo es idóneo con porcentajes de grasa elevados. Si eres magro, un ritmo conservador mantendrá tu tejido muscular intacto.
+                    </p>
+                  </motion.div>
+                )}
+
+                {/* Proyección Científica de Resultados */}
+                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 space-y-2 text-left font-sans mt-3">
+                  <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-widest block">
+                    📈 Proyección Científica de Resultados
+                  </span>
+                  {goal === "lose_weight" ? (
+                    currentBF <= targetBF ? (
+                      <div className="space-y-1">
+                        <p className="text-[11px] text-white font-bold leading-tight">
+                          ¡Tu porcentaje de grasa actual ({currentBF}%) ya es óptimo!
+                        </p>
+                        <p className="text-[9.5px] text-white/50 leading-normal">
+                          Se recomienda un déficit muy leve y controlado para preservación muscular total y definición de detalles.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <p className="text-[11px] text-white font-bold leading-tight">
+                          Llegarás a tu grasa óptima ({targetBF}%) en aprox. <span className="text-emerald-400 font-black">{weeks} semanas</span>.
+                        </p>
+                        <p className="text-[9.5px] text-white/50 leading-normal">
+                          Perdiendo unos <b>{weeklyLossKg.toFixed(2)} kg/semana</b> de forma segura (reducción total de <b>{weightToLose.toFixed(1)} kg</b> de grasa preservando tu tejido muscular).
+                        </p>
+                      </div>
+                    )
+                  ) : goal === "gain_muscle" ? (
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-white font-bold leading-tight">
+                        Para construir 4 kg de masa muscular limpia: <span className="text-emerald-400 font-black">{months} meses</span>.
+                      </p>
+                      <p className="text-[9.5px] text-white/50 leading-normal">
+                        Ganando unos <b>{monthlyGainKg.toFixed(2)} kg/mes</b> de músculo limpio de forma fisiológicamente óptima y limitando la acumulación de grasa.
+                      </p>
+                    </div>
+                  ) : goal === "aesthetics" ? (
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-white font-bold leading-tight">
+                        Recomposición corporal recomendada: <span className="text-emerald-400 font-black">12 a 16 semanas</span>.
+                      </p>
+                      <p className="text-[9.5px] text-white/50 leading-normal">
+                        Fase ideal para notar reducciones visibles en el porcentaje de grasa y ganancias moderadas de tono y firmeza muscular simultáneamente.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-white font-bold leading-tight">
+                        Fase de estabilización recomendada: <span className="text-emerald-400 font-black">8 a 12 semanas</span>.
+                      </p>
+                      <p className="text-[9.5px] text-white/50 leading-normal">
+                        Ideal para consolidar tus resultados anteriores, regular hormonas del apetito y optimizar tu metabolismo antes de volver a definir o volumen.
+                      </p>
+                    </div>
+                  )}
+                  
+                  <p className="text-[8px] text-white/35 italic leading-normal border-t border-white/5 pt-1.5 mt-1.5 text-center font-sans">
+                    * Estimación teórica basada en un 100% de adherencia y consistencia en el déficit calórico y entrenamiento recomendados.
+                  </p>
+                </div>
+              </motion.div>
+            );
+          })()}
 
           {step === 6 && (
             <motion.div
@@ -1992,9 +2065,9 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { id: "beginner", label: "Principiante", desc: "0-6 meses" },
-                    { id: "intermediate", label: "Intermedio", desc: "6-24 meses" },
-                    { id: "advanced", label: "Avanzado", desc: "2+ años" }
+                    { id: "beginner", label: "Principiante", desc: "0-1 año continuo" },
+                    { id: "intermediate", label: "Intermedio", desc: "1-3 años sólidos" },
+                    { id: "advanced", label: "Avanzado", desc: "3+ años continuos" }
                   ].map((lvl) => (
                     <button
                       key={lvl.id}
@@ -2114,7 +2187,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                   </span>
                 </label>
                 
-                <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto no-scrollbar border border-white/5 p-2 rounded-2xl bg-black/30">
+                <div className="grid grid-cols-2 gap-2 border border-white/5 p-2 rounded-2xl bg-black/30">
                   {availableEquipmentOptions.map((eq) => {
                     const selected = equipment.includes(eq);
                     return (
@@ -2160,7 +2233,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                     <div>
                       <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Requerimiento Diario</span>
                       <div className="text-4xl font-black text-emerald-400 tracking-tight mt-1 font-mono">
-                        {calculateRequirements({ weight, height, age, sex, goal, level }).calories} <span className="text-xs font-normal text-white/50 italic font-sans ml-0.5">kcal</span>
+                        {calculateRequirements({ weight, height, age, sex, goal, level, bodyFat, activityLevel, stepsRange, deficitPace, dietType }).calories} <span className="text-xs font-normal text-white/50 italic font-sans ml-0.5">kcal</span>
                       </div>
                     </div>
 
@@ -2168,19 +2241,19 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                       <div className="bg-white/5 py-2.5 rounded-xl border border-white/5">
                         <span className="block text-[8px] text-white/40 uppercase font-bold">Proteína</span>
                         <span className="text-xs font-extrabold text-white font-mono">
-                          {calculateRequirements({ weight, height, age, sex, goal, level }).protein}g
+                          {calculateRequirements({ weight, height, age, sex, goal, level, bodyFat, activityLevel, stepsRange, deficitPace, dietType }).protein}g
                         </span>
                       </div>
                       <div className="bg-white/5 py-2.5 rounded-xl border border-white/5">
                         <span className="block text-[8px] text-white/40 uppercase font-bold">Carbos</span>
                         <span className="text-xs font-extrabold text-white font-mono">
-                          {calculateRequirements({ weight, height, age, sex, goal, level }).carbs}g
+                          {calculateRequirements({ weight, height, age, sex, goal, level, bodyFat, activityLevel, stepsRange, deficitPace, dietType }).carbs}g
                         </span>
                       </div>
                       <div className="bg-white/5 py-2.5 rounded-xl border border-white/5">
                         <span className="block text-[8px] text-white/40 uppercase font-bold">Grasas</span>
                         <span className="text-xs font-extrabold text-white font-mono">
-                          {calculateRequirements({ weight, height, age, sex, goal, level }).fat}g
+                          {calculateRequirements({ weight, height, age, sex, goal, level, bodyFat, activityLevel, stepsRange, deficitPace, dietType }).fat}g
                         </span>
                       </div>
                     </div>
@@ -2218,6 +2291,52 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                       ))}
                     </div>
                   </div>
+
+                  {/* Comidas sólidas al día */}
+                  <div className="border-t border-white/5 pt-4 space-y-2">
+                    <label className="block text-[10px] font-bold text-white/40 mb-2 uppercase tracking-widest">
+                      ¿Cuántas comidas al día prefieres realizar?
+                    </label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[3, 4, 5, 6].map((num) => (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => setSolidMealsCount(num)}
+                          className={`p-3 rounded-xl border text-center transition flex flex-col justify-center items-center h-[46px] cursor-pointer ${
+                            solidMealsCount === num
+                              ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
+                              : "bg-white/5 border-white/10 text-white/40 text-xs"
+                          }`}
+                        >
+                          <span className="block text-xs font-bold leading-tight">{num === 6 ? "6 o más" : `${num} comidas`}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Vegan / Vegetarian supplementation notice */}
+                  {(dietType === "vegan" || dietType === "vegetarian") && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-emerald-500/5 p-4 rounded-2xl border border-emerald-500/15 space-y-2.5 text-left mt-3"
+                    >
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        <span>Recomendación Nutricional Plant-Based</span>
+                      </div>
+                      <p className="text-[10px] text-white/60 leading-normal font-medium">
+                        Las dietas vegetarianas y veganas son excelentes para la salud, pero requieren atención en ciertos micronutrientes. Te sugerimos complementar con:
+                      </p>
+                      <ul className="text-[9.5px] text-white/50 space-y-1 pl-4 list-disc leading-normal font-medium">
+                        <li><b>Vitamina B12:</b> Esencial para el sistema nervioso y glóbulos rojos (suplementar con cianocobalamina).</li>
+                        <li><b>Vitamina D3:</b> Favorece la salud ósea y muscular (derivada de líquenes).</li>
+                        <li><b>Omega 3 (DHA/EPA):</b> Importante para la salud cardiovascular y cerebral (de origen algal).</li>
+                        <li><b>Hierro y Zinc:</b> Consume vitamina C junto con tus legumbres para potenciar la absorción de hierro vegetal (no hemo).</li>
+                      </ul>
+                    </motion.div>
+                  )}
                 </>
               ) : (
                 <motion.div
@@ -2317,6 +2436,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             </motion.div>
           )}
 
+
           {step === 1 && (
             <motion.div
               key="step1"
@@ -2350,14 +2470,25 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
               <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
                 <label className="block text-[10px] text-white/40 font-bold uppercase tracking-wider">Clave de API de Gemini</label>
-                <Input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="AIzaSy... (Obligatorio)"
-                  className="bg-[#121212] rounded-xl font-mono"
-                  size="md"
-                />
+                <div className="flex gap-2 items-center">
+                  <div className="flex-1">
+                    <Input
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="AIzaSy... (Obligatorio)"
+                      className="bg-[#121212] rounded-xl font-mono"
+                      size="md"
+                    />
+                  </div>
+                  <Button
+                    variant="secondary"
+                    onClick={handlePasteApiKey}
+                    className="shrink-0 h-[42px] px-3.5 text-[11px] font-bold rounded-xl"
+                  >
+                    Pegar
+                  </Button>
+                </div>
 
                 <div className="flex gap-2 p-3 bg-emerald-500/10 border border-emerald-500/15 rounded-xl text-[9px] text-emerald-400 leading-normal">
                   <AlertCircle className="h-4 w-4 flex-shrink-0" />
@@ -2387,6 +2518,131 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
+              className="space-y-4 text-left"
+            >
+              <p className="text-xs text-white/50 leading-relaxed">
+                Completa este breve tamizaje oficial de aptitud física (PAR-Q+) para entrenar de forma 100% segura y libre de riesgos.
+              </p>
+
+              <div className="space-y-3.5 pr-1 border border-white/5 p-3 rounded-2xl bg-black/20">
+                {[
+                  { id: "q1", text: "1. ¿Alguna vez un médico te ha indicado que padeces de una afección cardíaca o presión arterial alta?" },
+                  { id: "q2", text: "2. ¿Sientes dolor, opresión o pesadez en el pecho en reposo o al realizar actividad física?" },
+                  { id: "q3", text: "3. ¿Experimentas pérdidas de equilibrio por mareos frecuentes o has perdido el conocimiento en los últimos 12 meses?" },
+                  { id: "q4", text: "4. ¿Se te ha diagnosticado otra afección médica de carácter crónico?" },
+                  { id: "q5", text: "5. ¿Tomas actualmente medicamentos recetados para alguna condición médica crónica?" },
+                  { id: "q6", text: "6. ¿Tienes algún problema óseo, articular o muscular que pueda agravarse al hacer ejercicio más intenso?" },
+                  { id: "q7", text: "7. ¿Alguna vez un especialista te ha indicado que solo debes hacer ejercicio bajo supervisión médica estricta?" }
+                ].map((q) => {
+                  const val = (parqAnswers as any)[q.id];
+                  return (
+                    <div key={q.id} className="bg-white/[0.02] border border-white/5 rounded-xl p-3 space-y-2 flex flex-col justify-between font-sans">
+                      <span className="text-[10px] text-white/80 leading-normal font-medium">{q.text}</span>
+                      <div className="flex gap-2 h-8">
+                        <button
+                          key={`${q.id}-yes`}
+                          type="button"
+                          onClick={() => setParqAnswers(prev => ({ ...prev, [q.id]: true }))}
+                          className={`flex-1 rounded-lg text-[10px] font-bold transition cursor-pointer flex items-center justify-center ${
+                            val === true
+                              ? "bg-rose-500/20 border border-rose-500/40 text-rose-400"
+                              : "bg-white/5 border border-white/10 text-white/40"
+                          }`}
+                        >
+                          Sí
+                        </button>
+                        <button
+                          key={`${q.id}-no`}
+                          type="button"
+                          onClick={() => setParqAnswers(prev => ({ ...prev, [q.id]: false }))}
+                          className={`flex-1 rounded-lg text-[10px] font-bold transition cursor-pointer flex items-center justify-center ${
+                            val === false
+                              ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-400"
+                              : "bg-white/5 border border-white/10 text-white/40"
+                          }`}
+                        >
+                          No
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Dynamic Anatomical Areas affected if Q6 is true */}
+              {parqAnswers.q6 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-amber-500/5 p-4 rounded-2xl border border-amber-500/15 space-y-3 text-left font-sans"
+                >
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <span>¿Qué zona articular o muscular te afecta?</span>
+                  </div>
+                  <p className="text-[9.5px] text-white/50 leading-normal">
+                    Selecciona las áreas afectadas para que nuestra IA adapte tus rutinas eliminando ejercicios contraindicados:
+                  </p>
+                  
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: "knee", label: "Rodilla" },
+                      { id: "back", label: "Espalda Baja" },
+                      { id: "shoulder", label: "Hombro" }
+                    ].map((area) => {
+                      const selected = jointPainAreas.includes(area.id as any);
+                      return (
+                        <button
+                          key={area.id}
+                          type="button"
+                          onClick={() => {
+                            const newArea = area.id as any;
+                            if (selected) {
+                              setJointPainAreas(jointPainAreas.filter(a => a !== newArea));
+                            } else {
+                              setJointPainAreas([...jointPainAreas, newArea]);
+                            }
+                          }}
+                          className={`py-2 px-1 rounded-xl border text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                            selected
+                              ? "bg-amber-500/15 border-amber-500/45 text-amber-400 font-bold"
+                              : "bg-white/5 border border-white/10 text-white/40 text-xs"
+                          }`}
+                        >
+                          <div className={`w-3 h-3 rounded flex items-center justify-center border transition ${
+                            selected ? "bg-amber-500 border-amber-500 text-black" : "border-white/20"
+                          }`}>
+                            {selected && <Check className="h-2 w-2 stroke-[4px]" />}
+                          </div>
+                          <span className="text-[10px]">{area.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Cardiovascular / Neurological alert if Q1/Q2/Q3/Q7 is true */}
+              {requiresMedicalClearance && (
+                <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl text-left space-y-1.5 font-sans">
+                  <span className="text-xs font-extrabold text-red-400 flex items-center gap-1.5">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>Aviso de Seguridad Médica</span>
+                  </span>
+                  <p className="text-[10px] text-white/60 leading-relaxed font-medium">
+                    Has indicado antecedentes o síntomas cardiovasculares o neurológicos. Por tu seguridad, <b>Trophia congelará la generación de rutinas de alta intensidad</b>. Te recomendamos fuertemente obtener autorización de un médico antes de iniciar actividad física vigorosa.
+                  </p>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {step === 9 && (
+            <motion.div
+              key="step9"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
               className="space-y-6 text-center py-4"
             >
               <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shadow-lg shadow-emerald-500/5">
@@ -2411,10 +2667,10 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                 <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl text-left space-y-1.5 max-w-sm mx-auto">
                   <span className="text-xs font-extrabold text-amber-400 flex items-center gap-1.5">
                     <Info className="h-4 w-4" />
-                    <span>Safari en iOS Detectado</span>
+                    <span>Notificaciones no disponibles</span>
                   </span>
                   <p className="text-[10px] text-white/60 leading-relaxed">
-                    Para activar las notificaciones en iOS, debes agregar Trophia a tu pantalla de inicio (Compartir → Guardar en Pantalla de Inicio) y abrir la app desde allí. Podrás activarlas después en los Ajustes.
+                    Las notificaciones push no son compatibles con este navegador o dispositivo.
                   </p>
                 </div>
               ) : (
@@ -2536,7 +2792,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             >
               Siguiente
             </Button>
-          ) : step < 8 ? (
+          ) : step < 9 ? (
             <Button
               variant="primary"
               onClick={handleNext}

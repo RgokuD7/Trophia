@@ -39,6 +39,22 @@ export interface UserProfile {
   activeRoutesToday?: { routeId: string; date: string }[];
   weeklyTrainingDays?: number;
   environments?: TrainingEnvironment[];
+  activityLevel?: "sedentary" | "lightly_active" | "moderately_active" | "highly_active" | "heavy_labor";
+  stepsRange?: "under_4k" | "5k_7k" | "8k_10k" | "12k_15k" | "over_18k";
+  deficitPace?: "conservative" | "moderate" | "aggressive";
+  solidMealsCount?: number;
+  parqAnswers?: {
+    q1: boolean;
+    q2: boolean;
+    q3: boolean;
+    q4: boolean;
+    q5: boolean;
+    q6: boolean;
+    q7: boolean;
+  };
+  requiresMedicalClearance?: boolean;
+  jointPainAreas?: ("knee" | "back" | "shoulder")[];
+  trainingAge?: ExperienceLevel;
 
   aiRecommendations?: {
     summary: string;

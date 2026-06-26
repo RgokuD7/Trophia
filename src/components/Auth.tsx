@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { AlertCircle, AlertTriangle, Smartphone, ChevronRight } from "lucide-react";
+import { AlertCircle, AlertTriangle, Smartphone, ChevronRight, Share } from "lucide-react";
 import { loginWithGoogle } from "../services/authService";
 import logo from "../assets/logo.png";
 import { Button } from "./ui/Button";
@@ -47,7 +47,7 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
 
   if (deviceInfo.isMobile && !isStandalone) {
     return (
-      <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0d0e15] px-6 py-12 justify-between items-center relative overflow-hidden">
+      <div className="flex flex-col min-h-full w-full bg-[#0d0e15] px-6 py-6 justify-between items-center relative overflow-y-auto no-scrollbar pb-10">
         {/* Decorative Gradients */}
         <div className="absolute top-[-10%] left-[-10%] w-[150px] h-[150px] rounded-full bg-emerald-500/10 blur-[80px]"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[180px] h-[180px] rounded-full bg-blue-500/10 blur-[80px]"></div>
@@ -80,7 +80,7 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
             </p>
           </div>
 
-          <div className="bg-white dark:bg-[#121420]/60 border border-gray-200 dark:border-[#1e2238] rounded-2xl p-4 space-y-3.5 shadow-md">
+          <div className="bg-[#121420]/60 border border-[#1e2238] rounded-2xl p-4 space-y-3.5 shadow-md">
             <span className="text-xs font-black text-emerald-400 block uppercase tracking-wider">
               ¿Cómo instalar en tu {deviceInfo.isIOS ? "iPhone / iPad" : "Android"}?
             </span>
@@ -89,11 +89,11 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
               <div className="space-y-2.5 text-[10px] text-white/70 leading-relaxed font-medium">
                 <div className="flex gap-2.5 items-start">
                   <span className="bg-white/10 w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">1</span>
-                  <span>Presiona el botón de <b>Compartir</b> (el icono de cuadrado con una flecha hacia arriba 📤) en Safari.</span>
+                  <span>Presiona el botón de <b>Compartir</b> (icono <Share className="inline-block h-3.5 w-3.5 mx-1 mb-0.5 text-emerald-400" /> en la barra inferior) o, si usas la barra de pestañas compacta, presiona primero los tres puntos (<b>...</b>).</span>
                 </div>
                 <div className="flex gap-2.5 items-start">
                   <span className="bg-white/10 w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">2</span>
-                  <span>Desplázate hacia abajo y selecciona <b>Agregar a Inicio</b> (el icono con un signo <b>+</b>).</span>
+                  <span>Desplázate hacia abajo y selecciona <b>Agregar a Inicio</b> (icono con un signo <b>+</b>).</span>
                 </div>
                 <div className="flex gap-2.5 items-start">
                   <span className="bg-white/10 w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">3</span>
@@ -106,11 +106,11 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
               <div className="space-y-2.5 text-[10px] text-white/70 leading-relaxed font-medium">
                 <div className="flex gap-2.5 items-start">
                   <span className="bg-white/10 w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">1</span>
-                  <span>Presiona el menú de tres puntos (<b>...</b>) al lado de la barra de direcciones de Chrome.</span>
+                  <span>Presiona el icono de <b>Compartir</b> (el icono <Share className="inline-block h-3.5 w-3.5 mx-1 mb-0.5 text-emerald-400" /> en la barra de direcciones superior) o abre el menú de tres puntos (<b>...</b>).</span>
                 </div>
                 <div className="flex gap-2.5 items-start">
                   <span className="bg-white/10 w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">2</span>
-                  <span>Selecciona la opción <b>Compartir</b> y luego pulsa <b>Agregar a pantalla de inicio</b>.</span>
+                  <span>Presiona en <b>Compartir</b> (o "Ver más" si es necesario) y luego busca y pulsa <b>Agregar a pantalla de inicio</b>.</span>
                 </div>
                 <div className="flex gap-2.5 items-start">
                   <span className="bg-white/10 w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">3</span>
@@ -185,7 +185,7 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0d0e15] px-6 py-12 justify-between items-center relative overflow-hidden">
+    <div className="flex flex-col min-h-full w-full bg-[#0d0e15] px-6 py-6 justify-between items-center relative overflow-y-auto no-scrollbar pb-10">
       
       {/* Decorative Gradients */}
       <div className="absolute top-[-10%] left-[-10%] w-[150px] h-[150px] rounded-full bg-emerald-500/10 blur-[80px]"></div>
