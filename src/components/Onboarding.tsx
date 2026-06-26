@@ -1092,15 +1092,15 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                         <div className="space-y-2 text-[10px] text-white/70 leading-relaxed font-medium">
                           <div className="flex gap-2 items-start">
                             <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">1</span>
-                            <span>Pulsa el botón de <b>Compartir</b> en Safari (el ícono de la flecha hacia arriba <span className="inline-flex items-center text-[11px] font-bold bg-white/10 px-1 rounded">📤</span> en la barra inferior).</span>
+                            <span>Presiona el menú de los 3 puntos (<span className="font-bold">...</span>) en la esquina del navegador o el botón de compartir.</span>
                           </div>
                           <div className="flex gap-2 items-start">
                             <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">2</span>
-                            <span>Selecciona la opción <b>Agregar a pantalla de inicio</b> (o <b>Añadir a pantalla de inicio</b> ➕).</span>
+                            <span>Selecciona la opción <b>Compartir</b> y desplázate hacia abajo para pulsar <b>Agregar a Inicio</b> (un icono de cuadrado con un <span className="font-bold">+</span>).</span>
                           </div>
                           <div className="flex gap-2 items-start">
                             <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">3</span>
-                            <span>Abre la app desde el ícono de <b>Trophia</b> en tu pantalla de inicio.</span>
+                            <span>Deja marcado "Abrir como app web" si aparece la opción, y pulsa <b>Agregar</b> en la esquina superior derecha.</span>
                           </div>
                         </div>
                       </div>
