@@ -1,0 +1,258 @@
+[
+  {
+    "id": "sobrecarga-progresiva",
+    "category": "entrenamiento",
+    "title": "Sobrecarga Progresiva Multifactorial",
+    "text": "La sobrecarga progresiva no es solo subir peso. Aumentar repeticiones con el mismo peso genera adaptaciones de fuerza e hipertrofia comparables a incrementar la carga. Es ideal cuando el incremento de peso no sea viable o el equipo sea limitado.",
+    "source": "Plotkin et al. (2022) - PubMed: 36199287",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/36199287/"
+  },
+  {
+    "id": "volumen-semanal",
+    "category": "entrenamiento",
+    "title": "Volumen Óptimo de Series",
+    "text": "Para maximizar la ganancia muscular, se recomienda realizar entre 10 y 20 series efectivas semanales por grupo muscular. Volúmenes mayores pueden generar mayores incrementos, pero dependen estrictamente de tu capacidad de recuperación.",
+    "source": "Schoenfeld et al. (2019) - PMC: PMC6303131",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6303131/"
+  },
+  {
+    "id": "frecuencia-semanal",
+    "category": "entrenamiento",
+    "title": "Frecuencia de Entrenamiento",
+    "text": "Entrenar cada grupo muscular al menos 2 veces por semana produce resultados superiores que hacerlo una sola vez. La síntesis de proteína muscular (MPS) alcanza su pico a las 24 horas y retorna a niveles basales en 48-72 horas.",
+    "source": "Grgic et al. (2018) - PubMed: 29470825",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/29470825/"
+  },
+  {
+    "id": "entrenamiento-fallo",
+    "category": "entrenamiento",
+    "title": "El Fallo Muscular No Es Indispensable",
+    "text": "No es necesario entrenar al fallo en cada serie. Detener tus series dejando de 1 a 4 Repeticiones en Reserva (RIR) proporciona un estímulo anabólico idéntico al fallo, mitigando la fatiga del sistema nervioso central.",
+    "source": "Vieira et al. (2021) - PubMed: 33555822",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/33555822/"
+  },
+  {
+    "id": "orden-ejercicios",
+    "category": "entrenamiento",
+    "title": "Orden de los Ejercicios",
+    "text": "Prioriza siempre los movimientos compuestos (multiarticulares) al inicio de tu sesión. Hacer aislamiento primero acumula metabolitos prematuramente y precipita la fatiga central, disminuyendo el reclutamiento de unidades motoras.",
+    "source": "Schumann et al. (2022) / UNM Study",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/22292516/"
+  },
+  {
+    "id": "rango-movimiento",
+    "category": "entrenamiento",
+    "title": "Rango de Movimiento Completo (ROM)",
+    "text": "Entrenar con rango de movimiento completo induce adaptaciones estructurales significativamente mayores. La tensión mecánica bajo elongación (estiramiento muscular bajo carga) es uno de los estímulos anabólicos más potentes.",
+    "source": "Kassiano et al. (2023) - PubMed: 36662126",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/36662126/"
+  },
+  {
+    "id": "sentadilla-profunda",
+    "category": "entrenamiento",
+    "title": "Sentadillas y Rango Completo",
+    "text": "La flexión profunda en sentadilla (90° a 140°) maximiza la activación del glúteo mayor y del vasto lateral. Restringir el rango por miedo a lesionarse es contraproducente: trabajar en rangos completos fortalece los tejidos conectivos.",
+    "source": "Muscle Activation in Squat - PMC: PMC4967668",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4967668/"
+  },
+  {
+    "id": "press-banca-agarre",
+    "category": "entrenamiento",
+    "title": "Agarre en Press de Banca",
+    "text": "Utilizar un agarre excesivamente ancho incrementa las fuerzas de cizallamiento en la articulación acromioclavicular del hombro. Se recomienda un agarre ligeramente más estrecho y mantener retracción escapular constante.",
+    "source": "Decoding Shoulder Mechanics - PMC: PMC12372072",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12372072/"
+  },
+  {
+    "id": "remo-retraccion",
+    "category": "entrenamiento",
+    "title": "Retracción Escapular en Remo",
+    "text": "Mantener las escápulas en retracción constante durante el remo sentado maximiza la actividad isométrica del trapecio medio y de los romboides, previniendo la disquinesia escapular y mejorando la postura.",
+    "source": "Seated Row Scapular Positions - PMC: PMC12821611",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12821611/"
+  },
+  {
+    "id": "proteina-diaria",
+    "category": "nutricion",
+    "title": "Requerimientos Diarios de Proteína",
+    "text": "Para maximizar la síntesis de proteína muscular, se establecen requerimientos en el rango de 1.6 a 2.2 g por kg de peso corporal al día, distribuyendo el consumo de manera uniforme cada 3 o 4 horas.",
+    "source": "ISSN Position Stand - PubMed: 28642676",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/28642676/"
+  },
+  {
+    "id": "proteina-definiton",
+    "category": "nutricion",
+    "title": "Proteína en Déficit Calórico",
+    "text": "Durante fases de déficit calórico estricto para perder grasa, la evidencia sugiere elevar el consumo de proteína a rangos de 2.3 a 3.1 g por kg de peso corporal al día para preservar el tejido magro y evitar el catabolismo.",
+    "source": "ISSN Position Stand - PubMed: 28642676",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/28642676/"
+  },
+  {
+    "id": "dieta-flexible",
+    "category": "nutricion",
+    "title": "Alimentación Flexible vs. Control Rígido",
+    "text": "El control dietético rígido (clasificar alimentos como 'buenos' o 'malos') es el mayor predictor de atracones y efecto rebote. La alimentación flexible promueve mayor retención de masa magra y sostenibilidad psicológica.",
+    "source": "Conlin et al. (2021) / Linardon et al. (2017) - PMC: PMC8745028",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8745028/"
+  },
+  {
+    "id": "recomposicion-corporal",
+    "category": "nutricion",
+    "title": "Recomposición Corporal",
+    "text": "Ganar músculo y perder grasa simultáneamente es un fenómeno científicamente documentado en novatos, personas con sobrepeso y atletas entrenados. El peso de la báscula es engañoso: puedes perder grasa y ganar músculo sin variar tu peso total.",
+    "source": "Barakat et al. (2020) - Study Link",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/32030125/"
+  },
+  {
+    "id": "cardio-liss",
+    "category": "cardio",
+    "title": "Beneficios del Cardio LISS",
+    "text": "El cardio de baja intensidad constante (LISS) depende casi exclusivamente de la oxidación de lípidos (grasas) durante la sesión. Su gran ventaja es que genera nula fatiga central, minimizando la interferencia con los entrenamientos de pesas.",
+    "source": "Viana et al. (2017) - PubMed: 29127602",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/29127602/"
+  },
+  {
+    "id": "cardio-hiit",
+    "category": "cardio",
+    "title": "Cardio HIIT y Grasa Visceral",
+    "text": "El cardio de alta intensidad por intervalos (HIIT) utiliza principalmente glucógeno, pero incrementa el consumo de oxígeno post-ejercicio (EPOC). Muestra una ventaja marginal en la reducción de grasa visceral en menos tiempo, pero exige más al sistema nervioso.",
+    "source": "Viana et al. (2017) - PMC: PMC10048683",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10048683/"
+  },
+  {
+    "id": "interferencia-cardio",
+    "category": "cardio",
+    "title": "Evitar la Interferencia de Cardio",
+    "text": "El cardio no compromete la ganancia muscular si se programa correctamente. Para mitigar la interferencia: separa el cardio y las pesas por al menos 6 horas, prioriza la fuerza primero y opta por cardio de bajo impacto (como bicicleta).",
+    "source": "Schumann et al. (2022) - Compatibility Study",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/33433148/"
+  },
+  {
+    "id": "creatina-beneficios",
+    "category": "suplementacion",
+    "title": "Eficacia de la Creatina Monohidratada",
+    "text": "La creatina satura los depósitos celulares de fosfocreatina para acelerar la resíntesis de ATP. Incrementa la fuerza máxima, el volumen de trabajo tolerado y mejora la función cognitiva (memoria y fatiga mental).",
+    "source": "Kreider et al. (2017) - PMC: PMC5469049",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5469049/"
+  },
+  {
+    "id": "creatina-mitos",
+    "category": "suplementacion",
+    "title": "Desmitificando la Creatina",
+    "text": "La creatina no causa problemas renales en individuos sanos. Además, la retención de líquidos asociada es intracelular (anabólica y positiva para la síntesis de proteína) y no subcutánea. Se recomiendan de 3 a 5 gramos diarios continuos.",
+    "source": "Kreider et al. (2017) - PMC: PMC2048496",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC2048496/"
+  },
+  {
+    "id": "suplemento-whey",
+    "category": "suplementacion",
+    "title": "Proteína de Suero de Leche (Whey)",
+    "text": "La proteína Whey destaca por su velocidad de absorción y digestión rápida, lo que la convierte en una opción extremadamente práctica y eficiente para el periodo post-entrenamiento.",
+    "source": "ISSN Position Stand - PubMed: 28642676",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/28642676/"
+  },
+  {
+    "id": "suplemento-caseina",
+    "category": "suplementacion",
+    "title": "Proteína de Caseína",
+    "text": "La caseína es una proteína de absorción lenta. Consumir de 30 a 40 gramos antes de dormir proporciona un flujo sostenido de aminoácidos durante la noche, elevando la síntesis proteica muscular nocturna.",
+    "source": "ISSN Position Stand - PMC: PMC5596471",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5596471/"
+  },
+  {
+    "id": "suplemento-cafeina",
+    "category": "suplementacion",
+    "title": "Cafeína como Ayuda Errogénica",
+    "text": "La cafeína en dosis de 3 a 6 mg por kg de peso actúa como antagonista de la adenosina. Esto incrementa la producción de fuerza muscular, reduce la percepción del esfuerzo y retrasa la aparición de fatiga.",
+    "source": "Tactical Athlete Nutrition - PMC Study",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/28642676/"
+  },
+  {
+    "id": "suplemento-betaalanina",
+    "category": "suplementacion",
+    "title": "Uso de la Beta-Alanina",
+    "text": "La Beta-Alanina en dosis de 4 a 6 g/día actúa como un tampón intracelular de carnosina contra la acidosis láctica. Esto mejora notablemente el rendimiento y la resistencia en esfuerzos sostenidos de alta intensidad.",
+    "source": "Trexler et al. (2015) - PubMed: 26175657",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/26175657/"
+  },
+  {
+    "id": "suplemento-lcarnitina",
+    "category": "suplementacion",
+    "title": "La Realidad de la L-Carnitina",
+    "text": "La L-Carnitina no posee evidencia científica sólida que respalde propiedades lipolíticas (quemadoras de grasa) en humanos a menos que exista un déficit calórico establecido. No malgastes tu dinero sin cuidar tu dieta.",
+    "source": "ISSN Supplements Review - PubMed: 28642676",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/28642676/"
+  },
+  {
+    "id": "sueño-proteinas",
+    "category": "salud",
+    "title": "Higiene de Sueño y Músculo",
+    "text": "Una sola noche de privación total de sueño reduce la síntesis de proteína muscular en un 18%, incrementa el cortisol (hormona catabólica) en un 21% y suprime la testosterona total un 24%, saboteando tu composición corporal.",
+    "source": "Dattilo et al. (2021) - PubMed: 33400856",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/33400856/"
+  },
+  {
+    "id": "descarga-deload",
+    "category": "salud",
+    "title": "Semanas de Descarga (Deload)",
+    "text": "Para disipar la fatiga acumulada en el sistema nervioso y articulaciones, se aconseja una semana de descarga cada 4-6 semanas. Consiste en reducir a la mitad el volumen (series) y alejarse del fallo, no en dejar de entrenar.",
+    "source": "Bell et al. (2022) / PMC Study",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC13031491/"
+  },
+  {
+    "id": "mito-grasa-localizada",
+    "category": "mito",
+    "title": "Mito: Pérdida de Grasa Localizada",
+    "text": "No se puede elegir de dónde perder grasa. Realizar abdominales no elimina la grasa de la barriga. Metaanálisis con más de 1,100 participantes demuestran que el ejercicio localizado tiene un efecto nulo en la grasa adyacente.",
+    "source": "Ramírez-Campillo et al. (2022) - Study Link",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/36199287/"
+  },
+  {
+    "id": "mito-tonificar",
+    "category": "mito",
+    "title": "Mito: Tonificar con Poco Peso",
+    "text": "La 'tonificación' como proceso fisiológico aislado no existe. Lo que popularmente se conoce como tonificar es simplemente el resultado visual de desarrollar masa muscular y mantener un porcentaje de grasa corporal bajo.",
+    "source": "8 Strength Training Myths - Innermost Study",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/26024494/"
+  },
+  {
+    "id": "mito-sudar",
+    "category": "mito",
+    "title": "Mito: Sudar es Perder Grasa",
+    "text": "Sudar no equivale a quemar grasa. Las fajas y saunas inducen una pérdida temporal de agua y deshidratación, no oxidación de lípidos. Además, entrenar deshidratado disminuye drásticamente el rendimiento.",
+    "source": "ACSM Position Stand on Hydration",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/41843416/"
+  },
+  {
+    "id": "mito-agujetas",
+    "category": "mito",
+    "title": "Mito: Sin Agujetas No Hay Progreso",
+    "text": "Las agujetas (DOMS) no indican un mejor entrenamiento. Son una respuesta inflamatoria inicial a estímulos nuevos. Con la adaptación celular (repeated bout effect), el dolor desaparece, pero el crecimiento y las ganancias musculares continúan ocurriendo al mismo ritmo.",
+    "source": "Muscle Hypertrophy Umbrella Review - PMC: PMC9302196",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9302196/"
+  },
+  {
+    "id": "mito-frecuencia-comidas",
+    "category": "mito",
+    "title": "Mito: Comer 6 Veces Acelera el Metabolismo",
+    "text": "La frecuencia de las comidas no altera tu tasa metabólica basal ni tu pérdida de grasa. Comer 2 veces al día o 6 veces al día da exactamente el mismo resultado metabólico si el total calórico y proteico es idéntico.",
+    "source": "Schoenfeld et al. (2015) - PubMed: 26024494",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/26024494/"
+  },
+  {
+    "id": "mito-pesas-mujeres",
+    "category": "mito",
+    "title": "Mito: Las Pesas Masculinizan a las Mujeres",
+    "text": "Las mujeres poseen solo una pequeña fracción de la testosterona de los hombres. El entrenamiento de fuerza pesado no las ensancha desproporcionadamente; al contrario, mejora su densidad ósea y estética funcional y atlética.",
+    "source": "ACSM Resistance Training Guidelines",
+    "url": "https://acsm.org/resistance-training-guidelines-update-2026/"
+  },
+  {
+    "id": "mito-ventana-anabolica",
+    "category": "mito",
+    "title": "Mito: La Ventana Anabólica de 30 Minutos",
+    "text": "La 'ventana anabólica' no dura solo 30 minutos. La sensibilidad del músculo a absorber nutrientes y sintetizar proteínas permanece elevada entre 24 y 48 horas post-entreno. Lo importante es el total de proteína diaria.",
+    "source": "Aragon & Schoenfeld (2013) - PMC Study",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3577439/"
+  }
+]

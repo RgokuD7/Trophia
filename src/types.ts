@@ -3,6 +3,7 @@ export type FitnessGoal = "lose_weight" | "gain_muscle" | "aesthetics" | "mainte
 export type ExperienceLevel = "beginner" | "intermediate" | "advanced";
 export type TrainingEnvironment = "gym" | "home" | "outdoor";
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
+export type DietType = "standard" | "vegetarian" | "vegan" | "keto" | "paleo" | "mediterranean";
 
 export interface UserProfile {
   name: string;
@@ -20,6 +21,7 @@ export interface UserProfile {
   environment: TrainingEnvironment;
   equipment: string[];
   nutritionKnowledge: "low" | "medium" | "high";
+  dietType?: DietType;
   dailyCalorieTarget: number;
   proteinTarget: number; // in grams
   carbsTarget: number; // in grams
@@ -30,6 +32,11 @@ export interface UserProfile {
   theme: "light" | "dark";
   takesCreatine?: boolean;
   lastCreatineIntake?: string; // Format YYYY-MM-DD
+  favoriteExercises?: string[];
+  sleepLogs?: { date: string; hours: number; quality: number }[];
+  moodLogs?: { date: string; mood: number; energy: number; notes?: string }[];
+  frequentRoutes?: FrequentRoute[];
+  activeRoutesToday?: { routeId: string; date: string }[];
 
   aiRecommendations?: {
     summary: string;
@@ -104,4 +111,12 @@ export interface FoodItem {
   brand?: string;
   image?: string;
   barcode?: string;
+}
+
+export interface FrequentRoute {
+  id: string;
+  name: string;
+  distanceKm: number;
+  activityType: "walking" | "running" | "cycling";
+  caloriesBurned: number;
 }

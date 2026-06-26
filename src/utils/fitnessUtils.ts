@@ -1,4 +1,4 @@
-import { FoodItem, UserProfile, FitnessGoal, ExperienceLevel } from "../types";
+import { FoodItem, UserProfile, FitnessGoal, ExperienceLevel, MealType, DietType } from "../types";
 
 // Common healthy foods for the autocomplete predictive global search
 export const GLOBAL_FOODS_DB: FoodItem[] = [
@@ -198,3 +198,115 @@ export function calculateRequirements(profile: {
     fat: fatGrams
   };
 }
+
+export function getSuggestedMealTypeByTime(): { type: MealType; label: string } {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 11) {
+    return { type: "breakfast", label: "Desayuno" };
+  } else if (hour >= 11 && hour < 16) {
+    return { type: "lunch", label: "Almuerzo" };
+  } else if (hour >= 16 && hour < 19) {
+    return { type: "snack", label: "Colación" };
+  } else if (hour >= 19 && hour < 23) {
+    return { type: "dinner", label: "Cena" };
+  } else {
+    return { type: "snack", label: "Snack Nocturno" };
+  }
+}
+
+export interface PrePostAdvice {
+  title: string;
+  recommendation: string;
+  macrosFocus: string;
+}
+
+export function getPrePostWorkoutAdvice(diet: DietType, goal: FitnessGoal, isPost: boolean): PrePostAdvice {
+  const isKeto = diet === "keto";
+  const isPlant = diet === "vegan" || diet === "vegetarian";
+  const isVegan = diet === "vegan";
+  
+  if (!isPost) {
+    // Pre-workout
+    let recommendation = "";
+    let macrosFocus = "";
+    
+    if (isKeto) {
+      macrosFocus = "Grasas saludables y Energía Limpia";
+      if (goal === "lose_weight") {
+        recommendation = "Café con 1 cucharadita de aceite de coco (MCT) o un puñado de nueces de macadamia para aportar energía rápida sin romper la cetosis.";
+      } else {
+        recommendation = "Aguacate maduro con un huevo duro y café cargado para máxima energía y disponibilidad de grasas.";
+      }
+    } else if (isVegan) {
+      macrosFocus = "Carbohidratos Complejos y Digestión Ligera";
+      if (goal === "lose_weight") {
+        recommendation = "Una manzana mediana con 1 cucharada pequeña de mantequilla de maní, o 30g de avena cocida en agua.";
+      } else {
+        recommendation = "Avena con medio plátano y semillas de chía, o un batido de proteína vegana con leche de almendra y avena.";
+      }
+    } else if (isPlant) {
+      macrosFocus = "Carbohidratos y Proteína Ligera";
+      if (goal === "lose_weight") {
+        recommendation = "Yogur griego descremado con un puñado de frutos rojos, o una manzana verde.";
+      } else {
+        recommendation = "Avena cocida en leche descremada con plátano y rodajas de fresas, o tostada integral con queso cottage.";
+      }
+    } else {
+      // Standard / Paleo / Mediterranean
+      macrosFocus = "Carbohidratos de Fácil Asimilación";
+      if (goal === "lose_weight") {
+        recommendation = "Un plátano maduro mediano junto con una taza de café negro (sin azúcar) para estimular el rendimiento.";
+      } else {
+        recommendation = "Avena con leche, plátano y una cucharadita de miel, o una tostada integral con huevo y rebanadas de aguacate.";
+      }
+    }
+    
+    return {
+      title: "Pre-Entrenamiento (Aporte de Energía)",
+      recommendation,
+      macrosFocus
+    };
+  } else {
+    // Post-workout
+    let recommendation = "";
+    let macrosFocus = "";
+    
+    if (isKeto) {
+      macrosFocus = "Proteína de Rápida Absorción y Grasas";
+      if (goal === "lose_weight") {
+        recommendation = "Pescado azul (salmón o atún) con ensalada verde y aceite de oliva, o un batido de proteína Isopure (cero carbohidratos).";
+      } else {
+        recommendation = "Filete de res magra o salmón a la plancha con aguacate y un huevo revuelto para optimizar la síntesis proteica.";
+      }
+    } else if (isVegan) {
+      macrosFocus = "Proteína Vegetal y Carbohidratos de Recuperación";
+      if (goal === "lose_weight") {
+        recommendation = "Tofu revuelto con espinacas y tomates cherry, o un batido de proteína de chícharo/cáñamo en agua.";
+      } else {
+        recommendation = "Garbanzos o lentejas cocidas con quinoa, medio aguacate y espinacas, o batido con plátano y proteína vegana.";
+      }
+    } else if (isPlant) {
+      macrosFocus = "Proteína Completa y Glucógeno";
+      if (goal === "lose_weight") {
+        recommendation = "Yogur griego 0% con 10g de nueces o queso cottage con rodajas de pepino y pimienta.";
+      } else {
+        recommendation = "Batido de proteína de suero (whey) con un plátano, o huevos revueltos con tostadas integrales y aguacate.";
+      }
+    } else {
+      // Standard / Paleo / Mediterranean
+      macrosFocus = "Proteína de Alta Calidad y Carbohidratos";
+      if (goal === "lose_weight") {
+        recommendation = "Lata de atún al natural con 2 tostadas de arroz integral, o pechuga de pollo a la plancha con verduras al vapor.";
+      } else {
+        recommendation = "Pechuga de pollo con arroz blanco y rebanadas de aguacate, o filete de salmón al horno con camote (batata) asado.";
+      }
+    }
+    
+    return {
+      title: "Post-Entrenamiento (Recuperación Muscular)",
+      recommendation,
+      macrosFocus
+    };
+  }
+}
+

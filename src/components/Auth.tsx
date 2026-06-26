@@ -34,7 +34,7 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0d0e15] px-6 py-12 justify-between items-center relative overflow-hidden">
+    <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0d0e15] px-6 py-12 justify-between items-center relative overflow-hidden">
       
       {/* Decorative Gradients */}
       <div className="absolute top-[-10%] left-[-10%] w-[150px] h-[150px] rounded-full bg-emerald-500/10 blur-[80px]"></div>
@@ -42,20 +42,20 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
 
       {/* Header section (Logo and App Name) */}
       <div className="flex flex-col items-center text-center mt-12 space-y-4 z-10 w-full">
-        <div className="relative p-2 rounded-2xl bg-gradient-to-br from-emerald-500/5 to-blue-500/5 border border-emerald-500/10 shadow-lg shadow-emerald-950/10">
+        <div className="relative p-2 rounded-2xl bg-gradient-to-br from-emerald-500/5 to-blue-500/5 border border-emerald-500/10 dark:border-emerald-500/20 shadow-lg dark:shadow-emerald-950/10">
           <img src={logo} alt="Trophia Logo" className="w-16 h-16 object-contain rounded-xl" />
         </div>
 
         <div className="space-y-1">
-          <h1 className="text-3.5xl font-black tracking-tight bg-gradient-to-r from-emerald-400 via-teal-300 to-blue-400 bg-clip-text text-transparent">
+          <h1 className="text-3.5xl font-black tracking-tight bg-gradient-to-r from-emerald-600 via-teal-500 to-blue-600 dark:from-emerald-400 dark:via-teal-300 dark:to-blue-400 bg-clip-text text-transparent">
             Trophia
           </h1>
-          <p className="text-xs font-semibold uppercase tracking-widest text-emerald-500/70">
+          <p className="text-xs font-semibold uppercase tracking-widest text-emerald-600 dark:text-emerald-500/70">
             Intelligent Fitness
           </p>
         </div>
 
-        <p className="text-gray-400 text-sm max-w-[280px] leading-relaxed pt-2">
+        <p className="text-gray-600 dark:text-gray-400 text-sm max-w-[280px] leading-relaxed pt-2">
           Tu evolución física y nutricional optimizada de forma personalizada con Inteligencia Artificial.
         </p>
       </div>
@@ -65,25 +65,25 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
         
         {/* Error Alert */}
         {error && (
-          <div className="flex items-start space-x-2 bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs p-3.5 rounded-xl transition-all duration-300">
+          <div className="flex items-start space-x-2 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-300 text-xs p-3.5 rounded-xl transition-all duration-300">
             <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
             <p className="leading-tight">{error}</p>
           </div>
         )}
 
         {/* Feature Highlights Carousel/List */}
-        <div className="bg-[#121420]/60 border border-[#1e2238] rounded-2xl p-4 space-y-3 shadow-inner">
+        <div className="bg-white dark:bg-[#121420]/60 border border-gray-200 dark:border-[#1e2238] rounded-2xl p-4 space-y-3 shadow-md dark:shadow-inner">
           <div className="flex items-center space-x-3">
             <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-            <p className="text-xs text-gray-300 font-medium">Análisis de composición corporal por IA</p>
+            <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">Análisis de composición corporal por IA</p>
           </div>
           <div className="flex items-center space-x-3">
             <div className="w-2 h-2 rounded-full bg-teal-500"></div>
-            <p className="text-xs text-gray-300 font-medium">Rutinas dinámicas personalizadas</p>
+            <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">Rutinas dinámicas personalizadas</p>
           </div>
           <div className="flex items-center space-x-3">
             <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-            <p className="text-xs text-gray-300 font-medium">Registro inteligente de alimentos</p>
+            <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">Registro inteligente de alimentos</p>
           </div>
         </div>
 
@@ -92,7 +92,7 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
           onClick={handleGoogleLogin}
           isLoading={loading}
           variant="white"
-          className="w-full font-bold"
+          className="w-full font-bold cursor-pointer"
           hoverScale={true}
           size="md"
         >
@@ -123,10 +123,10 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
           <p className="text-[10px] text-gray-500 px-4 leading-normal">
             Al continuar, aceptas la sincronización y el almacenamiento de tus métricas y registros en la base de datos segura de Trophia.
           </p>
-          <div className="text-[9px] text-white/20 font-mono tracking-wider">
+          <div className="text-[9px] text-gray-400 dark:text-white/20 font-mono tracking-wider">
             <span>by Richard Bouryssieres</span>
             <span className="mx-1.5">•</span>
-            <span>v0.0.1</span>
+            <span>v0.0.2</span>
           </div>
         </div>
       </div>

@@ -2,13 +2,14 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   User, Weight, Ruler, ChevronRight, ChevronLeft, Sparkles, 
-  BookOpen, Key, AlertCircle, Camera, Check, Eye, Info, RefreshCw
+  BookOpen, Key, AlertCircle, Camera, Check, Eye, Info, RefreshCw, Bell
 } from "lucide-react";
-import { UserProfile, BiologicalSex, FitnessGoal, ExperienceLevel, TrainingEnvironment } from "../types";
+import { UserProfile, BiologicalSex, FitnessGoal, ExperienceLevel, TrainingEnvironment, DietType } from "../types";
 import { calculateBMI, getBMICategory, calculateNavyBodyFat, calculateCaliperBodyFat, calculateRequirements } from "../utils/fitnessUtils";
 import { analyzeFatByIA, recommendGoalByIA } from "../services/geminiService";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
+import { savePushSubscription, deletePushSubscription } from "../services/dbService";
 import neckMale from "../assets/neck_measurement_male.png";
 import neckFemale from "../assets/neck_measurement_female.png";
 import waistMeasurement from "../assets/waist_measurement.png";
@@ -123,10 +124,11 @@ const OUTDOOR_EQUIPMENT = [
 
 interface OnboardingProps {
   onComplete: (profile: UserProfile) => void;
+  userId: string;
   defaultName?: string;
 }
 
-export default function Onboarding({ onComplete, defaultName }: OnboardingProps) {
+export default function Onboarding({ onComplete, userId, defaultName }: OnboardingProps) {
   const [step, setStep] = useState(() => {
     const savedKey = localStorage.getItem("trophia_api_key");
     return (savedKey && savedKey.trim().length >= 15) ? 2 : 1;
@@ -136,6 +138,7 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
   const [sex, setSex] = useState<BiologicalSex>("male");
   const [weight, setWeight] = useState<number>(75);
   const [height, setHeight] = useState<number>(175);
+  const [dietType, setDietType] = useState<DietType>("standard");
   
   // Step 2 variables (Navy & Caliper & IA body fat)
   const [knowsBodyFat, setKnowsBodyFat] = useState<"yes" | "no" | null>(null);
@@ -214,6 +217,104 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
     }, 30);
     return () => clearInterval(interval);
   }, [showCreatineScreen]);
+
+  // States for Push Notifications PWA
+  const [pushSupported, setPushSupported] = useState<boolean | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("default");
+  const [isSubscribed, setIsSubscribed] = useState<boolean>(false);
+  const [pushLoading, setPushLoading] = useState<boolean>(false);
+  const [pushError, setPushError] = useState<string | null>(null);
+
+  const checkPushSubscription = async () => {
+    try {
+      const isSupported = "serviceWorker" in navigator && "PushManager" in window;
+      setPushSupported(isSupported);
+      
+      if (!isSupported) {
+        setNotificationPermission("unsupported");
+        return;
+      }
+      
+      setNotificationPermission(Notification.permission);
+      
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      setIsSubscribed(!!subscription);
+    } catch (err) {
+      console.error("Error al comprobar suscripción push:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (step === 7) {
+      checkPushSubscription();
+    }
+  }, [step]);
+
+  function urlBase64ToUint8Array(base64String: string) {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/\-/g, "+").replace(/_/g, "/");
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  const handleToggleNotifications = async () => {
+    setPushLoading(true);
+    setPushError(null);
+    try {
+      const isSupported = "serviceWorker" in navigator && "PushManager" in window;
+      if (!isSupported) {
+        throw new Error("Push no soportado en este navegador.");
+      }
+
+      if (isSubscribed) {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        if (subscription) {
+          await subscription.unsubscribe();
+          await deletePushSubscription(userId, subscription.endpoint);
+        }
+        setIsSubscribed(false);
+      } else {
+        let permission = Notification.permission;
+        if (permission === "default") {
+          permission = await Notification.requestPermission();
+          setNotificationPermission(permission);
+        }
+
+        if (permission !== "granted") {
+          throw new Error("Permiso de notificaciones denegado.");
+        }
+
+        const registration = await navigator.serviceWorker.ready;
+        const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+        if (!vapidPublicKey) {
+          throw new Error("Falta la clave pública VAPID en las variables de entorno.");
+        }
+        
+        const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
+        
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedKey,
+        });
+
+        await savePushSubscription(userId, subscription.toJSON());
+        setIsSubscribed(true);
+      }
+    } catch (err: any) {
+      console.error("Error al configurar notificaciones:", err);
+      setPushError(err.message || "Ocurrió un error inesperado.");
+    } finally {
+      setPushLoading(false);
+    }
+  };
 
   // Step 3 variables (Goals)
   const [goal, setGoal] = useState<FitnessGoal>("lose_weight");
@@ -553,6 +654,7 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
       environment,
       equipment,
       nutritionKnowledge,
+      dietType,
       dailyCalorieTarget: reqs.calories,
       proteinTarget: reqs.protein,
       carbsTarget: reqs.carbs,
@@ -803,7 +905,7 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
       <div className="p-6 pb-4 flex items-center justify-between border-b border-white/5 z-10 bg-[#050505]/80 backdrop-blur-xl sticky top-0">
         <div>
           <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-widest">
-            Paso {step} de 6
+            Paso {step} de 7
           </span>
           <h2 className="text-xl font-black text-white tracking-tight italic">
             {step === 1 && "Asistente Inteligente"}
@@ -812,12 +914,13 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
             {step === 4 && "Tus Objetivos"}
             {step === 5 && "Entrenamiento"}
             {step === 6 && "Perfil Nutricional"}
+            {step === 7 && "Recordatorios"}
           </h2>
         </div>
         
         {/* Step Indicator dots */}
         <div className="flex gap-1.5">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
+          {[1, 2, 3, 4, 5, 6, 7].map((i) => (
             <div 
               key={i} 
               className={`h-1 rounded-full transition-all duration-300 ${
@@ -1766,6 +1869,37 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
                       ))}
                     </div>
                   </div>
+
+                  <div className="border-t border-white/5 pt-4 space-y-2">
+                    <label className="block text-[10px] font-bold text-white/40 mb-2 uppercase tracking-widest">
+                      ¿Sigues algún tipo de dieta?
+                    </label>
+                    
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: "standard", label: "Estándar", desc: "Como de todo" },
+                        { id: "vegetarian", label: "Vegetariana", desc: "Sin carne ni pez" },
+                        { id: "vegan", label: "Vegana", desc: "100% vegetal" },
+                        { id: "keto", label: "Keto", desc: "Baja en carbos" },
+                        { id: "paleo", label: "Paleo", desc: "Comida evolutiva" },
+                        { id: "mediterranean", label: "Mediterránea", desc: "Grasas sanas" }
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setDietType(item.id as DietType)}
+                          className={`p-3 rounded-xl border text-center transition flex flex-col justify-between items-center h-[52px] cursor-pointer ${
+                            dietType === item.id
+                              ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
+                              : "bg-white/5 border-white/10 text-white/40 text-xs"
+                          }`}
+                        >
+                          <span className="block text-[11px] font-bold leading-tight">{item.label}</span>
+                          <span className="text-[8px] opacity-60 font-normal block leading-tight mt-0.5">{item.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </>
               ) : (
                 <motion.div
@@ -1807,12 +1941,12 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
 
                   <Button
                     variant="primary"
-                    onClick={handleSubmit}
-                    rightIcon={Check}
+                    onClick={handleNext}
+                    rightIcon={ChevronRight}
                     className="w-full mt-2 font-bold"
                     size="md"
                   >
-                    ¡Comenzar!
+                    Continuar
                   </Button>
                 </motion.div>
               )}
@@ -1880,6 +2014,75 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
                   Ir a Google AI Studio
                 </a>
               </div>
+            </motion.div>
+          )}
+
+          {step === 7 && (
+            <motion.div
+              key="step7"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-6 text-center py-4"
+            >
+              <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shadow-lg shadow-emerald-500/5">
+                <Bell className="h-8 w-8 text-emerald-400" />
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-base font-black text-white tracking-tight">¡No te saltes tus metas!</h3>
+                <p className="text-[11px] text-white/50 leading-relaxed max-w-sm mx-auto">
+                  Activa las notificaciones para recibir recordatorios diarios personalizados sobre tu agua, creatina y el registro de tus comidas.
+                </p>
+              </div>
+
+              {pushError && (
+                <div className="bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl text-[10px] text-red-400 font-semibold flex items-center gap-2 max-w-sm mx-auto">
+                  <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span>{pushError}</span>
+                </div>
+              )}
+
+              {pushSupported === false ? (
+                <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl text-left space-y-1.5 max-w-sm mx-auto">
+                  <span className="text-xs font-extrabold text-amber-400 flex items-center gap-1.5">
+                    <Info className="h-4 w-4" />
+                    <span>Safari en iOS Detectado</span>
+                  </span>
+                  <p className="text-[10px] text-white/60 leading-relaxed">
+                    Para activar las notificaciones en iOS, debes agregar Trophia a tu pantalla de inicio (Compartir → Guardar en Pantalla de Inicio) y abrir la app desde allí. Podrás activarlas después en los Ajustes.
+                  </p>
+                </div>
+              ) : (
+                <div className="max-w-sm mx-auto space-y-3">
+                  {isSubscribed ? (
+                    <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl flex items-center justify-center gap-2 text-emerald-400 font-bold text-xs">
+                      <Check className="h-5 w-5" />
+                      <span>¡Notificaciones Activadas!</span>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      onClick={handleToggleNotifications}
+                      isLoading={pushLoading}
+                      disabled={notificationPermission === "denied"}
+                      className="w-full py-4 text-xs font-black shadow-lg"
+                      size="md"
+                    >
+                      {notificationPermission === "denied" 
+                        ? "Permiso Bloqueado en Navegador" 
+                        : "Permitir Notificaciones"
+                      }
+                    </Button>
+                  )}
+
+                  {notificationPermission === "denied" && (
+                    <p className="text-[10px] text-amber-400/80 leading-normal text-left">
+                      * El permiso fue denegado. Puedes cambiarlo luego desde la configuración de tu navegador.
+                    </p>
+                  )}
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -1969,7 +2172,7 @@ export default function Onboarding({ onComplete, defaultName }: OnboardingProps)
             >
               Siguiente
             </Button>
-          ) : (step < 6 || (step === 6 && nutritionKnowledge === "low")) ? (
+          ) : step < 7 ? (
             <Button
               variant="primary"
               onClick={handleNext}

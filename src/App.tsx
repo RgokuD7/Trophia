@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { 
-  Heart, Flame, Utensils, Droplets, Dumbbell, Settings, Sparkles, Key, AlertCircle, Info, RefreshCw
+  Heart, Flame, Utensils, Droplets, Dumbbell, Settings, Sparkles, Key, AlertCircle, Info, RefreshCw, ShoppingCart
 } from "lucide-react";
 import { User } from "firebase/auth";
-import { UserProfile, LoggedMeal, WaterLog, WorkoutSession } from "./types";
+import { UserProfile, LoggedMeal, WaterLog, WorkoutSession, MealType } from "./types";
 import Onboarding from "./components/Onboarding";
 import Dashboard from "./components/Dashboard";
 import Workouts from "./components/Workouts";
@@ -11,6 +11,10 @@ import Hydration from "./components/Hydration";
 import SettingsView from "./components/Settings";
 import FoodLogger from "./components/FoodLogger";
 import Auth from "./components/Auth";
+import RecipeAssistantModal from "./components/RecipeAssistantModal";
+import HealthWellness from "./components/HealthWellness";
+import GroceryPlanner from "./components/GroceryPlanner";
+import { getSuggestedMealTypeByTime } from "./utils/fitnessUtils";
 
 // Import Firebase services
 import { subscribeToAuthChanges, logout } from "./services/authService";
@@ -31,12 +35,31 @@ import {
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "workouts" | "hydration" | "settings">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "workouts" | "hydration" | "settings" | "health" | "grocery">("dashboard");
   const [loggedMeals, setLoggedMeals] = useState<LoggedMeal[]>([]);
   const [waterLogs, setWaterLogs] = useState<WaterLog[]>([]);
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
   const [isFoodLoggerOpen, setIsFoodLoggerOpen] = useState(false);
+  const [isRecipeAssistantOpen, setIsRecipeAssistantOpen] = useState(false);
+  const [defaultMealTypeForLogger, setDefaultMealTypeForLogger] = useState<MealType>("lunch");
   const [isCheckingStorage, setIsCheckingStorage] = useState(true);
+
+  const handleOpenFoodLogger = (suggestedType?: MealType) => {
+    setDefaultMealTypeForLogger(suggestedType || getSuggestedMealTypeByTime().type);
+    setIsFoodLoggerOpen(true);
+  };
+
+  // Global theme handling
+  useEffect(() => {
+    const theme = profile?.theme || "dark";
+    if (theme === "light") {
+      document.documentElement.classList.remove("dark");
+      document.documentElement.classList.add("light");
+    } else {
+      document.documentElement.classList.remove("light");
+      document.documentElement.classList.add("dark");
+    }
+  }, [profile?.theme]);
 
   // Subscribe to Auth changes and load user data from Firestore
   useEffect(() => {
@@ -231,6 +254,7 @@ export default function App() {
           ) : !profile ? (
             <Onboarding 
               onComplete={handleOnboardingComplete} 
+              userId={user.uid}
               defaultName={user.displayName ? user.displayName.split(" ")[0] : undefined}
             />
           ) : (
@@ -240,12 +264,15 @@ export default function App() {
                   profile={profile}
                   loggedMeals={loggedMeals}
                   waterLogs={waterLogs}
-                  onOpenFoodLogger={() => setIsFoodLoggerOpen(true)}
+                  workoutHistory={workoutHistory}
+                  onOpenFoodLogger={handleOpenFoodLogger}
+                  onOpenRecipeAssistant={() => setIsRecipeAssistantOpen(true)}
                   onAddWaterQuick={handleAddWater}
                   onDeleteMeal={handleDeleteMeal}
                   onNavigateToTab={(tab) => {
                     if (tab === "workouts") setActiveTab("workouts");
                     if (tab === "hydration") setActiveTab("hydration");
+                    if (tab === "settings") setActiveTab("settings");
                   }}
                   onUpdateProfile={handleUpdateProfile}
                 />
@@ -258,6 +285,7 @@ export default function App() {
                   workoutHistory={workoutHistory}
                   onAddWorkout={handleAddWorkout}
                   onClearWorkouts={handleClearWorkouts}
+                  onUpdateProfile={handleUpdateProfile}
                 />
               )}
 
@@ -270,9 +298,25 @@ export default function App() {
                 />
               )}
 
-              {activeTab === "settings" && (
+              {activeTab === "health" && (
+                <HealthWellness
+                  apiKey={profile.apiKey}
+                  userProfile={profile}
+                  onUpdateProfile={handleUpdateProfile}
+                />
+              )}
+
+              {activeTab === "grocery" && (
+                <GroceryPlanner
+                  apiKey={profile.apiKey}
+                  userProfile={profile}
+                />
+              )}
+
+              {activeTab === "settings" && user && (
                 <SettingsView
                   profile={profile}
+                  userId={user.uid}
                   onUpdateProfile={handleUpdateProfile}
                   onResetApp={handleResetApp}
                 />
@@ -289,6 +333,15 @@ export default function App() {
             loggedMeals={loggedMeals}
             onAddMeal={handleAddMeal}
             onClose={() => setIsFoodLoggerOpen(false)}
+            defaultMealType={defaultMealTypeForLogger}
+          />
+        )}
+
+        {isRecipeAssistantOpen && profile && (
+          <RecipeAssistantModal
+            profile={profile}
+            onAddMeal={handleAddMeal}
+            onClose={() => setIsRecipeAssistantOpen(false)}
           />
         )}
 
@@ -323,6 +376,26 @@ export default function App() {
             >
               <Droplets className="h-5 w-5" />
               <span className="text-[9px] font-bold uppercase tracking-wide">Agua</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("health")}
+              className={`flex flex-col items-center gap-1 py-1.5 transition ${
+                activeTab === "health" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              <Heart className="h-5 w-5" />
+              <span className="text-[9px] font-bold uppercase tracking-wide">Salud</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("grocery")}
+              className={`flex flex-col items-center gap-1 py-1.5 transition ${
+                activeTab === "grocery" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              <ShoppingCart className="h-5 w-5" />
+              <span className="text-[9px] font-bold uppercase tracking-wide">Compras</span>
             </button>
 
             <button

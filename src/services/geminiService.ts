@@ -343,6 +343,15 @@ export async function generateRecommendationsByIA(
     outdoor: "Aire libre",
   };
 
+  const dietLabels: Record<string, string> = {
+    standard: "Estándar (Todo / Sin restricciones)",
+    vegetarian: "Vegetariana",
+    vegan: "Vegana",
+    keto: "Cetogénica (Keto)",
+    paleo: "Paleolítica (Paleo)",
+    mediterranean: "Mediterránea",
+  };
+
   const prompt = `Actúa como un Coach de Fitness y Nutrición Clínico de élite. Tu tarea es generar recomendaciones personalizadas detalladas y altamente profesionales para el usuario basándote en su perfil físico, nivel y sus metas deportivas.
 
 [DATOS DEL USUARIO]:
@@ -358,9 +367,10 @@ export async function generateRecommendationsByIA(
 - Entorno de entrenamiento: ${envLabels[profile.environment] || profile.environment || "Casa"}
 - Equipamiento disponible: ${Array.isArray(profile.equipment) ? profile.equipment.join(", ") : "Peso corporal"}
 - Nivel de conocimiento nutricional: ${profile.nutritionKnowledge || "Medio"}
+- Tipo de Dieta: ${dietLabels[profile.dietType || ""] || profile.dietType || "Estándar (Todo / Sin restricciones)"}
 - Macros Diarios Calculados: Calorías: ${profile.dailyCalorieTarget || 2000} kcal, Proteínas: ${profile.proteinTarget || 140}g, Carbohidratos: ${profile.carbsTarget || 200}g, Grasas: ${profile.fatTarget || 60}g
 
-Analiza detalladamente esta información. En especial, presta mucha atención al Porcentaje de Grasa Corporal (% de Grasa Corporal: ${profile.bodyFat !== undefined ? `${profile.bodyFat}%` : "No provisto"}) si está presente, correlacionándolo con su IMC, su peso, su edad y su meta.
+Analiza detalladamente esta información. En especial, presta mucha atención al Porcentaje de Grasa Corporal (% de Grasa Corporal: ${profile.bodyFat !== undefined ? `${profile.bodyFat}%` : "No provisto"}) si está presente, correlacionándolo con su IMC, su peso, su edad y su meta. Asegúrate de que las recomendaciones de alimentación y macros en "nutritionAdvice" respeten estrictamente su Tipo de Dieta (${dietLabels[profile.dietType || ""] || "Estándar"}), sugiriendo fuentes de alimentos y consejos coherentes con dicho régimen.
 
 Debes responder estrictamente en formato JSON con la siguiente estructura:
 {
@@ -505,3 +515,594 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
     };
   }
 }
+
+export async function generateRecipeFromIngredientsByIA(
+  apiKey: string,
+  profile: UserProfile,
+  ingredients: string[]
+): Promise<any> {
+  const prompt = `Eres un Chef Nutricionista Experto de la aplicación Trophia.
+El usuario tiene los siguientes ingredientes en su despensa: ${ingredients.join(", ")}.
+Su perfil de fitness es:
+- Tipo de dieta: ${profile.dietType || "standard"}
+- Meta de fitness: ${profile.goal || "maintenance"}
+- Peso: ${profile.weight} kg
+- Estatura: ${profile.height} cm
+- Edad: ${profile.age} años
+
+Genera una receta deliciosa, fácil de preparar y saludable usando PRINCIPALMENTE los ingredientes de la despensa. Puedes asumir condimentos básicos de cocina (sal, pimienta, ajo, aceite de oliva en cantidades mínimas). La receta debe ajustarse estrictamente a su tipo de dieta y meta de fitness (por ejemplo, si es vegano no incluyas huevos/leche, si es keto mantén los carbohidratos extremadamente bajos).
+
+Debes responder estrictamente en formato JSON con la siguiente estructura:
+{
+  "name": "Nombre creativo y apetitoso de la receta",
+  "ingredientsList": ["Ingrediente 1 con cantidad sugerida", "Ingrediente 2 con cantidad sugerida"],
+  "instructions": ["Paso 1...", "Paso 2..."],
+  "calories": número (calorías estimadas por porción, entero),
+  "protein": número (proteínas estimadas por porción en gramos, entero),
+  "carbs": número (carbohidratos estimados por porción en gramos, entero),
+  "fat": número (grasas estimadas por porción en gramos, entero),
+  "servingSize": "Descripción de la porción (ej: 1 plato, 1 taza, 250g)",
+  "tip": "Consejo nutricional adaptado a su meta de fitness"
+}`;
+
+  try {
+    return await callGeminiAPI(apiKey, prompt);
+  } catch (apiError: any) {
+    console.warn("Gemini API error in generateRecipeFromIngredientsByIA, using fallback:", apiError);
+    
+    // Quick fallback recipe based on what was selected
+    const mainIngredient = ingredients.length > 0 ? ingredients[0] : "Ingredientes seleccionados";
+    const name = `Plato Rápido de ${mainIngredient.charAt(0).toUpperCase() + mainIngredient.slice(1)}`;
+    
+    return {
+      name: `${name} Trophia`,
+      ingredientsList: ingredients.map(ing => `100g de ${ing} fresco`),
+      instructions: [
+        "Lava y corta los ingredientes seleccionados.",
+        "Cocínalos en una sartén antiadherente con un hilo de aceite a fuego medio por 8-12 minutos.",
+        "Sazona al gusto con una pizca de sal, pimienta o tus especias favoritas.",
+        "Sirve caliente en un plato y disfruta."
+      ],
+      calories: 320,
+      protein: 18,
+      carbs: 25,
+      fat: 12,
+      servingSize: "1 plato hondo",
+      tip: "Receta rápida de respaldo. Aporta carbohidratos de fácil absorción y una base proteica moderada ideal para mantener tu energía estable."
+    };
+  }
+}
+
+export async function adjustLoggedMealByChatByIA(
+  apiKey: string,
+  meal: { name: string; calories: number; protein: number; carbs: number; fat: number },
+  userMessage: string
+): Promise<any> {
+  const prompt = `Eres el asistente de nutrición de Trophia.
+Un usuario registró la siguiente comida en su diario:
+- Nombre: "${meal.name}"
+- Calorías: ${meal.calories} kcal
+- Proteínas: ${meal.protein}g
+- Carbohidratos: ${meal.carbs}g
+- Grasas: ${meal.fat}g
+
+El usuario te envía el siguiente mensaje con respecto a lo que realmente consumió:
+"${userMessage}"
+
+Analiza el mensaje del usuario para ajustar proporcionalmente o de forma lógica el registro de macros y calorías de la comida.
+Ejemplos comunes:
+- "Dejé la mitad" -> multiplicar calorías y macros por 0.5.
+- "Comí el doble" -> multiplicar por 2.0.
+- "Dejé un tercio" -> multiplicar por 0.67.
+- "Solo comí la proteína, dejé el arroz" -> estimar y restar los carbohidratos y sumar o mantener la proteína.
+Usa tu juicio nutricional para hacer el ajuste lo más realista posible.
+
+Debes responder estrictamente en formato JSON con la siguiente estructura:
+{
+  "name": "Nombre ajustado (ej: Pechuga de pollo con arroz - Ajustado porción)",
+  "calories": número (calorías ajustadas totales, entero),
+  "protein": número (proteínas ajustadas totales en gramos, entero),
+  "carbs": número (carbohidratos ajustados totales en gramos, entero),
+  "fat": número (grasas ajustadas totales en gramos, entero),
+  "adjustmentExplanation": "Breve explicación en español de qué ajuste se realizó (ej: 'Se redujo la porción un 50% según lo indicado')."
+}`;
+
+  try {
+    return await callGeminiAPI(apiKey, prompt);
+  } catch (apiError: any) {
+    console.warn("Gemini API error in adjustLoggedMealByChatByIA, using simple client-side parsing fallback:", apiError);
+    
+    // Quick client-side regex fallback
+    let multiplier = 0.75; // default fallback adjustment
+    let explanation = "Se redujo la porción a un 75% aproximado de forma preventiva.";
+    
+    const msg = userMessage.toLowerCase();
+    if (msg.includes("mitad") || msg.includes("50%")) {
+      multiplier = 0.5;
+      explanation = "Se dividieron las porciones al 50% (mitad de plato).";
+    } else if (msg.includes("doble") || msg.includes("2 veces") || msg.includes("200%")) {
+      multiplier = 2.0;
+      explanation = "Se duplicaron las porciones (2x).";
+    } else if (msg.includes("tercio") || msg.includes("30%")) {
+      multiplier = 0.66;
+      explanation = "Se descontó un tercio del plato (consumido 66%).";
+    } else if (msg.includes("cuarto") || msg.includes("25%")) {
+      multiplier = 0.25;
+      explanation = "Se redujo al 25% (un cuarto de porción).";
+    } else if (msg.includes("tres cuartos") || msg.includes("75%")) {
+      multiplier = 0.75;
+      explanation = "Se estimó un 75% consumido (dejó un cuarto).";
+    } else if (msg.includes("todo") || msg.includes("completo") || msg.includes("entero")) {
+      multiplier = 1.0;
+      explanation = "Se mantuvo el registro de plato entero (100%).";
+    }
+    
+    return {
+      name: `${meal.name} (Ajustado)`,
+      calories: Math.round(meal.calories * multiplier),
+      protein: Math.round(meal.protein * multiplier),
+      carbs: Math.round(meal.carbs * multiplier),
+      fat: Math.round(meal.fat * multiplier),
+      adjustmentExplanation: `[Filtro Rápido] ${explanation}`
+    };
+  }
+}
+
+export async function suggestAlternativeExercisesByIA(
+  apiKey: string,
+  exerciseName: string,
+  equipmentList: string[],
+  level: ExperienceLevel
+): Promise<any> {
+  const prompt = `Eres un Entrenador Deportivo de Élite de la aplicación Trophia.
+El usuario está realizando el siguiente ejercicio: "${exerciseName}".
+Sin embargo, desea cambiarlo por un ejercicio alternativo.
+El perfil de equipamiento y nivel del usuario es:
+- Equipamiento disponible: ${equipmentList.join(", ") || "Peso corporal (sin equipamiento)"}
+- Nivel de entrenamiento: ${level}
+
+Sugiere exactamente 3 ejercicios alternativos viables que trabajen el mismo grupo muscular.
+Los ejercicios propuestos deben cumplir estrictamente las siguientes reglas:
+1. Usar únicamente el equipamiento que el usuario tiene disponible (o peso corporal).
+2. Estar adaptados a su nivel.
+3. Ser seguros y efectivos.
+
+Debes responder estrictamente en formato JSON con la siguiente estructura:
+{
+  "alternatives": [
+    {
+      "name": "Nombre de la alternativa 1 (ej: Flexiones de brazos declinadas)",
+      "equipmentNeeded": "Equipamiento necesario (ej: Peso corporal, banco)",
+      "difficulty": "Dificultad (Fácil / Medio / Difícil)",
+      "repsText": "Rango sugerido (ej: 3 series de 12 repeticiones)",
+      "justification": "Explicación corta en español de por qué es un buen reemplazo y qué trabaja."
+    }
+  ]
+}`;
+
+  try {
+    return await callGeminiAPI(apiKey, prompt);
+  } catch (apiError: any) {
+    console.warn("Gemini API error in suggestAlternativeExercisesByIA, using fallback:", apiError);
+    
+    // Quick fallback alternatives based on name matching
+    const name = exerciseName.toLowerCase();
+    let alternatives = [];
+    
+    if (name.includes("pecho") || name.includes("bench") || name.includes("press") || name.includes("militar") || name.includes("push")) {
+      alternatives = [
+        {
+          name: "Flexiones de Brazos Clásicas",
+          equipmentNeeded: "Peso corporal",
+          difficulty: "Fácil",
+          repsText: "3 series de 12 repeticiones",
+          justification: "Excelente ejercicio básico para trabajar pectorales y tríceps utilizando únicamente la gravedad."
+        },
+        {
+          name: "Fondos en Paralelas / Silla",
+          equipmentNeeded: "Peso corporal o Silla",
+          difficulty: "Medio",
+          repsText: "3 series de 10 repeticiones",
+          justification: "Enfoca el esfuerzo en la porción inferior del pecho y tríceps, fácil de hacer en casa con un mueble estable."
+        },
+        {
+          name: "Flexiones con Manos Juntas (Diamante)",
+          equipmentNeeded: "Peso corporal",
+          difficulty: "Difícil",
+          repsText: "3 series de 8 repeticiones",
+          justification: "Aumenta la carga en la porción interna del pectoral y demanda gran estabilidad de tríceps."
+        }
+      ];
+    } else if (name.includes("sentadilla") || name.includes("pierna") || name.includes("zancada") || name.includes("squat") || name.includes("femoral") || name.includes("gluteo")) {
+      alternatives = [
+        {
+          name: "Sentadillas Búlgaras",
+          equipmentNeeded: "Peso corporal o Silla/Banco",
+          difficulty: "Medio",
+          repsText: "3 series de 10 repeticiones por pierna",
+          justification: "Excelente trabajo de aislamiento de cuádriceps y glúteos, reduciendo la carga en la columna lumbar."
+        },
+        {
+          name: "Zancadas en Reversa (Lunges)",
+          equipmentNeeded: "Peso corporal",
+          difficulty: "Fácil",
+          repsText: "3 series de 12 repeticiones por lado",
+          justification: "Movimiento funcional dinámico enfocado en el equilibrio, cuádriceps, glúteos e isquiotibiales."
+        },
+        {
+          name: "Puente de Glúteos Unilateral",
+          equipmentNeeded: "Peso corporal",
+          difficulty: "Fácil",
+          repsText: "3 series de 15 repeticiones",
+          justification: "Excelente trabajo enfocado en la cadena posterior (glúteos e isquiotibiales) sin riesgo de sobrecarga."
+        }
+      ];
+    } else {
+      // General/Core/Back
+      alternatives = [
+        {
+          name: "Plancha Abdominal Activa",
+          equipmentNeeded: "Peso corporal",
+          difficulty: "Fácil",
+          repsText: "3 series de 40 segundos",
+          justification: "Fortalece todo el core y los estabilizadores escapulares de forma estática y segura."
+        },
+        {
+          name: "Superman (Extensión Lumbar)",
+          equipmentNeeded: "Peso corporal",
+          difficulty: "Fácil",
+          repsText: "3 series de 15 repeticiones",
+          justification: "Trabaja la cadena lumbar y dorsal para mejorar la postura y balancear el desarrollo muscular posterior."
+        },
+        {
+          name: "Flexiones del Caminante (Walkouts)",
+          equipmentNeeded: "Peso corporal",
+          difficulty: "Medio",
+          repsText: "3 series de 8 repeticiones",
+          justification: "Movimiento dinámico de cuerpo entero que trabaja core, hombros y flexibilidad de la cadena posterior."
+        }
+      ];
+    }
+    
+    return { alternatives };
+  }
+}
+
+export async function analyzeInjuryByIA(
+  apiKey: string,
+  painDescription: string,
+  profile: UserProfile
+): Promise<any> {
+  const prompt = `Eres un Médico Deportivo e IA de Triaje Fisioterapéutico de Trophia.
+El usuario describe la siguiente molestia o dolor físico relacionado con el entrenamiento:
+"${painDescription}"
+
+Su perfil deportivo es:
+- Nivel de experiencia: ${profile.level}
+- Entorno de entrenamiento: ${profile.environment}
+- Meta de fitness: ${profile.goal}
+
+Analiza esta molestia de forma rigurosa y empática. Debes responder con recomendaciones profesionales basadas en evidencia.
+Debes responder estrictamente en formato JSON con la siguiente estructura:
+{
+  "possibleCauses": ["Causa 1...", "Causa 2..."],
+  "exercisesToAvoid": ["Ejercicio a evitar 1...", "Ejercicio a evitar 2..."],
+  "safeAlternatives": ["Alternativa segura 1...", "Alternativa segura 2..."],
+  "warmupTips": ["Consejo de calentamiento 1...", "Consejo de calentamiento 2..."],
+  "medicalWarning": "Texto completo de la advertencia médica en español"
+}`;
+
+  try {
+    return await callGeminiAPI(apiKey, prompt);
+  } catch (apiError: any) {
+    console.warn("Gemini API error in analyzeInjuryByIA, using fallback:", apiError);
+    
+    return {
+      possibleCauses: [
+        "Sobrecarga de tendones o fatiga acumulada en las fibras musculares locales.",
+        "Tensión por mala técnica o desbalance muscular durante ejercicios pesados."
+      ],
+      exercisesToAvoid: [
+        "Cualquier ejercicio con carga directa que reproduzca el dolor original.",
+        "Movimientos explosivos o que estiren excesivamente el músculo lesionado."
+      ],
+      safeAlternatives: [
+        "Entrenamientos de bajo impacto que mantengan la circulación sin dolor.",
+        "Trabajar otros grupos musculares sanos para evitar la atrofia por desuso."
+      ],
+      warmupTips: [
+        "Calentamiento dinámico prolongado (10-15 minutos) específico para la zona.",
+        "Iniciar con series de aproximación muy ligeras antes de meter peso."
+      ],
+      medicalWarning: "ADVERTENCIA: Esta es una recomendación educativa generada por IA. Si la molestia persiste, limita tu movilidad o se acompaña de hinchazón, calor local u hormigueos, suspende inmediatamente el ejercicio y consulta a un especialista médico o fisioterapeuta."
+    };
+  }
+}
+
+export async function generateGroceryListByIA(
+  apiKey: string,
+  profile: UserProfile
+): Promise<any> {
+  const prompt = `Actúas como un Nutricionista y Planificador de Compras Inteligente de Trophia.
+El usuario tiene el siguiente perfil nutricional:
+- Tipo de dieta: ${profile.dietType || "standard"}
+- Calorías objetivo: ${profile.dailyCalorieTarget || 2000} kcal/día
+- Reparto de macros objetivo: Proteínas: ${profile.proteinTarget || 140}g, Carbohidratos: ${profile.carbsTarget || 200}g, Grasas: ${profile.fatTarget || 60}g
+- Meta de fitness: ${profile.goal}
+
+Genera una lista de compras de supermercado semanal optimizada y equilibrada para cumplir con estas pautas de alimentación y macros. Agrupa los ingredientes por categorías de supermercado realistas (ej: Verdulería y Frutas, Proteínas y Carnes, Lácteos y Derivados, Despensa y Grasas).
+Asigna cantidades estimadas lógicas para una persona para toda la semana.
+
+Debes responder estrictamente en formato JSON con la siguiente estructura:
+{
+  "categories": [
+    {
+      "name": "Nombre de la categoría (ej: Proteínas y Carnes)",
+      "items": [
+        {
+          "name": "Nombre del ingrediente (ej: Pechuga de pollo)",
+          "quantity": "Cantidad recomendada (ej: 1.2 kg)",
+          "nutritionalValue": "Aporte principal (ej: Proteína magra de alta calidad)"
+        }
+      ]
+    }
+  ]
+}`;
+
+  try {
+    return await callGeminiAPI(apiKey, prompt);
+  } catch (apiError: any) {
+    console.warn("Gemini API error in generateGroceryListByIA, using smart fallback:", apiError);
+    
+    const diet = profile.dietType || "standard";
+    let categories = [];
+    
+    if (diet === "vegan") {
+      categories = [
+        {
+          name: "Proteínas Veganas y Legumbres",
+          items: [
+            { name: "Tofu firme orgánico", quantity: "1.0 kg", nutritionalValue: "Proteína vegetal básica versátil" },
+            { name: "Lentejas secas o en conserva", quantity: "500g", nutritionalValue: "Proteína y fibra de lenta digestión" },
+            { name: "Garbanzos", quantity: "500g", nutritionalValue: "Excelente carbohidrato complejo proteico" },
+            { name: "Tempeh o Seitán", quantity: "400g", nutritionalValue: "Alta densidad de proteína vegetal" }
+          ]
+        },
+        {
+          name: "Cereales y Tubérculos",
+          items: [
+            { name: "Avena arrollada integral", quantity: "800g", nutritionalValue: "Carbohidratos complejos de avena" },
+            { name: "Arroz integral o Quinoa", quantity: "600g", nutritionalValue: "Cereal completo con aminoácidos esenciales" },
+            { name: "Camote o Boniato", quantity: "1.2 kg", nutritionalValue: "Carbohidratos ricos en vitamina A y potasio" }
+          ]
+        },
+        {
+          name: "Verdulería y Frutas",
+          items: [
+            { name: "Espinacas frescas", quantity: "300g", nutritionalValue: "Vitaminas, hierro y minerales" },
+            { name: "Plátanos / Bananos", quantity: "1 docena", nutritionalValue: "Energía rápida y potasio para entrenar" },
+            { name: "Manzanas o Arándanos", quantity: "500g", nutritionalValue: "Antioxidantes y fibra" },
+            { name: "Brócoli o Coliflor", quantity: "1.0 kg", nutritionalValue: "Crucíferas ricas en micronutrientes" }
+          ]
+        },
+        {
+          name: "Frutos Secos, Semillas y Grasas",
+          items: [
+            { name: "Palta / Aguacate", quantity: "4 unidades", nutritionalValue: "Grasas monoinsaturadas saludables" },
+            { name: "Mantequilla de maní o almendras", quantity: "1 frasco", nutritionalValue: "Grasas densas y aporte proteico" },
+            { name: "Semillas de chía o linaza", quantity: "200g", nutritionalValue: "Ácidos grasos esenciales Omega-3" }
+          ]
+        }
+      ];
+    } else if (diet === "vegetarian") {
+      categories = [
+        {
+          name: "Huevos, Lácteos y Tofu",
+          items: [
+            { name: "Huevos enteros de gallina", quantity: "2 docenas", nutritionalValue: "Proteína de referencia y grasas saludables" },
+            { name: "Queso cottage o Yogur griego", quantity: "1.2 kg", nutritionalValue: "Proteína de caseína de liberación lenta" },
+            { name: "Tofu firme", quantity: "500g", nutritionalValue: "Proteína vegetal densa" }
+          ]
+        },
+        {
+          name: "Cereales, Tubérculos y Legumbres",
+          items: [
+            { name: "Avena integral", quantity: "700g", nutritionalValue: "Energía estable y fibra saciante" },
+            { name: "Quinoa", quantity: "500g", nutritionalValue: "Carbohidrato completo" },
+            { name: "Lentejas o Frijoles negros", quantity: "600g", nutritionalValue: "Base proteica de lenta absorción" }
+          ]
+        },
+        {
+          name: "Verduras, Frutas y Grasas",
+          items: [
+            { name: "Palta / Aguacate", quantity: "4 unidades", nutritionalValue: "Grasas cardiosaludables" },
+            { name: "Espinaca o Brócoli", quantity: "800g", nutritionalValue: "Micronutrientes esenciales" },
+            { name: "Plátanos", quantity: "10 unidades", nutritionalValue: "Carbohidratos pre-entrenamiento" },
+            { name: "Nueces o Almendras", quantity: "250g", nutritionalValue: "Grasas esenciales y saciedad" }
+          ]
+        }
+      ];
+    } else if (diet === "keto") {
+      categories = [
+        {
+          name: "Carnes, Pescados y Proteínas",
+          items: [
+            { name: "Pechuga o Muslo de pollo", quantity: "1.5 kg", nutritionalValue: "Proteína básica para hipertrofia" },
+            { name: "Carne de res molida magra", quantity: "800g", nutritionalValue: "Proteína y hierro" },
+            { name: "Salmón o Atún en agua", quantity: "600g", nutritionalValue: "Proteína de alta calidad y grasas omega-3" },
+            { name: "Huevos de gallina", quantity: "2 docenas", nutritionalValue: "La mejor fuente de grasas y proteínas grasas" }
+          ]
+        },
+        {
+          name: "Lácteos y Grasas Saludables",
+          items: [
+            { name: "Aceite de coco o de oliva extra virgen", quantity: "1 botella", nutritionalValue: "Grasas saludables básicas para cetosis" },
+            { name: "Palta / Aguacate", quantity: "6 unidades", nutritionalValue: "Grasas y potasio esencial" },
+            { name: "Mantequilla o Ghee", quantity: "250g", nutritionalValue: "Grasas saturadas estables para cocinar" },
+            { name: "Queso parmesano o cheddar", quantity: "300g", nutritionalValue: "Grasas, sodio y proteínas" }
+          ]
+        },
+        {
+          name: "Verduras Bajas en Carbohidratos",
+          items: [
+            { name: "Espinacas o Acelgas", quantity: "500g", nutritionalValue: "Fibra, magnesio y potasio" },
+            { name: "Brócoli o Espárragos", quantity: "800g", nutritionalValue: "Fibra saciante baja en carbohidratos" }
+          ]
+        }
+      ];
+    } else {
+      categories = [
+        {
+          name: "Proteínas y Carnes",
+          items: [
+            { name: "Pechuga de pollo fileteada", quantity: "1.5 kg", nutritionalValue: "Proteína magra para construcción muscular" },
+            { name: "Lomo de cerdo o res magra", quantity: "800g", nutritionalValue: "Proteína, zinc y hierro" },
+            { name: "Atún al agua en conserva", quantity: "4 latas", nutritionalValue: "Proteína rápida, baja en grasas" },
+            { name: "Huevos enteros", quantity: "2 docenas", nutritionalValue: "Proteína y grasas esenciales" }
+          ]
+        },
+        {
+          name: "Cereales y Tubérculos",
+          items: [
+            { name: "Arroz integral o Quinoa", quantity: "800g", nutritionalValue: "Carbohidratos complejos" },
+            { name: "Avena integral", quantity: "1.0 kg", nutritionalValue: "Carbohidratos de avena saciantes" },
+            { name: "Patatas o Camotes", quantity: "1.5 kg", nutritionalValue: "Carbohidratos de fácil digestión" }
+          ]
+        },
+        {
+          name: "Lácteos y Derivados",
+          items: [
+            { name: "Yogur griego natural sin azúcar", quantity: "1.0 kg", nutritionalValue: "Proteínas lácteas y probióticos" },
+            { name: "Leche descremada o vegetal", quantity: "2 litros", nutritionalValue: "Base líquida proteica" }
+          ]
+        },
+        {
+          name: "Verdulería y Grasas",
+          items: [
+            { name: "Plátanos", quantity: "1 docena", nutritionalValue: "Potasio y energía pre-entreno" },
+            { name: "Brócoli y Espinacas", quantity: "1.2 kg", nutritionalValue: "Fito-nutrientes y fibra" },
+            { name: "Palta / Aguacate", quantity: "4 unidades", nutritionalValue: "Grasas monoinsaturadas" },
+            { name: "Aceite de oliva extra virgen", quantity: "1 botella", nutritionalValue: "Grasas saludables de cocina" }
+          ]
+        }
+      ];
+    }
+    
+    return { categories };
+  }
+}
+
+export async function suggestFoodSubstitutesByIA(
+  apiKey: string,
+  foodOrIngredient: string,
+  dietType: string
+): Promise<any> {
+  const prompt = `Eres un Experto Nutricionista de la aplicación Trophia.
+El usuario quiere reemplazar el siguiente ingrediente o alimento: "${foodOrIngredient}".
+Su tipo de dieta es: ${dietType || "standard"}.
+
+Sugiere exactamente 3 alternativas o sustitutos saludables viables que encajen estrictamente con su tipo de dieta (por ejemplo, si es vegano no sugieras miel o lácteos, si es keto mantén los carbohidratos extremadamente bajos).
+Para cada alternativa provee:
+1. Nombre del sustituto.
+2. Proporción o ratio de reemplazo (ej: "1 a 1", "50% de la cantidad original").
+3. Beneficio nutricional (por qué es un buen reemplazo y qué aporta).
+
+Debes responder estrictamente en formato JSON con la siguiente estructura:
+{
+  "substitutes": [
+    {
+      "name": "Nombre de la alternativa",
+      "ratioText": "Proporción sugerida de reemplazo",
+      "benefit": "Explicación corta del beneficio nutricional en español."
+    }
+  ]
+}`;
+
+  try {
+    return await callGeminiAPI(apiKey, prompt);
+  } catch (apiError: any) {
+    console.warn("Gemini API error in suggestFoodSubstitutesByIA, using fallback:", apiError);
+    
+    // Quick fallback based on common ingredient matches
+    const name = foodOrIngredient.toLowerCase();
+    let substitutes = [];
+    
+    if (name.includes("azucar") || name.includes("azúcar") || name.includes("dulce")) {
+      substitutes = [
+        {
+          name: dietType === "keto" ? "Eritritol o Alulosa" : "Miel de Abeja Orgánica",
+          ratioText: dietType === "keto" ? "1 a 1 en volumen" : "3/4 de la cantidad original",
+          benefit: dietType === "keto" ? "Libre de calorías y no eleva la glucosa en sangre." : "Aporta enzimas activas y antioxidantes naturales."
+        },
+        {
+          name: "Stevia natural en hojas o extracto",
+          ratioText: "Unas pocas gotas al gusto",
+          benefit: "Endulzante sin calorías que no altera la respuesta insulínica."
+        },
+        {
+          name: dietType === "vegan" || dietType === "vegetarian" ? "Jarabe de arce puro (Maple syrup)" : "Puré de manzana o plátano maduro",
+          ratioText: "1 a 1 en volumen",
+          benefit: "Aporta dulzor natural junto con fibra alimentaria que ralentiza la absorción."
+        }
+      ];
+    } else if (name.includes("leche") || name.includes("lácteo") || name.includes("lacteo") || name.includes("queso")) {
+      substitutes = [
+        {
+          name: "Bebida de almendras sin azúcar",
+          ratioText: "1 a 1 en volumen",
+          benefit: "Baja en calorías, libre de lactosa y apta para regímenes veganos/keto."
+        },
+        {
+          name: "Bebida de avena integral",
+          ratioText: "1 a 1 en volumen",
+          benefit: "Aporta carbohidratos complejos y una textura cremosa ideal para batidos."
+        },
+        {
+          name: "Leche de coco light (en lata o cartón)",
+          ratioText: "1 a 1 en volumen",
+          benefit: "Aporta ácidos grasos de cadena media (MCT) altamente saciantes y energía limpia."
+        }
+      ];
+    } else if (name.includes("huevo")) {
+      substitutes = [
+        {
+          name: "Semillas de chía o linaza activadas (Huevo de chía)",
+          ratioText: "1 cucharada de chía + 3 de agua por cada huevo",
+          benefit: "Excelente aglutinante vegetal rico en ácidos grasos omega-3 y fibra soluble."
+        },
+        {
+          name: "Tofu suave (Silken tofu)",
+          ratioText: "1/4 taza (aprox. 60g) por cada huevo",
+          benefit: "Ideal para horneados, aporta una consistencia suave y una buena dosis de proteína vegetal."
+        },
+        {
+          name: "Puré de plátano maduro",
+          ratioText: "1/2 plátano machacado por cada huevo",
+          benefit: "Funciona como aglutinante aportando humedad, potasio y dulzor natural."
+        }
+      ];
+    } else {
+      substitutes = [
+        {
+          name: "Aguacate / Palta",
+          ratioText: "Sustituye grasas como mantequilla o aceites en proporción 1 a 1",
+          benefit: "Aporta grasas monoinsaturadas cardiosaludables, potasio y gran cremosidad."
+        },
+        {
+          name: "Quinoa cocida",
+          ratioText: "Sustituye cereales refinados en proporción 1 a 1",
+          benefit: "Proteína completa con todos los aminoácidos esenciales y carbohidratos lentos."
+        },
+        {
+          name: "Levadura nutricional",
+          ratioText: "Sustituye queso rallado al gusto",
+          benefit: "Aporta un delicioso sabor a queso, rico en vitaminas del complejo B y proteínas."
+        }
+      ];
+    }
+    
+    return { substitutes };
+  }
+}
+
+

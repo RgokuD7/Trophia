@@ -189,3 +189,39 @@ export const clearWorkoutHistory = async (userId: string): Promise<void> => {
     throw error;
   }
 };
+
+// PWA Push Notifications Operations
+export const savePushSubscription = async (userId: string, subscription: any): Promise<void> => {
+  try {
+    // Generate a clean document ID from the endpoint URL by encoding it in base64
+    const subId = btoa(subscription.endpoint)
+      .replace(/\//g, "_")
+      .replace(/\+/g, "-")
+      .replace(/=/g, "");
+    
+    const subRef = doc(db, "users", userId, "push_subscriptions", subId);
+    await setDoc(subRef, {
+      ...subscription,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+  } catch (error) {
+    console.error("Error saving push subscription:", error);
+    throw error;
+  }
+};
+
+export const deletePushSubscription = async (userId: string, endpoint: string): Promise<void> => {
+  try {
+    const subId = btoa(endpoint)
+      .replace(/\//g, "_")
+      .replace(/\+/g, "-")
+      .replace(/=/g, "");
+      
+    const subRef = doc(db, "users", userId, "push_subscriptions", subId);
+    await deleteDoc(subRef);
+  } catch (error) {
+    console.error("Error deleting push subscription:", error);
+    throw error;
+  }
+};
+

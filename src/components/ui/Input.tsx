@@ -57,11 +57,11 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     }[size];
 
     // Smart class overriding to avoid conflicts and retain look & feel
-    const bgClass = className.includes("bg-") ? "" : "bg-white/5";
+    const bgClass = className.includes("bg-") ? "" : "bg-gray-50 dark:bg-white/5";
     
     const borderClass = error
       ? "border-rose-500/40 focus:border-rose-500/60"
-      : `${className.includes("border-") ? "" : "border-white/10"} ${className.includes("focus:border-") ? "" : "focus:border-emerald-500/40"}`;
+      : `${className.includes("border-") ? "" : "border-gray-200 dark:border-white/10"} ${className.includes("focus:border-") ? "" : "focus:border-emerald-500/30 dark:focus:border-emerald-500/40"}`;
       
     const roundedClass = className.includes("rounded-") ? "" : sizeConfig.rounded;
     
@@ -73,13 +73,13 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     const plClass = (className.includes("pl-") || hasPx) ? "" : (sizeConfig.pl.startsWith("pl-") ? sizeConfig.pl : sizeConfig.pl.split(" ")[0]);
     const prClass = (className.includes("pr-") || hasPx) ? "" : (sizeConfig.pr.startsWith("pr-") ? sizeConfig.pr : sizeConfig.pr.split(" ")[1] || sizeConfig.pr.split(" ")[0]);
 
-    const baseClasses = "w-full text-white placeholder-white/20 outline-none transition duration-200 border";
+    const baseClasses = "w-full text-gray-900 placeholder-gray-400 dark:text-white dark:placeholder-white/20 outline-none transition duration-200 border";
     const combinedClasses = `${baseClasses} ${bgClass} ${borderClass} ${roundedClass} ${sizeConfig.textSize} ${pyClass} ${plClass} ${prClass} ${className}`.trim();
 
     return (
       <div className={`relative w-full ${containerClassName}`}>
         {Icon && (
-          <div className={`absolute ${sizeConfig.iconLeftClass} top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none text-white/30`}>
+          <div className={`absolute ${sizeConfig.iconLeftClass} top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none text-gray-400 dark:text-white/30`}>
             <Icon className="h-4 w-4 shrink-0" />
           </div>
         )}
@@ -95,7 +95,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className={`absolute ${sizeConfig.iconRightClass} top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 p-1 rounded-lg transition`}
+            className={`absolute ${sizeConfig.iconRightClass} top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-white/30 dark:hover:text-white/60 p-1 rounded-lg transition`}
           >
             {showPassword ? (
               <EyeOff className="h-4 w-4" />

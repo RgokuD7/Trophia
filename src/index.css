@@ -6,6 +6,8 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+@variant dark (&:where(.dark, .dark *));
+
 /* Custom glassmorphism and hide scrollbars */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
@@ -16,8 +18,7 @@
 }
 
 body {
-  background-color: #090a0f;
-  color: #f3f4f6;
+  @apply bg-gray-50 text-gray-900 dark:bg-[#090a0f] dark:text-gray-100;
   font-family: var(--font-sans);
   overflow: hidden;
 }

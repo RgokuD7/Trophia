@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
-  Dumbbell, Calendar, RefreshCw, Check, Play, Square, Pause, Flame, Info, ChevronRight, Sparkles, Timer, RotateCcw, Award, Trash
+  Dumbbell, Calendar, RefreshCw, Check, Play, Square, Pause, Flame, Info, ChevronRight, Sparkles, Timer, RotateCcw, Award, Trash, Star
 } from "lucide-react";
 import { WorkoutSession, WorkoutExercise, MuscleRecovery, UserProfile } from "../types";
-import { generateRoutineByIA } from "../services/geminiService";
+import { generateRoutineByIA, suggestAlternativeExercisesByIA } from "../services/geminiService";
 
 interface WorkoutsProps {
   apiKey?: string;
@@ -12,14 +12,21 @@ interface WorkoutsProps {
   workoutHistory: WorkoutSession[];
   onAddWorkout: (workout: WorkoutSession) => void;
   onClearWorkouts: () => void;
+  onUpdateProfile: (profile: UserProfile) => void;
 }
 
-export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWorkout, onClearWorkouts }: WorkoutsProps) {
+export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWorkout, onClearWorkouts, onUpdateProfile }: WorkoutsProps) {
   const [activeTab, setActiveTab] = useState<"routine" | "recovery" | "timer">("routine");
   const [selectedDay, setSelectedDay] = useState<string>(new Date().toISOString().split("T")[0]);
   const [activeSession, setActiveSession] = useState<WorkoutSession | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  
+  // Phase 3 States
+  const [calendarView, setCalendarView] = useState<"week" | "month">("week");
+  const [exerciseForAlternatives, setExerciseForAlternatives] = useState<WorkoutExercise | null>(null);
+  const [alternativesList, setAlternativesList] = useState<any[]>([]);
+  const [loadingAlternatives, setLoadingAlternatives] = useState(false);
 
   // Muscle recovery state
   const [recovery, setRecovery] = useState<MuscleRecovery>({
@@ -377,22 +384,162 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
 
   const weekDates = getWeekDates();
 
+  // Get month grid dates helper
+  const getMonthDates = () => {
+    const dates = [];
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth();
+
+    const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
+    // Get Monday-indexed weekday: (day + 6) % 7
+    const firstDayOfWeek = (firstDayOfMonth.getDay() + 6) % 7;
+    const totalDaysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const prevMonthDays = new Date(currentYear, currentMonth, 0).getDate();
+    const totalCells = 42; // 6 weeks * 7 days
+
+    for (let i = 0; i < totalCells; i++) {
+      let d;
+      let isCurrentMonth = true;
+
+      if (i < firstDayOfWeek) {
+        const dayNum = prevMonthDays - firstDayOfWeek + i + 1;
+        d = new Date(currentYear, currentMonth - 1, dayNum);
+        isCurrentMonth = false;
+      } else if (i >= firstDayOfWeek + totalDaysInMonth) {
+        const dayNum = i - firstDayOfWeek - totalDaysInMonth + 1;
+        d = new Date(currentYear, currentMonth + 1, dayNum);
+        isCurrentMonth = false;
+      } else {
+        const dayNum = i - firstDayOfWeek + 1;
+        d = new Date(currentYear, currentMonth, dayNum);
+      }
+
+      dates.push({
+        dateStr: d.toISOString().split("T")[0],
+        dayNum: d.getDate(),
+        isToday: d.toDateString() === today.toDateString(),
+        isCurrentMonth
+      });
+    }
+    return dates;
+  };
+
+  const handleToggleFavorite = (exerciseName: string) => {
+    const favorites = userProfile.favoriteExercises || [];
+    let updatedFavorites;
+    if (favorites.includes(exerciseName)) {
+      updatedFavorites = favorites.filter(ex => ex !== exerciseName);
+    } else {
+      updatedFavorites = [...favorites, exerciseName];
+    }
+    onUpdateProfile({
+      ...userProfile,
+      favoriteExercises: updatedFavorites
+    });
+  };
+
+  const handleOpenAlternatives = async (exercise: WorkoutExercise) => {
+    setExerciseForAlternatives(exercise);
+    setLoadingAlternatives(true);
+    setAlternativesList([]);
+    try {
+      const data = await suggestAlternativeExercisesByIA(
+        apiKey || "",
+        exercise.name,
+        userProfile.equipment,
+        userProfile.level
+      );
+      if (data && data.alternatives) {
+        setAlternativesList(data.alternatives);
+      } else {
+        setAlternativesList([]);
+      }
+    } catch (err) {
+      console.error("Error fetching alternatives", err);
+      setAlternativesList([]);
+    } finally {
+      setLoadingAlternatives(false);
+    }
+  };
+
+  const handleReplaceExercise = (alternative: any) => {
+    if (!activeSession || !exerciseForAlternatives) return;
+
+    const updatedExercises = activeSession.exercises.map(ex => {
+      if (ex.id === exerciseForAlternatives.id) {
+        return {
+          ...ex,
+          name: alternative.name,
+          completedSets: Array.from({ length: ex.sets }).map((_, sIdx) => ({
+            setIndex: sIdx,
+            completed: false,
+            reps: ex.reps,
+            weight: ex.weight
+          }))
+        };
+      }
+      return ex;
+    });
+
+    const updatedSession = { ...activeSession, exercises: updatedExercises };
+    onAddWorkout(updatedSession);
+    setActiveSession(updatedSession);
+    setExerciseForAlternatives(null);
+    setAlternativesList([]);
+  };
+
+  const getMonthlyStats = () => {
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+
+    const monthlySessions = workoutHistory.filter(w => {
+      const dateParts = w.date.split("-");
+      if (dateParts.length === 3) {
+        const year = parseInt(dateParts[0]);
+        const month = parseInt(dateParts[1]) - 1;
+        return year === currentYear && month === currentMonth;
+      }
+      const d = new Date(w.date);
+      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+    });
+
+    const completedCount = monthlySessions.filter(w => w.completed).length;
+    
+    const totalCalories = monthlySessions.reduce((sum, session) => {
+      const sessionCal = session.exercises.reduce((exSum, ex) => {
+        const completedSetsCount = ex.completedSets.filter(s => s.completed).length || (session.completed ? ex.sets : 0);
+        return exSum + (completedSetsCount * ex.caloriesBurnedPerSet);
+      }, 0);
+      return sum + sessionCal;
+    }, 0);
+
+    return {
+      completedCount,
+      totalCalories,
+      totalSessions: monthlySessions.length
+    };
+  };
+
+  const monthlyStats = getMonthlyStats();
+
   return (
-    <div className="flex flex-col h-full bg-[#0d0e15] text-gray-100 overflow-y-auto no-scrollbar pb-16">
+    <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0d0e15] text-gray-900 dark:text-gray-100 overflow-y-auto no-scrollbar pb-16">
       
       {/* Tab Header Selector */}
-      <div className="px-6 pt-5 border-b border-gray-800/40">
+      <div className="px-6 pt-5 border-b border-gray-200 dark:border-gray-800/40">
         <span className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider">Módulo Fitness</span>
-        <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-1.5 mt-0.5">
+        <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-1.5 mt-0.5">
           <Dumbbell className="h-5 w-5 text-emerald-400" />
           <span>Plan de Entrenamiento</span>
         </h2>
 
-        <div className="flex gap-4 mt-3 border-b border-gray-800/20">
+        <div className="flex gap-4 mt-3 border-b border-gray-200 dark:border-gray-800/20">
           <button
             onClick={() => setActiveTab("routine")}
             className={`pb-2.5 text-xs font-bold border-b-2 transition ${
-              activeTab === "routine" ? "border-emerald-500 text-white" : "border-transparent text-gray-400"
+              activeTab === "routine" ? "border-emerald-500 text-gray-900 dark:text-white" : "border-transparent text-gray-500 dark:text-gray-400"
             }`}
           >
             Sesión Diaria
@@ -400,7 +547,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
           <button
             onClick={() => setActiveTab("recovery")}
             className={`pb-2.5 text-xs font-bold border-b-2 transition ${
-              activeTab === "recovery" ? "border-emerald-500 text-white" : "border-transparent text-gray-400"
+              activeTab === "recovery" ? "border-emerald-500 text-gray-900 dark:text-white" : "border-transparent text-gray-500 dark:text-gray-400"
             }`}
           >
             Recuperación Muscular
@@ -408,7 +555,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
           <button
             onClick={() => setActiveTab("timer")}
             className={`pb-2.5 text-xs font-bold border-b-2 transition flex items-center gap-1 ${
-              activeTab === "timer" ? "border-emerald-500 text-white" : "border-transparent text-gray-400"
+              activeTab === "timer" ? "border-emerald-500 text-gray-900 dark:text-white" : "border-transparent text-gray-500 dark:text-gray-400"
             }`}
           >
             <Timer className="h-3.5 w-3.5" />
@@ -419,50 +566,170 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
 
       {activeTab === "routine" && (
         <div className="flex-1 flex flex-col">
-          
-          {/* 1. Calendario Semanal */}
-          <div className="px-6 py-4 bg-[#12131d]/60 border-b border-gray-800/30">
-            <div className="flex justify-between gap-1.5 overflow-x-auto no-scrollbar py-1">
-              {weekDates.map((day) => {
-                const isSelected = selectedDay === day.dateStr;
-                const hasSession = workoutHistory.some(w => w.date === day.dateStr);
-                const completedSession = workoutHistory.some(w => w.date === day.dateStr && w.completed);
-
-                return (
-                  <button
-                    key={day.dateStr}
-                    onClick={() => setSelectedDay(day.dateStr)}
-                    className={`flex-1 min-w-[42px] py-2 rounded-xl border flex flex-col items-center justify-between transition ${
-                      isSelected 
-                        ? "bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/10"
-                        : "bg-[#161824] border-gray-800/80 text-gray-400"
-                    }`}
-                  >
-                    <span className="text-[10px] font-mono uppercase font-bold opacity-80">{day.dayName}</span>
-                    <span className="text-sm font-black mt-1">{day.dayNum}</span>
-                    
-                    {/* Completion indicators */}
-                    <div className="flex gap-1 mt-1.5">
-                      {hasSession && (
-                        <div className={`w-1.5 h-1.5 rounded-full ${completedSession ? "bg-emerald-300" : "bg-amber-400"}`} />
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
+              {/* 1. Calendario Semanal / Mensual */}
+          <div className="px-6 py-4 bg-white dark:bg-[#12131d]/60 border-b border-gray-200 dark:border-b-gray-800/30 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                <Calendar className="h-4 w-4 text-emerald-400" />
+                <span>Calendario de Entrenamientos</span>
+              </span>
+              <div className="flex bg-gray-100 dark:bg-[#161824] p-0.5 rounded-lg border border-gray-200 dark:border-gray-800 text-[10px]">
+                <button
+                  onClick={() => setCalendarView("week")}
+                  className={`px-2 py-1 font-bold rounded-md transition cursor-pointer ${
+                    calendarView === "week" ? "bg-emerald-500 text-white" : "text-gray-500 dark:text-gray-400"
+                  }`}
+                >
+                  Semana
+                </button>
+                <button
+                  onClick={() => setCalendarView("month")}
+                  className={`px-2 py-1 font-bold rounded-md transition cursor-pointer ${
+                    calendarView === "month" ? "bg-emerald-500 text-white" : "text-gray-500 dark:text-gray-400"
+                  }`}
+                >
+                  Mes
+                </button>
+              </div>
             </div>
+
+            {calendarView === "week" ? (
+              <div className="flex justify-between gap-1.5 overflow-x-auto no-scrollbar py-1">
+                {weekDates.map((day) => {
+                  const isSelected = selectedDay === day.dateStr;
+                  const hasSession = workoutHistory.some(w => w.date === day.dateStr);
+                  const completedSession = workoutHistory.some(w => w.date === day.dateStr && w.completed);
+
+                  return (
+                    <button
+                      key={day.dateStr}
+                      onClick={() => setSelectedDay(day.dateStr)}
+                      className={`flex-grow min-w-[42px] py-2 rounded-xl border flex flex-col items-center justify-between transition cursor-pointer ${
+                        isSelected 
+                          ? "bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/10"
+                          : "bg-white dark:bg-[#161824] border-gray-200 dark:border-gray-800/80 text-gray-550 dark:text-gray-400 shadow-sm dark:shadow-none"
+                      }`}
+                    >
+                      <span className="text-[9px] font-mono uppercase font-bold opacity-80">{day.dayName}</span>
+                      <span className="text-sm font-black mt-1">{day.dayNum}</span>
+                      
+                      {/* Completion indicators */}
+                      <div className="flex gap-1 mt-1.5">
+                        {hasSession && (
+                          <div className={`w-1.5 h-1.5 rounded-full ${completedSession ? "bg-emerald-300" : "bg-amber-400"}`} />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              /* Grid Calendario Mensual (7x6 days) */
+              <div className="space-y-2">
+                {/* Headers: Lu Ma Mi Ju Vi Sá Do */}
+                <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold text-gray-450 dark:text-gray-550 uppercase tracking-wider font-mono">
+                  <span>Lu</span>
+                  <span>Ma</span>
+                  <span>Mi</span>
+                  <span>Ju</span>
+                  <span>Vi</span>
+                  <span>Sá</span>
+                  <span>Do</span>
+                </div>
+                <div className="grid grid-cols-7 gap-1">
+                  {getMonthDates().map((day, idx) => {
+                    const isSelected = selectedDay === day.dateStr;
+                    const hasSession = workoutHistory.some(w => w.date === day.dateStr);
+                    const completedSession = workoutHistory.some(w => w.date === day.dateStr && w.completed);
+
+                    return (
+                      <button
+                        key={`${day.dateStr}-${idx}`}
+                        onClick={() => setSelectedDay(day.dateStr)}
+                        className={`aspect-square p-1 rounded-lg border flex flex-col items-center justify-between transition relative cursor-pointer ${
+                          isSelected
+                            ? "bg-emerald-500 border-emerald-400 text-white z-10 shadow-md shadow-emerald-500/10"
+                            : !day.isCurrentMonth
+                              ? "bg-transparent border-transparent text-gray-300 dark:text-gray-700 pointer-events-none"
+                              : "bg-white dark:bg-[#161824] border-gray-200 dark:border-gray-800/80 text-gray-750 dark:text-gray-300"
+                        }`}
+                      >
+                        <span className={`text-[10px] font-bold ${!day.isCurrentMonth ? "opacity-30" : ""}`}>
+                          {day.dayNum}
+                        </span>
+
+                        {/* Session indicators */}
+                        {day.isCurrentMonth && hasSession && (
+                          <div className="absolute bottom-1 flex gap-0.5 justify-center">
+                            <div className={`w-1.5 h-1.5 rounded-full ${
+                              completedSession 
+                                ? isSelected ? "bg-white" : "bg-emerald-500" 
+                                : isSelected ? "bg-white" : "bg-amber-500"
+                            }`} />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex gap-4 justify-center text-[9px] font-bold text-gray-450 dark:text-gray-550 pt-1.5 border-t border-gray-100 dark:border-gray-800/20 font-mono">
+                  <div className="flex items-center gap-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    <span>Sesión Completada</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    <span>Sesión Pendiente / Creada</span>
+                  </div>
+                </div>
+
+                {/* Stats Panel */}
+                <div className="bg-emerald-500/5 dark:bg-[#12131d]/60 border border-emerald-500/10 dark:border-gray-800/80 p-3.5 rounded-2xl grid grid-cols-2 gap-3.5 mt-2.5 text-left shadow-inner">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase block">Entrenamientos Completados</span>
+                    <span className="text-xs font-black text-gray-900 dark:text-white flex items-baseline gap-1 mt-0.5">
+                      {monthlyStats.completedCount}
+                      <span className="text-[9px] text-gray-400 dark:text-gray-500 font-medium">de {monthlyStats.totalSessions} creados</span>
+                    </span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase block">Calorías Quemadas</span>
+                    <span className="text-xs font-black text-emerald-500 flex items-baseline gap-0.5 mt-0.5">
+                      ~{monthlyStats.totalCalories}
+                      <span className="text-[9px] text-gray-400 dark:text-gray-500 font-medium">kcal</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="px-6 py-5 space-y-4 flex-1">
             
             {!activeSession ? (
-              <div className="bg-[#12131d] border border-gray-800 border-dashed rounded-2xl p-6 text-center space-y-4">
+              <div className="space-y-4">
+                {/* Active Rest Suggestions Card */}
+                <div className="bg-white dark:bg-[#12131d]/60 border border-gray-200 dark:border-gray-800/80 p-4.5 rounded-2xl space-y-3 shadow-md text-left">
+                  <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider block">Recomendación de Descanso Activo</span>
+                  <p className="text-xs text-gray-755 dark:text-gray-300 leading-relaxed font-medium">
+                    {userProfile.goal === "lose_weight" 
+                      ? "🚶 Caminata ligera de 30-45 minutos. Ideal para mantener un gasto calórico bajo control sin fatigar tu sistema muscular y articular."
+                      : userProfile.goal === "gain_muscle"
+                        ? "🧘 15 minutos de elongaciones estáticas completas. Enfocado en descomprimir articulaciones y acelerar el flujo de recuperación de fibras musculares."
+                        : "🏃 Paseo recreativo o movilidad suave de 20 minutos. Ayuda a lubricar las articulaciones y reducir la rigidez acumulada."}
+                  </p>
+                  <span className="block text-[9px] text-gray-400 dark:text-gray-500 italic leading-none">
+                    💡 Aprovechar hoy para descansar permitirá que tus fibras musculares se reparen más fuerte.
+                  </span>
+                </div>
+
+                <div className="bg-white dark:bg-[#12131d] border border-gray-250 dark:border-gray-800 border-dashed rounded-2xl p-6 text-center space-y-4 shadow-sm dark:shadow-none">
                 <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto text-emerald-400">
                   <Sparkles className="h-6 w-6" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-extrabold text-white">¿Entrenamos hoy?</h4>
-                  <p className="text-xs text-gray-400 max-w-xs mx-auto mt-1 leading-relaxed">
+                  <h4 className="text-sm font-extrabold text-gray-900 dark:text-white">¿Entrenamos hoy?</h4>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs mx-auto mt-1 leading-relaxed">
                     Usa nuestro motor de IA para formular una rutina de {userProfile.goal === "lose_weight" ? "quema de grasa" : "hipertrofia"} adaptada a tu equipamiento: <b>{userProfile.equipment.join(", ") || "Peso corporal"}</b>.
                   </p>
                 </div>
@@ -471,7 +738,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                   <button
                     onClick={handleGenerateRoutine}
                     disabled={isGenerating}
-                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black py-3 rounded-xl transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 active:scale-98"
+                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black py-3 rounded-xl transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 active:scale-98 cursor-pointer"
                   >
                     {isGenerating ? (
                       <>
@@ -503,7 +770,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                             <span className="block text-xs font-bold text-rose-200">
                               {isHighDemand ? "Saturación del Servidor de Rutinas (503)" : "Error al Generar Rutina"}
                             </span>
-                            <span className="block text-[10px] text-white/50 leading-relaxed">
+                            <span className="block text-[10px] text-gray-500 dark:text-white/50 leading-relaxed">
                               {isHighDemand 
                                 ? "El motor de IA está experimentando alta demanda en este momento. ¡Puedes intentar de nuevo en un momento o usar una excelente plantilla sin conexión!" 
                                 : generationError}
@@ -515,7 +782,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                           <button
                             type="button"
                             onClick={handleGenerateRoutine}
-                            className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition cursor-pointer"
+                            className="flex-1 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-900 dark:text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 border border-gray-200 dark:border-transparent transition cursor-pointer"
                           >
                             <RefreshCw className="h-3 w-3" />
                             Reintentar con IA
@@ -523,7 +790,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                           <button
                             type="button"
                             onClick={handleGenerateDefaultOffline}
-                            className="flex-1 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition cursor-pointer"
+                            className="flex-1 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition cursor-pointer"
                           >
                             <Dumbbell className="h-3 w-3" />
                             Rutina sin Conexión
@@ -534,15 +801,16 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                   })()}
                 </div>
               </div>
-            ) : (
+            </div>
+          ) : (
               /* Session active display */
               <div className="space-y-4">
                 
                 {/* Session title bar */}
-                <div className="bg-[#161824] p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-md">
+                <div className="bg-white dark:bg-[#161824] p-4 rounded-xl border border-gray-250 dark:border-gray-800 flex justify-between items-center shadow-md">
                   <div>
                     <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">Plan del día</span>
-                    <h3 className="text-sm font-extrabold text-white mt-0.5">{activeSession.name}</h3>
+                    <h3 className="text-sm font-extrabold text-gray-900 dark:text-white mt-0.5">{activeSession.name}</h3>
                   </div>
                   {activeSession.completed ? (
                     <div className="flex items-center gap-1 text-xs font-bold text-emerald-400 bg-emerald-500/10 py-1 px-2.5 rounded-full border border-emerald-500/20">
@@ -552,7 +820,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                   ) : (
                     <button
                       onClick={handleMarkSessionComplete}
-                      className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition"
+                      className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition cursor-pointer"
                     >
                       Terminar
                     </button>
@@ -560,9 +828,9 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                 </div>
 
                 {/* Warm up block */}
-                <div className="bg-[#12131d] p-3 rounded-xl border border-gray-800/60 space-y-2">
-                  <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide">1. Calentamiento (Movilidad)</span>
-                  <ul className="space-y-1 text-xs text-gray-300">
+                <div className="bg-white dark:bg-[#12131d] p-3 rounded-xl border border-gray-200 dark:border-gray-800/60 space-y-2">
+                  <span className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">1. Calentamiento (Movilidad)</span>
+                  <ul className="space-y-1 text-xs text-gray-750 dark:text-gray-300">
                     {activeSession.warmup.map((w, idx) => (
                       <li key={idx} className="flex gap-1.5 items-start">
                         <span className="text-emerald-400 font-bold">•</span>
@@ -574,7 +842,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
 
                 {/* Exercises Tracker Block */}
                 <div className="space-y-3">
-                  <span className="block text-xs font-bold text-gray-400 uppercase tracking-wide">2. Rutina Central (Ejercicios)</span>
+                  <span className="block text-xs font-bold text-gray-550 dark:text-gray-400 uppercase tracking-wide">2. Rutina Central (Ejercicios)</span>
                   
                   {activeSession.exercises.map((ex) => {
                     const allCompleted = ex.completedSets.every(s => s.completed);
@@ -582,67 +850,94 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                     return (
                       <div 
                         key={ex.id}
-                        className={`bg-[#161824] rounded-2xl border p-4 space-y-3 shadow-md transition ${
-                          allCompleted ? "border-emerald-500/30 bg-[#161824]/40" : "border-gray-800"
+                        className={`bg-white dark:bg-[#161824] rounded-2xl border p-4 space-y-3 shadow-md transition ${
+                          allCompleted ? "border-emerald-500/30 bg-emerald-500/5 dark:bg-[#161824]/40" : "border-gray-200 dark:border-gray-800"
                         }`}
                       >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h4 className="text-xs font-black text-white">{ex.name}</h4>
-                            <span className="text-[10px] text-gray-400 font-bold uppercase mt-0.5 block">
-                              {ex.sets} series × {ex.reps} reps
-                            </span>
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleToggleFavorite(ex.name)}
+                              className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                                (userProfile.favoriteExercises || []).includes(ex.name)
+                                  ? "bg-amber-500/10 border-amber-500/30 text-amber-500"
+                                  : "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-400 hover:text-amber-500"
+                              }`}
+                              title="Marcar como favorito"
+                            >
+                              <Star className={`h-4 w-4 ${(userProfile.favoriteExercises || []).includes(ex.name) ? "fill-current" : ""}`} />
+                            </button>
+                            <div>
+                              <h4 className="text-xs font-black text-gray-900 dark:text-white flex items-center gap-1.5 flex-wrap">
+                                <span>{ex.name}</span>
+                                {(userProfile.favoriteExercises || []).includes(ex.name) && (
+                                  <span className="text-[9px] bg-amber-500/10 text-amber-500 font-black px-1.5 py-0.5 rounded-md border border-amber-500/20 font-mono">FAV</span>
+                                )}
+                              </h4>
+                              <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase mt-0.5 block">
+                                {ex.sets} series × {ex.reps} reps
+                              </span>
+                            </div>
                           </div>
                           
-                          {/* Low calorie expenditure estimate */}
-                          <div className="text-right">
-                            <span className="text-xs font-bold text-amber-500 flex items-center justify-end gap-1">
-                              <Flame className="h-3.5 w-3.5" />
-                              <span>~{ex.sets * ex.caloriesBurnedPerSet} kcal</span>
-                            </span>
-                            <span className="text-[9px] text-gray-500 block">(Gasto conservador)</span>
+                          {/* Low calorie expenditure estimate & Alternatives button */}
+                          <div className="text-right flex flex-col items-end gap-1.5 flex-shrink-0">
+                            <div>
+                              <span className="text-xs font-bold text-amber-500 flex items-center justify-end gap-1">
+                                <Flame className="h-3.5 w-3.5" />
+                                <span>~{ex.sets * ex.caloriesBurnedPerSet} kcal</span>
+                              </span>
+                              <span className="text-[9px] text-gray-450 dark:text-gray-500 block">(Gasto conservador)</span>
+                            </div>
+                            <button
+                              onClick={() => handleOpenAlternatives(ex)}
+                              className="text-[9px] font-black text-emerald-500 hover:text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded-lg border border-emerald-500/20 flex items-center gap-1 transition cursor-pointer"
+                            >
+                              <RefreshCw className="h-2.5 w-2.5" />
+                              <span>Alternativas IA</span>
+                            </button>
                           </div>
                         </div>
-
-                        {/* Series table for Progressive Overload adjustments */}
-                        <div className="space-y-2 border-t border-gray-800/40 pt-2.5">
+                          
+                          {/* Series table for Progressive Overload adjustments */}
+                        <div className="space-y-2 border-t border-gray-250 dark:border-gray-800/40 pt-2.5">
                           {ex.completedSets.map((set) => (
                             <div 
                               key={set.setIndex}
                               className="flex items-center justify-between text-xs py-1"
                             >
                               <div className="flex items-center gap-2">
-                                <span className="font-mono text-[10px] text-gray-500 font-bold">SET {set.setIndex + 1}</span>
+                                <span className="font-mono text-[10px] text-gray-450 dark:text-gray-500 font-bold">SET {set.setIndex + 1}</span>
                                 
                                 {/* Edit Reps */}
-                                <div className="flex items-center gap-1 bg-[#0f101a] border border-gray-800 rounded-lg px-2 py-0.5">
+                                <div className="flex items-center gap-1 bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-lg px-2 py-0.5">
                                   <input
                                     type="number"
                                     value={set.reps}
                                     onChange={(e) => handleUpdateSetWeightOrReps(ex.id, set.setIndex, set.weight, Math.max(1, Number(e.target.value) || set.reps))}
-                                    className="w-8 text-center text-xs bg-transparent text-white focus:outline-none"
+                                    className="w-8 text-center text-xs bg-transparent text-gray-900 dark:text-white focus:outline-none"
                                   />
-                                  <span className="text-[9px] text-gray-500">rep</span>
+                                  <span className="text-[9px] text-gray-400 dark:text-gray-500">rep</span>
                                 </div>
 
                                 {/* Edit Weight */}
-                                <div className="flex items-center gap-1 bg-[#0f101a] border border-gray-800 rounded-lg px-2 py-0.5">
+                                <div className="flex items-center gap-1 bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-lg px-2 py-0.5">
                                   <input
                                     type="number"
                                     value={set.weight}
                                     onChange={(e) => handleUpdateSetWeightOrReps(ex.id, set.setIndex, Math.max(0, Number(e.target.value) || 0), set.reps)}
-                                    className="w-8 text-center text-xs bg-transparent text-white focus:outline-none"
+                                    className="w-8 text-center text-xs bg-transparent text-gray-900 dark:text-white focus:outline-none"
                                   />
-                                  <span className="text-[9px] text-gray-500">kg</span>
+                                  <span className="text-[9px] text-gray-400 dark:text-gray-500">kg</span>
                                 </div>
                               </div>
 
                               <button
                                 onClick={() => handleToggleSet(ex.id, set.setIndex)}
-                                className={`w-6 h-6 rounded-lg border flex items-center justify-center transition ${
+                                className={`w-6 h-6 rounded-lg border flex items-center justify-center transition cursor-pointer ${
                                   set.completed
                                     ? "bg-emerald-500 border-emerald-400 text-white"
-                                    : "bg-gray-900 border-gray-800 text-gray-600 hover:text-white"
+                                    : "bg-gray-100 dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-450 dark:text-gray-600 hover:text-gray-800 dark:hover:text-white"
                                 }`}
                               >
                                 {set.completed ? <Check className="h-3.5 w-3.5" /> : <Play className="h-2.5 w-2.5 fill-current" />}
@@ -656,9 +951,9 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                 </div>
 
                 {/* Cooldown stretching list */}
-                <div className="bg-[#12131d] p-3 rounded-xl border border-gray-800/60 space-y-2">
-                  <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide">3. Enfriamiento (Elongación)</span>
-                  <ul className="space-y-1 text-xs text-gray-300">
+                <div className="bg-white dark:bg-[#12131d] p-3 rounded-xl border border-gray-200 dark:border-gray-800/60 space-y-2">
+                  <span className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">3. Enfriamiento (Elongación)</span>
+                  <ul className="space-y-1 text-xs text-gray-750 dark:text-gray-300">
                     {activeSession.cooldown.map((c, idx) => (
                       <li key={idx} className="flex gap-1.5 items-start">
                         <span className="text-emerald-400 font-bold">•</span>
@@ -671,7 +966,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                 {/* Clear Workout Option */}
                 <button
                   onClick={onClearWorkouts}
-                  className="w-full bg-gray-900 hover:bg-rose-950/20 border border-gray-800 hover:border-rose-900/30 text-xs text-gray-400 hover:text-rose-400 py-3 rounded-xl transition flex items-center justify-center gap-1.5"
+                  className="w-full bg-white hover:bg-rose-50 dark:bg-gray-900 dark:hover:bg-rose-950/20 border border-gray-250 dark:border-gray-800 hover:border-rose-350 dark:hover:border-rose-900/30 text-xs text-gray-600 dark:text-gray-400 hover:text-rose-600 dark:hover:text-rose-400 py-3 rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm dark:shadow-none cursor-pointer"
                 >
                   <Trash className="h-4 w-4" />
                   <span>Eliminar todas las sesiones</span>
@@ -683,9 +978,9 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
         </div>
       )}
 
-      {activeTab === "recovery" && (
+        {activeTab === "recovery" && (
         <div className="px-6 py-5 space-y-5">
-          <p className="text-xs text-gray-400 leading-normal">
+          <p className="text-xs text-gray-500 dark:text-gray-400 leading-normal">
             Porcentaje de recuperación muscular estimado basado en el historial de ejercicios completados. Deja descansar los músculos si están por debajo de 35% de recuperación.
           </p>
 
@@ -700,17 +995,17 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
             ].map((muscle) => (
               <div 
                 key={muscle.id}
-                className="bg-[#161824] p-4 rounded-xl border border-gray-800 space-y-2.5 shadow-md"
+                className="bg-white dark:bg-[#161824] p-4 rounded-xl border border-gray-200 dark:border-gray-800 space-y-2.5 shadow-md"
               >
                 <div className="flex justify-between items-center text-xs">
-                  <span className="font-bold text-gray-300 truncate">{muscle.label}</span>
+                  <span className="font-bold text-gray-700 dark:text-gray-300 truncate">{muscle.label}</span>
                   <span className={`font-black ${
-                    muscle.value < 40 ? "text-rose-400" : muscle.value < 75 ? "text-amber-400" : "text-emerald-400"
+                    muscle.value < 40 ? "text-rose-450 dark:text-rose-400" : muscle.value < 75 ? "text-amber-500 dark:text-amber-400" : "text-emerald-500 dark:text-emerald-400"
                   }`}>{muscle.value}%</span>
                 </div>
 
                 {/* Progress bar */}
-                <div className="h-2 w-full bg-gray-900 rounded-full overflow-hidden">
+                <div className="h-2 w-full bg-gray-100 dark:bg-gray-900 rounded-full overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${muscle.value}%` }}
@@ -718,32 +1013,30 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                   />
                 </div>
                 
-                <span className="text-[9px] text-gray-500 block">
+                <span className="text-[9px] text-gray-450 dark:text-gray-500 block">
                   {muscle.value < 40 ? "⚠️ Sobrecargado. Priorizar descanso hoy" : muscle.value < 75 ? "🔋 Recuperación intermedia" : "✅ Listo para entrenar pesado"}
                 </span>
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {activeTab === "timer" && (
+        </div>     )}
+        {activeTab === "timer" && (
         <div className="px-6 py-5 space-y-6 text-center flex flex-col justify-center items-center">
           
           {/* Timer Mode Toggle */}
-          <div className="flex bg-[#161824] p-1 rounded-xl border border-gray-800 w-full max-w-xs">
+          <div className="flex bg-white dark:bg-[#161824] p-1 rounded-xl border border-gray-200 dark:border-gray-800 w-full max-w-xs shadow-sm dark:shadow-none">
             <button
               onClick={() => { setTimerType("rest"); handleResetTimer(); }}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${
-                timerType === "rest" ? "bg-emerald-500 text-white" : "text-gray-400"
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
+                timerType === "rest" ? "bg-emerald-500 text-white" : "text-gray-500 dark:text-gray-400"
               }`}
             >
               Descanso entre Series
             </button>
             <button
               onClick={() => { setTimerType("hiit"); handleResetTimer(); }}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${
-                timerType === "hiit" ? "bg-emerald-500 text-white" : "text-gray-400"
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
+                timerType === "hiit" ? "bg-emerald-500 text-white" : "text-gray-500 dark:text-gray-400"
               }`}
             >
               Intervalos HIIT
@@ -759,7 +1052,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                 cx="112"
                 cy="112"
                 r="100"
-                className="stroke-gray-800"
+                className="stroke-gray-200 dark:stroke-gray-800"
                 strokeWidth="8"
                 fill="transparent"
               />
@@ -781,16 +1074,16 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
             <div className="z-10 text-center">
               {timerType === "hiit" && (
                 <span className={`block text-[11px] font-bold uppercase tracking-wider ${
-                  hiitCycle === "work" ? "text-emerald-400" : "text-blue-400"
+                  hiitCycle === "work" ? "text-emerald-500 dark:text-emerald-400" : "text-blue-500 dark:text-blue-400"
                 }`}>
                   {hiitCycle === "work" ? `💪 ¡TRABAJA! (Ronda ${hiitRound})` : "🔋 Descanso activo"}
                 </span>
               )}
               {timerType === "rest" && (
-                <span className="block text-xs text-gray-500 font-bold uppercase">Descansando</span>
+                <span className="block text-xs text-gray-400 dark:text-gray-500 font-bold uppercase">Descansando</span>
               )}
 
-              <span className="text-5xl font-black text-white tracking-tighter mt-1 block">
+              <span className="text-5xl font-black text-gray-900 dark:text-white tracking-tighter mt-1 block">
                 {timeRemaining}
                 <span className="text-lg font-bold ml-0.5">s</span>
               </span>
@@ -805,7 +1098,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                 <button
                   key={preset}
                   onClick={() => handleStartTimer(preset)}
-                  className="bg-[#161824] hover:bg-gray-800 border border-gray-800 px-4 py-1.5 rounded-lg text-xs text-white transition active:scale-95"
+                  className="bg-white dark:bg-[#161824] hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-250 dark:border-gray-800 px-4 py-1.5 rounded-lg text-xs text-gray-900 dark:text-white transition active:scale-95 cursor-pointer shadow-sm dark:shadow-none"
                 >
                   {preset}s
                 </button>
@@ -818,7 +1111,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
             {isTimerRunning ? (
               <button
                 onClick={handlePauseTimer}
-                className="flex-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold py-3 rounded-xl transition flex items-center justify-center gap-1 shadow-lg shadow-amber-500/10 active:scale-95"
+                className="flex-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold py-3 rounded-xl transition flex items-center justify-center gap-1 shadow-lg shadow-amber-500/10 active:scale-95 cursor-pointer"
               >
                 <Pause className="h-4 w-4" />
                 <span>Pausar</span>
@@ -826,7 +1119,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
             ) : (
               <button
                 onClick={() => setIsTimerRunning(true)}
-                className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold py-3 rounded-xl transition flex items-center justify-center gap-1 shadow-lg shadow-emerald-500/10 active:scale-95"
+                className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold py-3 rounded-xl transition flex items-center justify-center gap-1 shadow-lg shadow-emerald-500/10 active:scale-95 cursor-pointer"
               >
                 <Play className="h-4 w-4" />
                 <span>Iniciar</span>
@@ -835,11 +1128,105 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
 
             <button
               onClick={handleResetTimer}
-              className="bg-gray-800 hover:bg-gray-700 text-white py-3 px-4 rounded-xl transition active:scale-95"
+              className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-900 dark:text-white py-3 px-4 rounded-xl border border-gray-250 dark:border-transparent transition active:scale-95 cursor-pointer"
             >
               <RotateCcw className="h-4 w-4" />
             </button>
           </div>
+
+          {/* Alternatives Modal */}
+          <AnimatePresence>
+            {exerciseForAlternatives && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.95, opacity: 0 }}
+                  className="bg-white dark:bg-[#12131d] border border-gray-200 dark:border-gray-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 text-left"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">Alternativas Inteligentes</span>
+                      <h3 className="text-base font-extrabold text-gray-900 dark:text-white mt-0.5">
+                        Reemplazar "{exerciseForAlternatives.name}"
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => { setExerciseForAlternatives(null); setAlternativesList([]); }}
+                      className="text-gray-400 hover:text-gray-600 dark:hover:text-white transition cursor-pointer text-sm font-bold"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {loadingAlternatives ? (
+                    <div className="py-12 flex flex-col items-center justify-center gap-3">
+                      <RefreshCw className="h-8 w-8 text-emerald-400 animate-spin" />
+                      <span className="text-xs text-gray-500 dark:text-gray-400 font-bold">Consultando a Gemini por sustitutos...</span>
+                    </div>
+                  ) : alternativesList.length > 0 ? (
+                    <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1 no-scrollbar">
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                        Sugerencias personalizadas para tu nivel (<b>{userProfile.level}</b>) y equipamiento (<b>{userProfile.equipment.join(", ") || "Peso Corporal"}</b>):
+                      </p>
+                      
+                      {alternativesList.map((alt, idx) => (
+                        <div 
+                          key={idx}
+                          className="bg-gray-50 dark:bg-[#161824] border border-gray-200 dark:border-gray-800 p-3.5 rounded-2xl space-y-2.5 hover:border-emerald-500/30 transition-all shadow-sm"
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="text-xs font-black text-gray-900 dark:text-white">{alt.name}</h4>
+                              <span className="text-[9px] text-gray-450 dark:text-gray-500 font-bold block mt-0.5 font-mono">
+                                Equipamiento: {alt.equipmentNeeded}
+                              </span>
+                            </div>
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border font-mono ${
+                              alt.difficulty === "Fácil" 
+                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" 
+                                : alt.difficulty === "Medio" 
+                                  ? "bg-amber-500/10 border-amber-500/20 text-amber-500" 
+                                  : "bg-rose-500/10 border-rose-500/20 text-rose-500"
+                            }`}>
+                              {alt.difficulty}
+                            </span>
+                          </div>
+
+                          <div className="space-y-1">
+                            <span className="block text-[10px] text-gray-650 dark:text-gray-300 font-medium">
+                              {alt.justification}
+                            </span>
+                            <span className="block text-[9px] text-emerald-500 dark:text-emerald-400 font-bold font-mono">
+                              {alt.repsText}
+                            </span>
+                          </div>
+
+                          <button
+                            onClick={() => handleReplaceExercise(alt)}
+                            className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-black py-2 rounded-xl transition flex items-center justify-center gap-1 active:scale-98 shadow-sm cursor-pointer"
+                          >
+                            <Check className="h-3 w-3" />
+                            <span>Seleccionar y Reemplazar</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center space-y-2">
+                      <p className="text-xs text-rose-450 dark:text-rose-400 font-bold">No se pudieron obtener alternativas</p>
+                      <button
+                        onClick={() => handleOpenAlternatives(exerciseForAlternatives)}
+                        className="mx-auto text-[10px] font-bold text-gray-600 dark:text-gray-400 underline cursor-pointer"
+                      >
+                        Reintentar búsqueda
+                      </button>
+                    </div>
+                  )}
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
 
         </div>
       )}

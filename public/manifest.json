@@ -1,0 +1,18 @@
+{
+  "short_name": "Trophia",
+  "name": "Trophia: Intelligent Fitness",
+  "description": "Tu evolución física y nutricional optimizada de forma personalizada con Inteligencia Artificial.",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0d0e15",
+  "theme_color": "#0d0e15",
+  "display": "standalone",
+  "orientation": "portrait"
+}

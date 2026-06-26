@@ -31,11 +31,11 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     // Variants
     const variants = {
-      primary: "bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/15 active:bg-emerald-700 disabled:bg-emerald-950/40 disabled:text-white/20 disabled:border disabled:border-white/5",
-      secondary: "bg-white/5 hover:bg-white/10 border border-white/10 text-white active:bg-white/15",
-      danger: "bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 active:bg-rose-500/30",
-      ghost: "text-white/60 hover:bg-white/5 hover:text-white active:bg-white/10",
-      white: "bg-white hover:bg-gray-100 text-gray-900 active:bg-gray-200 disabled:bg-white/50 disabled:text-gray-900/50 shadow-lg shadow-white/5 border-none",
+      primary: "bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/15 active:bg-emerald-700 disabled:bg-emerald-100 disabled:text-emerald-400 dark:disabled:bg-emerald-950/40 dark:disabled:text-white/20 dark:disabled:border dark:disabled:border-white/5",
+      secondary: "bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-900 active:bg-gray-300 dark:bg-white/5 dark:hover:bg-white/10 dark:border-white/10 dark:text-white dark:active:bg-white/15",
+      danger: "bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-600 active:bg-rose-500/30 dark:border-rose-500/30 dark:text-rose-400 dark:text-rose-400",
+      ghost: "text-gray-600 hover:bg-gray-100 hover:text-gray-900 active:bg-gray-200 dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white dark:active:bg-white/10",
+      white: "bg-white border border-gray-200 hover:bg-gray-50 text-gray-900 active:bg-gray-100 disabled:bg-gray-100 disabled:text-gray-400 shadow-md dark:border-none dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 dark:active:bg-gray-200 dark:disabled:bg-white/50 dark:disabled:text-gray-900/50 shadow-lg dark:shadow-white/5",
     };
 
     // Sizes
