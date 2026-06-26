@@ -161,7 +161,7 @@ Adopta un tono profesional, empático, científico y motivador. Si las imágenes
 Debes responder estrictamente en formato JSON con la siguiente estructura:
 {
   "bodyFat": número (porcentaje de grasa estimado, ej: 18.5, o null si es completamente imposible de estimar),
-  "analysis": "Explicación detallada de la composición observada (somatotipo, masa muscular, distribución de grasa en torso y extremidades inferiores si se aprecian, y su relación con los rasgos visibles y mediciones proporcionadas) junto a recomendaciones de entrenamiento/alimentación coherentes.",
+  "analysis": "Explicación detallada de la composición observada (somatotipo, masa muscular, distribución de grasa en torso y extremidades inferiores si se aprecian, y su relación con los rasgos visibles y mediciones proporcionadas) junto a recomendaciones de entrenamiento/alimentación coherentes. Utiliza formato de Markdown básico (como **negrita** para resaltar hallazgos clave o métricas importantes) dentro del texto.",
   "recommendedGoal": "lose_weight" | "gain_muscle" | "aesthetics" | "maintenance",
   "recommendedGoalReason": "Explicación muy motivadora, breve (máximo 2-3 oraciones en español) de por qué este objetivo es ideal para su fisionomía, basándote en su grasa y composición corporal."
 }`;
@@ -227,7 +227,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 
     return {
       bodyFat: estimatedFat,
-      analysis: `[Estimación Biométrica Inteligente] Analizamos tus medidas y perfil físico para asegurar un diagnóstico preciso: ${sex === "female" ? "Mujer" : "Varón"} de ${age || 25} años con un porcentaje de grasa calculado del ${estimatedFat}%. Se aprecia una base corporal sólida con excelente potencial para optimizar tu masa muscular y reducir tejido graso de manera progresiva. Te sugerimos seguir los macros diarios y planificar entrenamientos constantes con sobrecarga progresiva.`,
+      analysis: `[Estimación Biométrica Inteligente] Analizamos tus medidas y perfil físico para asegurar un diagnóstico preciso: **${sex === "female" ? "Mujer" : "Varón"}** de **${age || 25} años** con un porcentaje de grasa calculado de **${estimatedFat}%**. Se aprecia una **base corporal sólida** con excelente potencial para optimizar tu masa muscular y reducir tejido graso de manera progresiva. Te sugerimos seguir los **macros diarios** y planificar entrenamientos constantes con **sobrecarga progresiva**.`,
       recommendedGoal: recommendedGoal,
       recommendedGoalReason: recommendedGoalReason,
     };

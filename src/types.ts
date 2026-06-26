@@ -37,6 +37,8 @@ export interface UserProfile {
   moodLogs?: { date: string; mood: number; energy: number; notes?: string }[];
   frequentRoutes?: FrequentRoute[];
   activeRoutesToday?: { routeId: string; date: string }[];
+  weeklyTrainingDays?: number;
+  environments?: TrainingEnvironment[];
 
   aiRecommendations?: {
     summary: string;

@@ -2,13 +2,14 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   User, Weight, Ruler, ChevronRight, ChevronLeft, Sparkles, 
-  BookOpen, Key, AlertCircle, Camera, Check, Eye, Info, RefreshCw, Bell
+  BookOpen, Key, AlertCircle, Camera, Check, Eye, Info, RefreshCw, Bell, Calendar
 } from "lucide-react";
 import { UserProfile, BiologicalSex, FitnessGoal, ExperienceLevel, TrainingEnvironment, DietType } from "../types";
 import { calculateBMI, getBMICategory, calculateNavyBodyFat, calculateCaliperBodyFat, calculateRequirements } from "../utils/fitnessUtils";
 import { analyzeFatByIA, recommendGoalByIA } from "../services/geminiService";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
+import scientificTips from "../data/scientificTips.json";
 import { savePushSubscription, deletePushSubscription } from "../services/dbService";
 import neckMale from "../assets/neck_measurement_male.png";
 import neckFemale from "../assets/neck_measurement_female.png";
@@ -121,12 +122,29 @@ const OUTDOOR_EQUIPMENT = [
   "Arnés de arrastre de trineo",
   "Soga de arrastre de alta resistencia (Battle rope)"
 ];
-
 interface OnboardingProps {
   onComplete: (profile: UserProfile) => void;
   userId: string;
   defaultName?: string;
 }
+
+const formatAnalysisText = (text: string) => {
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={index} className="font-extrabold text-emerald-400">{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+};
+
+const getCleanedAnalysis = (text: string) => {
+  return text.replace(/^\[Estimación Biométrica Inteligente\]\s*/i, "");
+};
+
+const hasBiometricHeader = (text: string) => {
+  return text.toLowerCase().includes("[estimación biométrica inteligente]");
+};
 
 export default function Onboarding({ onComplete, userId, defaultName }: OnboardingProps) {
   const [step, setStep] = useState(() => {
@@ -307,6 +325,17 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
         await savePushSubscription(userId, subscription.toJSON());
         setIsSubscribed(true);
+
+        try {
+          registration.showNotification("¡Bienvenido a Trophia! 🏆", {
+            body: "Tus notificaciones están activadas. Te recordaremos tus comidas, agua y entrenamientos.",
+            icon: "/favicon.ico",
+            badge: "/favicon.ico",
+            vibrate: [100, 50, 100]
+          } as any);
+        } catch (notifErr) {
+          console.warn("Could not show welcome notification locally:", notifErr);
+        }
       }
     } catch (err: any) {
       console.error("Error al configurar notificaciones:", err);
@@ -321,7 +350,8 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
   // Step 4 variables (Workouts)
   const [level, setLevel] = useState<ExperienceLevel>("intermediate");
-  const [environment, setEnvironment] = useState<TrainingEnvironment>("home");
+  const [selectedEnvironments, setSelectedEnvironments] = useState<TrainingEnvironment[]>(["home"]);
+  const [weeklyTrainingDays, setWeeklyTrainingDays] = useState<number>(4);
   const [equipment, setEquipment] = useState<string[]>([
     "Peso corporal / Calistenia básica",
     "Mancuernas de peso fijo",
@@ -329,8 +359,19 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
     "Colchoneta de alta densidad / Mat de yoga"
   ]);
 
+  const environment = selectedEnvironments.includes("gym") 
+    ? "gym" 
+    : (selectedEnvironments.includes("home") ? "home" : "outdoor");
+
+  const randomNutritionTip = React.useMemo(() => {
+    const nutritionTips = scientificTips.filter(tip => tip.category === "nutrición" || tip.category === "suplementos");
+    if (nutritionTips.length === 0) return null;
+    const randomIndex = Math.floor(Math.random() * nutritionTips.length);
+    return nutritionTips[randomIndex];
+  }, []);
+
   // Step 5 variables (Nutrition & Education)
-  const [nutritionKnowledge, setNutritionKnowledge] = useState<"low" | "medium" | "high">("low");
+  const [nutritionKnowledge, setNutritionKnowledge] = useState<"low" | "medium" | "high">("medium");
   const [showEducationTutorial, setShowEducationTutorial] = useState(false);
 
   // Step 6 variables (API Key)
@@ -344,12 +385,22 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
     }
   }, [apiKey]);
 
-  const availableEquipmentOptions = 
-    environment === "gym" 
-      ? [...HYBRID_EQUIPMENT, ...GYM_EQUIPMENT]
-      : environment === "home"
-        ? [...HYBRID_EQUIPMENT, ...HOME_EQUIPMENT]
-        : [...HYBRID_EQUIPMENT, ...OUTDOOR_EQUIPMENT];
+  const availableEquipmentOptions = React.useMemo(() => {
+    const opts = new Set<string>();
+    HYBRID_EQUIPMENT.forEach(x => opts.add(x));
+    
+    if (selectedEnvironments.includes("gym")) {
+      GYM_EQUIPMENT.forEach(x => opts.add(x));
+    }
+    if (selectedEnvironments.includes("home")) {
+      HOME_EQUIPMENT.forEach(x => opts.add(x));
+    }
+    if (selectedEnvironments.includes("outdoor")) {
+      OUTDOOR_EQUIPMENT.forEach(x => opts.add(x));
+    }
+    
+    return Array.from(opts);
+  }, [selectedEnvironments]);
 
   // Calculate BMI and Category
   const bmi = calculateBMI(weight, height);
@@ -619,7 +670,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   };
 
   const handleNext = () => {
-    if (step === 6 && nutritionKnowledge === "low" && !showEducationTutorial) {
+    if (step === 6 && !showEducationTutorial) {
       setShowEducationTutorial(true);
     } else {
       setShowEducationTutorial(false);
@@ -652,6 +703,8 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
       goal,
       level,
       environment,
+      environments: selectedEnvironments,
+      weeklyTrainingDays,
       equipment,
       nutritionKnowledge,
       dietType,
@@ -750,7 +803,15 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
               ¿Por qué consumir Creatina?
             </h3>
             <p className="text-xs text-white/60 leading-relaxed max-w-xs mx-auto">
-              Es el suplemento con <b>mayor evidencia científica del planeta</b>. Indispensable para acelerar tu desarrollo físico y mental.
+              Es el suplemento con <b>mayor evidencia científica del planeta</b>. Indispensable para acelerar tu desarrollo físico y mental.{" "}
+              <a
+                href="https://pmc.ncbi.nlm.nih.gov/articles/PMC5469049/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold hover:underline inline-flex items-center gap-0.5"
+              >
+                Estudio ISSN ↗
+              </a>
             </p>
           </div>
 
@@ -958,41 +1019,43 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-white/40 mb-1.5 uppercase tracking-wider">Edad</label>
-                  <Input
-                    type="number"
-                    value={age || ""}
-                    onChange={(e) => setAge(parseInt(e.target.value) || 0)}
-                    placeholder="25"
-                    size="lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-white/40 mb-1.5 uppercase tracking-wider">Sexo Biológico</label>
-                  <div className="flex bg-white/5 rounded-2xl p-1 border border-white/10">
-                    <button
-                      onClick={() => setSex("male")}
-                      className={`flex-1 py-2 text-xs font-bold rounded-xl transition ${
-                        sex === "male" 
-                          ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/15" 
-                          : "text-white/40 hover:text-white"
-                      }`}
-                    >
-                      Masc
-                    </button>
-                    <button
-                      onClick={() => setSex("female")}
-                      className={`flex-1 py-2 text-xs font-bold rounded-xl transition ${
-                        sex === "female" 
-                          ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/15" 
-                          : "text-white/40 hover:text-white"
-                      }`}
-                    >
-                      Fem
-                    </button>
-                  </div>
+              <div>
+                <label className="block text-[10px] font-bold text-white/40 mb-1.5 uppercase tracking-wider">Edad</label>
+                <Input
+                  type="number"
+                  icon={Calendar}
+                  value={age || ""}
+                  onChange={(e) => setAge(parseInt(e.target.value) || 0)}
+                  placeholder="25"
+                  size="lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-white/40 mb-1.5 uppercase tracking-wider">Sexo Biológico</label>
+                <div className="flex bg-gray-50 dark:bg-white/5 rounded-2xl p-1 border border-gray-200 dark:border-white/10 h-[46px] items-center">
+                  <button
+                    type="button"
+                    onClick={() => setSex("male")}
+                    className={`flex-1 h-full flex items-center justify-center text-xs font-bold rounded-xl transition cursor-pointer ${
+                      sex === "male" 
+                        ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/15" 
+                        : "text-white/40 hover:text-white"
+                    }`}
+                  >
+                    Masculino
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSex("female")}
+                    className={`flex-1 h-full flex items-center justify-center text-xs font-bold rounded-xl transition cursor-pointer ${
+                      sex === "female" 
+                        ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/15" 
+                        : "text-white/40 hover:text-white"
+                    }`}
+                  >
+                    Femenino
+                  </button>
                 </div>
               </div>
 
@@ -1535,14 +1598,23 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
               {/* Gemini clinical insight if photos were uploaded */}
               {hasUploadedPhotos && analysisResult && (
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-left space-y-2">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-white">
-                    <Sparkles className="h-4 w-4 text-emerald-400" />
-                    <span>Diagnóstico Clínico de Imagen (Gemini):</span>
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-left space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                      <Sparkles className="h-4 w-4 text-emerald-400" />
+                      <span>Diagnóstico Clínico de Imagen (Gemini):</span>
+                    </div>
+                    {hasBiometricHeader(analysisResult) && (
+                      <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
+                        Biometría Inteligente
+                      </span>
+                    )}
                   </div>
-                  <p className="text-[11px] text-white/70 leading-relaxed italic bg-black/20 p-3 rounded-xl border border-white/5">
-                    "{analysisResult}"
-                  </p>
+                  <div className="text-[11px] text-white/70 leading-relaxed bg-black/20 p-3.5 rounded-xl border border-white/5 space-y-2">
+                    {getCleanedAnalysis(analysisResult).split("\n\n").map((paragraph, index) => (
+                      <p key={index}>{formatAnalysisText(paragraph)}</p>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -1704,8 +1776,9 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                   ].map((lvl) => (
                     <button
                       key={lvl.id}
+                      type="button"
                       onClick={() => setLevel(lvl.id as ExperienceLevel)}
-                      className={`p-3 rounded-xl border text-center transition ${
+                      className={`p-3 rounded-xl border text-center transition cursor-pointer ${
                         level === lvl.id
                           ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
                           : "bg-white/5 border-white/10 text-white/40 text-xs"
@@ -1720,45 +1793,89 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
               <div>
                 <label className="block text-[10px] font-bold text-white/40 mb-2 uppercase tracking-widest">
-                  2. Entorno de Entrenamiento
+                  2. Entornos de Entrenamiento (Puedes elegir varios)
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
                     { id: "home", label: "Casa", emoji: "🏠" },
                     { id: "gym", label: "Gimnasio", emoji: "🏋️" },
                     { id: "outdoor", label: "Aire Libre", emoji: "🌳" }
-                  ].map((env) => (
+                  ].map((env) => {
+                    const active = selectedEnvironments.includes(env.id as TrainingEnvironment);
+                    return (
+                      <button
+                        key={env.id}
+                        type="button"
+                        onClick={() => {
+                          const newEnv = env.id as TrainingEnvironment;
+                          let updatedEnvs: TrainingEnvironment[];
+                          if (active) {
+                            if (selectedEnvironments.length > 1) {
+                              updatedEnvs = selectedEnvironments.filter(e => e !== newEnv);
+                            } else {
+                              return; // keep at least one
+                            }
+                          } else {
+                            updatedEnvs = [...selectedEnvironments, newEnv];
+                          }
+                          setSelectedEnvironments(updatedEnvs);
+                          
+                          // Dynamically append default equipment for newly checked environments
+                          let newEq = [...equipment];
+                          if (!active) {
+                            if (newEnv === "gym") {
+                              newEq = Array.from(new Set([...newEq, ...HYBRID_EQUIPMENT, ...GYM_EQUIPMENT]));
+                            } else if (newEnv === "home") {
+                              newEq = Array.from(new Set([
+                                ...newEq,
+                                "Peso corporal / Calistenia básica",
+                                "Mancuernas de peso fijo",
+                                "Bandas de resistencia elásticas largas",
+                                "Colchoneta de alta densidad / Mat de yoga"
+                              ]));
+                            } else if (newEnv === "outdoor") {
+                              newEq = Array.from(new Set([
+                                ...newEq,
+                                "Peso corporal / Calistenia básica",
+                                "Barras fijas altas de exterior",
+                                "Barras paralelas de exterior",
+                                "Colchoneta de alta densidad / Mat de yoga"
+                              ]));
+                            }
+                          }
+                          setEquipment(newEq);
+                        }}
+                        className={`p-3 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                          active
+                            ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
+                            : "bg-white/5 border-white/10 text-white/40 text-xs"
+                        }`}
+                      >
+                        <span className="text-base">{env.emoji}</span>
+                        <span className="text-xs font-bold">{env.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-white/40 mb-2 uppercase tracking-widest">
+                  3. Frecuencia Semanal
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[3, 4, 5, 6].map((days) => (
                     <button
-                      key={env.id}
-                      onClick={() => {
-                        const newEnv = env.id as TrainingEnvironment;
-                        setEnvironment(newEnv);
-                        if (newEnv === "gym") {
-                          setEquipment([...HYBRID_EQUIPMENT, ...GYM_EQUIPMENT]);
-                        } else if (newEnv === "home") {
-                          setEquipment([
-                            "Peso corporal / Calistenia básica",
-                            "Mancuernas de peso fijo",
-                            "Bandas de resistencia elásticas largas",
-                            "Colchoneta de alta densidad / Mat de yoga"
-                          ]);
-                        } else if (newEnv === "outdoor") {
-                          setEquipment([
-                            "Peso corporal / Calistenia básica",
-                            "Barras fijas altas de exterior",
-                            "Barras paralelas de exterior",
-                            "Colchoneta de alta densidad / Mat de yoga"
-                          ]);
-                        }
-                      }}
-                      className={`p-3 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 ${
-                        environment === env.id
+                      key={days}
+                      type="button"
+                      onClick={() => setWeeklyTrainingDays(days)}
+                      className={`p-3 rounded-xl border text-center transition cursor-pointer ${
+                        weeklyTrainingDays === days
                           ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
                           : "bg-white/5 border-white/10 text-white/40 text-xs"
                       }`}
                     >
-                      <span className="text-base">{env.emoji}</span>
-                      <span className="text-xs font-bold">{env.label}</span>
+                      <span className="block text-xs font-bold">{days} días</span>
                     </button>
                   ))}
                 </div>
@@ -1766,20 +1883,21 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
               <div>
                 <label className="block text-[10px] font-bold text-white/40 mb-2 uppercase tracking-widest flex items-center justify-between">
-                  <span>3. Equipamiento Disponible</span>
+                  <span>4. Equipamiento Disponible</span>
                   <span className="text-[9px] text-emerald-400 font-mono font-normal">
                     {equipment.length} elegidos
                   </span>
                 </label>
                 
-                <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto no-scrollbar border border-white/5 p-2 rounded-2xl bg-black/30">
+                <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto no-scrollbar border border-white/5 p-2 rounded-2xl bg-black/30">
                   {availableEquipmentOptions.map((eq) => {
                     const selected = equipment.includes(eq);
                     return (
                       <button
                         key={eq}
+                        type="button"
                         onClick={() => handleToggleEquipment(eq)}
-                        className={`flex items-center gap-2 p-2 rounded-xl border text-left transition ${
+                        className={`flex items-center gap-2 p-2 rounded-xl border text-left transition cursor-pointer ${
                           selected
                             ? "bg-emerald-500/10 border-emerald-500/30 text-white"
                             : "bg-white/5 border-white/10 text-white/40"
@@ -1843,32 +1961,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                     </div>
                   </div>
 
-                  <div className="border-t border-white/5 pt-4 space-y-2">
-                    <label className="block text-[10px] font-bold text-white/40 mb-2 uppercase tracking-widest">
-                      ¿Qué tanto sabes sobre Nutrición / Calorías?
-                    </label>
-                    
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { id: "low", label: "Poco o nada", desc: "Quiero aprender" },
-                        { id: "medium", label: "Básico", desc: "Entiendo macros" },
-                        { id: "high", label: "Avanzado", desc: "Sé calcular todo" }
-                      ].map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => setNutritionKnowledge(item.id as "low" | "medium" | "high")}
-                          className={`p-3 rounded-xl border text-center transition ${
-                            nutritionKnowledge === item.id
-                              ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
-                              : "bg-white/5 border-white/10 text-white/40 text-xs"
-                          }`}
-                        >
-                          <span className="block text-xs font-bold">{item.label}</span>
-                          <span className="text-[8px] opacity-60 font-normal block mt-1">{item.desc}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+
 
                   <div className="border-t border-white/5 pt-4 space-y-2">
                     <label className="block text-[10px] font-bold text-white/40 mb-2 uppercase tracking-widest">
@@ -1937,13 +2030,39 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                         Los <b>Carbos</b> representan el combustible explosivo y las <b>Grasas</b> optimizan tu salud hormonal y celular general.
                       </span>
                     </div>
+
+                    {randomNutritionTip && (
+                      <div className="bg-emerald-500/5 p-3.5 rounded-2xl border border-emerald-500/10 space-y-1.5 mt-2 text-left">
+                        <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs">
+                          <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                          <span>Evidencia Científica: {randomNutritionTip.title}</span>
+                        </div>
+                        <p className="text-[10px] text-white/70 leading-relaxed">
+                          {randomNutritionTip.text}
+                        </p>
+                        {randomNutritionTip.url && (
+                          <a
+                            href={randomNutritionTip.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[9px] text-emerald-400 hover:text-emerald-300 font-bold hover:underline inline-block pt-0.5"
+                          >
+                            Fuente: {randomNutritionTip.source} ↗
+                          </a>
+                        )}
+                      </div>
+                    )}
+                    
+                    <p className="text-[9px] text-white/30 text-center italic mt-1 leading-normal">
+                      * Podrás consultar este y decenas de otros consejos y mitos científicos respaldados por estudios clínicos en la sección <b>Salud &gt; Biblioteca Científica</b> de la aplicación.
+                    </p>
                   </div>
 
                   <Button
                     variant="primary"
                     onClick={handleNext}
                     rightIcon={ChevronRight}
-                    className="w-full mt-2 font-bold"
+                    className="w-full mt-3 font-bold"
                     size="md"
                   >
                     Continuar
