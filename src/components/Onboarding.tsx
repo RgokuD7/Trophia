@@ -2,8 +2,8 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   User, Weight, Ruler, ChevronRight, ChevronLeft, Sparkles, 
-  BookOpen, Key, AlertCircle, Camera, Check, Eye, Info, RefreshCw, Bell, Calendar,
-  Flame, Dumbbell, Zap, UserRound, Smartphone, Download
+  BookOpen, Key, AlertCircle, AlertTriangle, Camera, Check, Eye, Info, RefreshCw, Bell, Calendar,
+  Flame, Dumbbell, Zap, UserRound, Smartphone, Download, Share
 } from "lucide-react";
 import { UserProfile, BiologicalSex, FitnessGoal, ExperienceLevel, TrainingEnvironment, DietType } from "../types";
 import { calculateBMI, getBMICategory, calculateNavyBodyFat, calculateCaliperBodyFat, calculateRequirements } from "../utils/fitnessUtils";
@@ -147,7 +147,30 @@ const hasBiometricHeader = (text: string) => {
   return text.toLowerCase().includes("[estimación biométrica inteligente]");
 };
 
+interface DeviceInfo {
+  isIOS: boolean;
+  isAndroid: boolean;
+  isSafari: boolean;
+  isChrome: boolean;
+  isMobile: boolean;
+}
+
+const getDeviceInfo = (): DeviceInfo => {
+  if (typeof window === "undefined") {
+    return { isIOS: false, isAndroid: false, isSafari: false, isChrome: false, isMobile: false };
+  }
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+  const isAndroid = /Android/.test(ua);
+  const isMobile = isIOS || isAndroid;
+  const isSafari = isIOS && /Safari/.test(ua) && !/CriOS|FxiOS|OPiOS|mercury/i.test(ua);
+  const isChrome = /Chrome|CriOS/i.test(ua);
+
+  return { isIOS, isAndroid, isSafari, isChrome, isMobile };
+};
+
 export default function Onboarding({ onComplete, userId, defaultName }: OnboardingProps) {
+  const deviceInfo = getDeviceInfo();
   const [step, setStep] = useState(() => {
     const savedKey = localStorage.getItem("trophia_api_key");
     return (savedKey && savedKey.trim().length >= 15) ? 2 : 1;
@@ -1070,6 +1093,21 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                 </div>
               ) : (
                 <div className="max-w-sm mx-auto space-y-4 text-left">
+                  {/* Warning banner for iOS users */}
+                  {deviceInfo.isIOS && (
+                    <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl text-amber-400 space-y-1.5">
+                      <div className="flex gap-2 items-start">
+                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
+                        <div>
+                          <span className="font-extrabold text-[11px] block text-amber-300">⚠️ ¡Acción Recomendada!</span>
+                          <p className="text-[10px] text-amber-400/90 leading-relaxed font-medium">
+                            iOS aísla la sesión de Safari/Chrome de la PWA de pantalla de inicio. Si completas la introducción en esta pestaña y la instalas después, <span className="font-bold text-amber-300">perderás tu sesión</span> y tendrás que repetir los pasos. Te recomendamos instalar la app ahora, abrirla desde el inicio y continuar desde allí.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {deferredPrompt ? (
                     <div className="space-y-3">
                       <Button
@@ -1087,37 +1125,91 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
-                        <span className="text-xs font-extrabold text-emerald-400 block uppercase tracking-wider">¿Cómo instalar en iOS (iPhone/iPad)?</span>
-                        <div className="space-y-2 text-[10px] text-white/70 leading-relaxed font-medium">
-                          <div className="flex gap-2 items-start">
-                            <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">1</span>
-                            <span>Presiona el menú de los 3 puntos (<span className="font-bold">...</span>) en la esquina del navegador o el botón de compartir.</span>
-                          </div>
-                          <div className="flex gap-2 items-start">
-                            <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">2</span>
-                            <span>Selecciona la opción <b>Compartir</b> y desplázate hacia abajo para pulsar <b>Agregar a Inicio</b> (un icono de cuadrado con un <span className="font-bold">+</span>).</span>
-                          </div>
-                          <div className="flex gap-2 items-start">
-                            <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">3</span>
-                            <span>Deja marcado "Abrir como app web" si aparece la opción, y pulsa <b>Agregar</b> en la esquina superior derecha.</span>
+                      {/* iOS Safari Instructions */}
+                      {deviceInfo.isIOS && deviceInfo.isSafari && (
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
+                          <span className="text-xs font-extrabold text-emerald-400 block uppercase tracking-wider">Cómo instalar en iOS (Safari)</span>
+                          <div className="space-y-2 text-[10px] text-white/70 leading-relaxed font-medium">
+                            <div className="flex gap-2 items-start">
+                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">1</span>
+                              <span>Presiona el botón de <b>Compartir</b> (el cuadrado con la flecha hacia arriba 📤) en la barra inferior de Safari.</span>
+                            </div>
+                            <div className="flex gap-2 items-start">
+                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">2</span>
+                              <span>Desplázate hacia abajo y selecciona la opción <b>Agregar a Inicio</b> (un icono de un cuadrado con un <span className="font-bold">+</span>).</span>
+                            </div>
+                            <div className="flex gap-2 items-start">
+                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">3</span>
+                              <span>Asegúrate de dejar marcado "Abrir como app web" si aparece la opción, y pulsa <b>Agregar</b> en la esquina superior derecha.</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      )}
 
-                      <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
-                        <span className="text-xs font-extrabold text-white/60 block uppercase tracking-wider">En Android / Chrome Desktop</span>
-                        <div className="space-y-2 text-[10px] text-white/50 leading-relaxed font-medium">
-                          <div className="flex gap-2 items-start">
-                            <span className="bg-white/5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white/40 shrink-0 mt-0.5">1</span>
-                            <span>Abre el menú del navegador (los tres puntos en la parte superior derecha).</span>
-                          </div>
-                          <div className="flex gap-2 items-start">
-                            <span className="bg-white/5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white/40 shrink-0 mt-0.5">2</span>
-                            <span>Presiona en <b>Instalar aplicación</b> o <b>Agregar a pantalla de inicio</b>.</span>
+                      {/* iOS Chrome Instructions */}
+                      {deviceInfo.isIOS && deviceInfo.isChrome && (
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
+                          <span className="text-xs font-extrabold text-emerald-400 block uppercase tracking-wider">Cómo instalar en iOS (Chrome)</span>
+                          <div className="space-y-2 text-[10px] text-white/70 leading-relaxed font-medium">
+                            <div className="flex gap-2 items-start">
+                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">1</span>
+                              <span>Presiona el menú de los tres puntos (<b>...</b>) al lado de la barra de direcciones de Chrome.</span>
+                            </div>
+                            <div className="flex gap-2 items-start">
+                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">2</span>
+                              <span>Selecciona la opción <b>Compartir</b> (o menú Compartir) y luego busca y pulsa <b>Agregar a pantalla de inicio</b>.</span>
+                            </div>
+                            <div className="flex gap-2 items-start">
+                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">3</span>
+                              <span>Asegúrate de dejar marcado "Abrir como app web" si aparece, y presiona <b>Agregar</b> para confirmar.</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      )}
+
+                      {/* iOS Other Browsers Instructions */}
+                      {deviceInfo.isIOS && !deviceInfo.isSafari && !deviceInfo.isChrome && (
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
+                          <span className="text-xs font-extrabold text-amber-400 block uppercase tracking-wider">Usa Safari para Instalar</span>
+                          <p className="text-[10px] text-white/70 leading-relaxed font-medium">
+                            En iOS, la instalación de aplicaciones web solo está soportada completamente a través de Safari. Copia el enlace de esta página y ábrelo en <span className="font-bold text-white">Safari</span> para poder agregar Trophia a tu pantalla de inicio.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Android Instructions */}
+                      {deviceInfo.isAndroid && (
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
+                          <span className="text-xs font-extrabold text-emerald-400 block uppercase tracking-wider">Cómo instalar en Android</span>
+                          <div className="space-y-2 text-[10px] text-white/70 leading-relaxed font-medium">
+                            <div className="flex gap-2 items-start">
+                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">1</span>
+                              <span>Abre el menú del navegador (los tres puntos en la parte superior derecha).</span>
+                            </div>
+                            <div className="flex gap-2 items-start">
+                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">2</span>
+                              <span>Presiona en <b>Instalar aplicación</b> o <b>Agregar a pantalla de inicio</b>.</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Desktop Instructions */}
+                      {!deviceInfo.isMobile && (
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
+                          <span className="text-xs font-extrabold text-emerald-400 block uppercase tracking-wider">Cómo instalar en Computadora</span>
+                          <div className="space-y-2 text-[10px] text-white/70 leading-relaxed font-medium">
+                            <div className="flex gap-2 items-start">
+                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">1</span>
+                              <span>Haz clic en el icono de instalación (una pequeña computadora o una flecha hacia abajo 📥) en el extremo derecho de tu barra de direcciones.</span>
+                            </div>
+                            <div className="flex gap-2 items-start">
+                              <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">2</span>
+                              <span>O abre el menú del navegador (los tres puntos en la esquina superior) y selecciona <b>Instalar Trophia...</b></span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
