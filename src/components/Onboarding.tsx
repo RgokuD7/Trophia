@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   User, Weight, Ruler, ChevronRight, ChevronLeft, Sparkles, 
   BookOpen, Key, AlertCircle, Camera, Check, Eye, Info, RefreshCw, Bell, Calendar,
-  Flame, Dumbbell, Zap
+  Flame, Dumbbell, Zap, UserRound, Smartphone, Download
 } from "lucide-react";
 import { UserProfile, BiologicalSex, FitnessGoal, ExperienceLevel, TrainingEnvironment, DietType } from "../types";
 import { calculateBMI, getBMICategory, calculateNavyBodyFat, calculateCaliperBodyFat, calculateRequirements } from "../utils/fitnessUtils";
@@ -152,6 +152,40 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
     const savedKey = localStorage.getItem("trophia_api_key");
     return (savedKey && savedKey.trim().length >= 15) ? 2 : 1;
   });
+
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isStandalone, setIsStandalone] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkStandalone = () => {
+      const isStandaloneMode = window.matchMedia("(display-mode: standalone)").matches || 
+                               (navigator as any).standalone === true;
+      setIsStandalone(isStandaloneMode);
+    };
+    
+    checkStandalone();
+    
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") {
+      setDeferredPrompt(null);
+      setIsStandalone(true);
+    }
+  };
   const [name, setName] = useState(defaultName || "Richard");
   const [age, setAge] = useState(25);
   const [sex, setSex] = useState<BiologicalSex>("male");
@@ -265,7 +299,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   };
 
   useEffect(() => {
-    if (step === 7) {
+    if (step === 8) {
       checkPushSubscription();
     }
   }, [step]);
@@ -442,7 +476,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
   // Fetch AI Goal Recommendation on Step 4 mount/reset
   useEffect(() => {
-    if (step === 4 && !aiGoalRecommendation && !isRecommendingGoal && !recommendGoalError) {
+    if (step === 5 && !aiGoalRecommendation && !isRecommendingGoal && !recommendGoalError) {
       const fetchGoalRecommendation = async () => {
         setIsRecommendingGoal(true);
         setRecommendGoalError(null);
@@ -684,7 +718,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   };
 
   const handleNext = () => {
-    if (step === 6 && !showEducationTutorial) {
+    if (step === 7 && !showEducationTutorial) {
       setShowEducationTutorial(true);
     } else {
       setShowEducationTutorial(false);
@@ -980,22 +1014,23 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
       <div className="p-6 pb-4 flex items-center justify-between border-b border-white/5 z-10 bg-[#050505]/80 backdrop-blur-xl sticky top-0">
         <div>
           <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-widest">
-            Paso {step} de 7
+            Paso {step} de 8
           </span>
           <h2 className="text-xl font-black text-white tracking-tight italic">
             {step === 1 && "Asistente Inteligente"}
-            {step === 2 && "Datos Básicos"}
-            {step === 3 && "Análisis Biométrico"}
-            {step === 4 && "Tus Objetivos"}
-            {step === 5 && "Entrenamiento"}
-            {step === 6 && "Perfil Nutricional"}
-            {step === 7 && "Recordatorios"}
+            {step === 2 && "Instalar Aplicación"}
+            {step === 3 && "Datos Básicos"}
+            {step === 4 && "Análisis Biométrico"}
+            {step === 5 && "Tus Objetivos"}
+            {step === 6 && "Entrenamiento"}
+            {step === 7 && "Perfil Nutricional"}
+            {step === 8 && "Recordatorios"}
           </h2>
         </div>
         
         {/* Step Indicator dots */}
         <div className="flex gap-1.5">
-          {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
             <div 
               key={i} 
               className={`h-1 rounded-full transition-all duration-300 ${
@@ -1015,6 +1050,87 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
+              className="space-y-6 text-center py-4"
+            >
+              <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shadow-lg shadow-emerald-500/5">
+                <Smartphone className="h-8 w-8 text-emerald-400" />
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-base font-black text-white tracking-tight">Instala Trophia en tu Pantalla de Inicio</h3>
+                <p className="text-[11px] text-white/50 leading-relaxed max-w-sm mx-auto">
+                  Trophia está diseñada para usarse como una aplicación nativa. Instalarla te dará una experiencia a pantalla completa sin barras de navegación del navegador, más rápida y cómoda.
+                </p>
+              </div>
+
+              {isStandalone ? (
+                <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl flex items-center justify-center gap-2 text-emerald-400 font-bold text-xs max-w-sm mx-auto">
+                  <Check className="h-5 w-5" />
+                  <span>¡Ya estás usando la versión PWA! 🎉</span>
+                </div>
+              ) : (
+                <div className="max-w-sm mx-auto space-y-4 text-left">
+                  {deferredPrompt ? (
+                    <div className="space-y-3">
+                      <Button
+                        variant="primary"
+                        onClick={handleInstallClick}
+                        className="w-full py-4 text-xs font-black shadow-lg"
+                        size="md"
+                        leftIcon={Download}
+                      >
+                        Instalar Aplicación Directamente
+                      </Button>
+                      <p className="text-[9px] text-white/40 text-center">
+                        * Haz clic en el botón para instalar de forma instantánea en tu dispositivo.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
+                        <span className="text-xs font-extrabold text-emerald-400 block uppercase tracking-wider">¿Cómo instalar en iOS (iPhone/iPad)?</span>
+                        <div className="space-y-2 text-[10px] text-white/70 leading-relaxed font-medium">
+                          <div className="flex gap-2 items-start">
+                            <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">1</span>
+                            <span>Pulsa el botón de <b>Compartir</b> en Safari (el ícono de la flecha hacia arriba <span className="inline-flex items-center text-[11px] font-bold bg-white/10 px-1 rounded">📤</span> en la barra inferior).</span>
+                          </div>
+                          <div className="flex gap-2 items-start">
+                            <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">2</span>
+                            <span>Selecciona la opción <b>Agregar a pantalla de inicio</b> (o <b>Añadir a pantalla de inicio</b> ➕).</span>
+                          </div>
+                          <div className="flex gap-2 items-start">
+                            <span className="bg-white/10 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5">3</span>
+                            <span>Abre la app desde el ícono de <b>Trophia</b> en tu pantalla de inicio.</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
+                        <span className="text-xs font-extrabold text-white/60 block uppercase tracking-wider">En Android / Chrome Desktop</span>
+                        <div className="space-y-2 text-[10px] text-white/50 leading-relaxed font-medium">
+                          <div className="flex gap-2 items-start">
+                            <span className="bg-white/5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white/40 shrink-0 mt-0.5">1</span>
+                            <span>Abre el menú del navegador (los tres puntos en la parte superior derecha).</span>
+                          </div>
+                          <div className="flex gap-2 items-start">
+                            <span className="bg-white/5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white/40 shrink-0 mt-0.5">2</span>
+                            <span>Presiona en <b>Instalar aplicación</b> o <b>Agregar a pantalla de inicio</b>.</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {step === 3 && (
+            <motion.div
+              key="step3"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
               className="space-y-5"
             >
               <p className="text-xs text-white/50 leading-relaxed">
@@ -1025,7 +1141,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                 <label className="block text-[10px] font-bold text-white/40 mb-1.5 uppercase tracking-wider">Tu Nombre</label>
                 <Input
                   type="text"
-                  icon={User}
+                  icon={UserRound}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Escribe tu nombre..."
@@ -1078,7 +1194,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                 <div className="relative">
                   <Input
                     type="number"
-                    icon={Weight}
+                    icon={Dumbbell}
                     step="0.1"
                     value={weight || ""}
                     onChange={(e) => setWeight(parseFloat(e.target.value) || 0)}
@@ -1108,9 +1224,9 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             </motion.div>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <motion.div
-              key="step3"
+              key="step4"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
@@ -1649,9 +1765,9 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             </motion.div>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <motion.div
-              key="step4"
+              key="step5"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
@@ -1770,9 +1886,9 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             </motion.div>
           )}
 
-          {step === 5 && (
+          {step === 6 && (
             <motion.div
-              key="step5"
+              key="step6"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
@@ -1934,9 +2050,9 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             </motion.div>
           )}
 
-          {step === 6 && (
+          {step === 7 && (
             <motion.div
-              key="step6"
+              key="step7"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
@@ -2173,9 +2289,9 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             </motion.div>
           )}
 
-          {step === 7 && (
+          {step === 8 && (
             <motion.div
-              key="step7"
+              key="step8"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
@@ -2258,7 +2374,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             </Button>
           )}
 
-          {step === 3 ? (
+          {step === 4 ? (
             showStep2Results ? (
               <Button
                 variant="primary"
@@ -2328,7 +2444,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             >
               Siguiente
             </Button>
-          ) : step < 7 ? (
+          ) : step < 8 ? (
             <Button
               variant="primary"
               onClick={handleNext}
