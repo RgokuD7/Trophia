@@ -148,6 +148,17 @@ export default function Dashboard({
   const upperOptBound = Math.round(adjustedCalTarget * 1.05);
   const inOptimalRange = totalCalories >= lowerOptBound && totalCalories <= upperOptBound && totalCalories > 0;
 
+  // Dynamic scale for the calorie progress bar to handle overflow gracefully
+  const barMax = totalCalories > adjustedCalTarget * 1.1 
+    ? Math.round(totalCalories * 1.05) 
+    : Math.round(adjustedCalTarget * 1.1);
+
+  // Proportions relative to the current barMax
+  const targetPercent = barMax > 0 ? (adjustedCalTarget / barMax) * 100 : 0;
+  const optMinPercent = barMax > 0 ? ((adjustedCalTarget * 0.90) / barMax) * 100 : 0;
+  const optMaxPercent = barMax > 0 ? ((adjustedCalTarget * 1.05) / barMax) * 100 : 0;
+  const progressPercent = barMax > 0 ? (totalCalories / barMax) * 100 : 0;
+
   const getMealEmoji = (type: MealType) => {
     switch (type) {
       case "breakfast": return "🍳";
@@ -225,166 +236,125 @@ export default function Dashboard({
             </button>
           </motion.div>
         )}
-        {/* 1. Calorie Balance Progress Card (Concentric Macro Rings & Target Calorie Range) */}
-        <div className="bg-white dark:bg-[#161824] p-5 rounded-3xl border border-gray-200 dark:border-gray-800 flex items-center justify-between gap-5 shadow-md dark:shadow-xl relative overflow-hidden">
-          
-          {/* Concentric progress rings */}
-          <div className="relative w-32 h-32 flex-shrink-0 flex items-center justify-center">
-            <svg className="absolute inset-0 w-full h-full -rotate-90">
-              {/* Protein Ring (Outer - Blue) */}
-              <circle
-                cx="64"
-                cy="64"
-                r="54"
-                className="stroke-gray-100 dark:stroke-gray-850/30"
-                strokeWidth="6"
-                fill="transparent"
-              />
-              <circle
-                cx="64"
-                cy="64"
-                r="54"
-                className="stroke-blue-500"
-                strokeWidth="6"
-                fill="transparent"
-                strokeDasharray={2 * Math.PI * 54}
-                strokeDashoffset={2 * Math.PI * 54 * (1 - pPercentage / 100)}
-                strokeLinecap="round"
-              />
 
-              {/* Carbs Ring (Middle - Orange) */}
-              <circle
-                cx="64"
-                cy="64"
-                r="44"
-                className="stroke-gray-100 dark:stroke-gray-850/30"
-                strokeWidth="6"
-                fill="transparent"
-              />
-              <circle
-                cx="64"
-                cy="64"
-                r="44"
-                className="stroke-orange-500"
-                strokeWidth="6"
-                fill="transparent"
-                strokeDasharray={2 * Math.PI * 44}
-                strokeDashoffset={2 * Math.PI * 44 * (1 - cPercentage / 100)}
-                strokeLinecap="round"
-              />
-
-              {/* Fat Ring (Inner - Purple) */}
-              <circle
-                cx="64"
-                cy="64"
-                r="34"
-                className="stroke-gray-100 dark:stroke-gray-850/30"
-                strokeWidth="6"
-                fill="transparent"
-              />
-              <circle
-                cx="64"
-                cy="64"
-                r="34"
-                className="stroke-purple-500"
-                strokeWidth="6"
-                fill="transparent"
-                strokeDasharray={2 * Math.PI * 34}
-                strokeDashoffset={2 * Math.PI * 34 * (1 - fPercentage / 100)}
-                strokeLinecap="round"
-              />
-            </svg>
-
-            {/* Inner details (Calories) */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10 pointer-events-none select-none">
-              <span className="text-[7.5px] text-gray-400 dark:text-gray-500 font-extrabold uppercase tracking-widest leading-none">
-                KCAL
-              </span>
-              <span className="text-[17px] font-black text-gray-900 dark:text-white tracking-tighter mt-1 leading-none">
-                {totalCalories}
-              </span>
-            </div>
-          </div>
-
-          {/* Calorie Range Progress Bar & Info */}
-          <div className="flex-1 space-y-3.5">
+        {/* 1. Calorie Balance Progress Card (Dynamic Scale Calorie Bar) */}
+        <div className="bg-white dark:bg-[#161824] p-5 rounded-3xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-md dark:shadow-xl relative overflow-hidden">
+          <div className="flex justify-between items-center">
             <div>
-              <div className="flex justify-between items-end">
-                <span className="text-xs text-gray-550 dark:text-gray-400 font-black uppercase tracking-wider">Calorías</span>
-                {inOptimalRange ? (
-                  <span className="text-[9px] font-black text-emerald-500 dark:text-emerald-450 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 shadow-sm animate-pulse">
-                    🎯 RANGO ÓPTIMO
-                  </span>
-                ) : calExceeded ? (
-                  <span className="text-[9px] font-black text-rose-500 dark:text-rose-450 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
-                    ⚠️ EXCEDIDO
-                  </span>
-                ) : (
-                  <span className="text-[9px] font-black text-blue-500 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/10">
-                    FALTAN {remainingCalories} KCAL
-                  </span>
-                )}
-              </div>
-
-              {/* Progress bar container */}
-              <div className="relative h-3 w-full bg-gray-100 dark:bg-gray-800/70 rounded-full mt-2.5 overflow-hidden border border-gray-150 dark:border-gray-800/40">
-                {/* Visual marker for target range (90% to 105%) */}
-                <div 
-                  className="absolute top-0 bottom-0 bg-emerald-500/15 dark:bg-emerald-500/10 border-l border-r border-emerald-450/20 dark:border-emerald-500/15"
-                  style={{ left: "90%", width: "15%" }}
-                />
-                
-                <div 
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    inOptimalRange 
-                      ? "bg-gradient-to-r from-emerald-500 to-emerald-400 shadow-sm shadow-emerald-500/20" 
-                      : calExceeded 
-                        ? "bg-gradient-to-r from-rose-500 to-rose-450" 
-                        : "bg-gradient-to-r from-blue-500 to-blue-400"
-                  }`}
-                  style={{ width: `${Math.min(100, (totalCalories / adjustedCalTarget) * 100)}%` }}
-                />
-              </div>
-
-              {/* Labels under progress bar */}
-              <div className="flex justify-between items-center text-[9px] text-gray-400 dark:text-gray-500 font-bold mt-1.5 px-0.5">
-                <span>0</span>
-                <span className="text-emerald-500 dark:text-emerald-450 font-black">Meta: {lowerOptBound} - {upperOptBound} kcal</span>
-                <span>Max</span>
+              <span className="text-[10px] text-gray-450 dark:text-gray-500 font-extrabold uppercase tracking-widest block leading-none">
+                Consumo Calórico
+              </span>
+              <div className="flex items-baseline gap-1.5 mt-2">
+                <span className="text-3xl font-black text-gray-900 dark:text-white tracking-tight leading-none">
+                  {totalCalories}
+                </span>
+                <span className="text-xs text-gray-400 dark:text-gray-500 font-bold">
+                  / {Math.round(adjustedCalTarget)} kcal
+                </span>
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5 pt-2.5 border-t border-gray-150 dark:border-gray-800/60 text-[9px] font-bold">
-              <div>
-                <span className="text-[8px] text-gray-400 dark:text-gray-555 block uppercase tracking-wider">Mantenimiento</span>
-                <span className="text-gray-700 dark:text-gray-300">{Math.round(adjustedCalTarget)}</span>
-              </div>
-              <div>
-                <span className="text-[8px] text-gray-400 dark:text-gray-555 block uppercase tracking-wider">Consumido</span>
-                <span className="text-blue-500">{totalCalories}</span>
-              </div>
-              <div>
-                <span className="text-[8px] text-gray-400 dark:text-gray-555 block uppercase tracking-wider">Gasto Extra</span>
-                <span className="text-orange-500">+{totalBurnedCalories}</span>
-              </div>
+            {/* Badges / Ranges feedback */}
+            <div>
+              {inOptimalRange ? (
+                <span className="text-[9px] font-black text-emerald-500 dark:text-emerald-400 bg-emerald-550/10 dark:bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 shadow-sm animate-pulse">
+                  🎯 RANGO ÓPTIMO
+                </span>
+              ) : calExceeded ? (
+                <span className="text-[9px] font-black text-rose-500 dark:text-rose-400 bg-rose-550/10 dark:bg-rose-500/10 px-2.5 py-1 rounded-full border border-rose-500/20">
+                  ⚠️ EXCESO: +{Math.round(totalCalories - adjustedCalTarget)} KCAL
+                </span>
+              ) : (
+                <span className="text-[9px] font-black text-blue-500 dark:text-blue-400 bg-blue-550/10 dark:bg-blue-500/10 px-2.5 py-1 rounded-full border border-blue-500/10">
+                  RESTANTE: {remainingCalories} KCAL
+                </span>
+              )}
             </div>
-
-            {calExceeded ? (
-              <div className="flex items-center gap-1.5 text-[10px] text-rose-400 bg-rose-500/10 py-1 px-2.5 rounded-lg border border-rose-500/20">
-                <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                <span>Superaste el límite calórico recomendado.</span>
-              </div>
-            ) : inOptimalRange ? (
-              <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 bg-emerald-500/10 py-1 px-2.5 rounded-lg border border-emerald-500/20">
-                <Check className="h-3.5 w-3.5 flex-shrink-0" />
-                <span>¡Rango óptimo alcanzado! Buen trabajo.</span>
-              </div>
-            ) : (
-              <div className="text-[10px] text-gray-500 dark:text-gray-400 leading-normal">
-                Logra entre {lowerOptBound} y {upperOptBound} kcal hoy para estar en tu rango ideal.
-              </div>
-            )}
           </div>
+
+          {/* Dynamic Progress Bar */}
+          <div className="space-y-2">
+            <div className="relative h-3.5 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden border border-gray-150 dark:border-gray-800/40">
+              
+              {/* 1. Optimal range highlighted band (90% to 105%) */}
+              <div 
+                className="absolute top-0 bottom-0 bg-emerald-500/15 dark:bg-emerald-500/10 border-l border-r border-emerald-400/25 dark:border-emerald-500/15 z-10"
+                style={{ left: `${optMinPercent}%`, width: `${optMaxPercent - optMinPercent}%` }}
+              />
+
+              {/* 2. Target Line Indicator (100% Meta) */}
+              <div 
+                className="absolute top-0 bottom-0 w-0.5 bg-gray-400 dark:bg-gray-600 z-20"
+                style={{ left: `${targetPercent}%` }}
+              />
+
+              {/* 3. Base Progress Bar (Up to Meta or current progress) */}
+              <div 
+                className={`h-full transition-all duration-500 ${
+                  inOptimalRange 
+                    ? "bg-gradient-to-r from-emerald-500 to-emerald-400" 
+                    : calExceeded
+                      ? "bg-gradient-to-r from-emerald-500 to-emerald-450" 
+                      : "bg-gradient-to-r from-blue-500 to-blue-400"
+                }`}
+                style={{ width: `${Math.min(targetPercent, progressPercent)}%` }}
+              />
+
+              {/* 4. Overflow Red Bar (Only shown if over Target) */}
+              {progressPercent > targetPercent && (
+                <div 
+                  className="absolute top-0 bottom-0 bg-gradient-to-r from-rose-500 to-rose-400 transition-all duration-500"
+                  style={{ left: `${targetPercent}%`, width: `${progressPercent - targetPercent}%` }}
+                />
+              )}
+            </div>
+
+            {/* Scale Legends below progress bar */}
+            <div className="flex justify-between items-center text-[9px] text-gray-400 dark:text-gray-500 font-bold px-0.5">
+              <span>0 kcal</span>
+              <span className="text-emerald-500 dark:text-emerald-400 font-black">Rango Objetivo: {lowerOptBound} - {upperOptBound} kcal</span>
+              <span>Max: {barMax} kcal</span>
+            </div>
+          </div>
+
+          {/* Desglose de Calorías */}
+          <div className="grid grid-cols-3 gap-2.5 pt-3 border-t border-gray-150 dark:border-gray-800/60 text-[10px] font-bold">
+            <div className="bg-gray-50/60 dark:bg-[#0f101a]/30 p-2 rounded-xl border border-gray-150/40 dark:border-gray-800/20 text-center">
+              <span className="text-[8px] text-gray-400 dark:text-gray-500 block uppercase tracking-wider mb-0.5">Objetivo Base</span>
+              <span className="text-gray-700 dark:text-gray-300 font-mono text-[11px]">{calTarget}</span>
+            </div>
+            <div className="bg-gray-50/60 dark:bg-[#0f101a]/30 p-2 rounded-xl border border-gray-150/40 dark:border-gray-800/20 text-center">
+              <span className="text-[8px] text-gray-400 dark:text-gray-500 block uppercase tracking-wider mb-0.5">Extra Quemado</span>
+              <span className="text-orange-500 font-mono text-[11px]">+{totalBurnedCalories}</span>
+            </div>
+            <div className="bg-gray-50/60 dark:bg-[#0f101a]/30 p-2 rounded-xl border border-gray-150/40 dark:border-gray-800/20 text-center">
+              <span className="text-[8px] text-gray-400 dark:text-gray-500 block uppercase tracking-wider mb-0.5">Meta Ajustada</span>
+              <span className="text-emerald-400 font-mono text-[11px]">{Math.round(adjustedCalTarget)}</span>
+            </div>
+          </div>
+
+          {/* Context Feedback */}
+          {calExceeded ? (
+            <div className="flex items-start gap-2 text-[10.5px] text-rose-400 bg-rose-500/10 p-3 rounded-2xl border border-rose-500/15 leading-relaxed text-left">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0 text-rose-400 mt-0.5" />
+              <div>
+                <span className="font-extrabold block">Límite Superado</span>
+                <p className="text-[10px] text-rose-400/80">Has consumido {Math.round(totalCalories - adjustedCalTarget)} kcal por encima de tu meta ajustada. Modera las porciones en tus siguientes comidas.</p>
+              </div>
+            </div>
+          ) : inOptimalRange ? (
+            <div className="flex items-start gap-2 text-[10.5px] text-emerald-400 bg-emerald-500/10 p-3 rounded-2xl border border-emerald-500/15 leading-relaxed text-left">
+              <Check className="h-4 w-4 flex-shrink-0 text-emerald-400 mt-0.5" />
+              <div>
+                <span className="font-extrabold block">¡En Rango Óptimo!</span>
+                <p className="text-[10px] text-emerald-400/85">Tu ingesta diaria se encuentra dentro de los márgenes fisiológicos ideales. ¡Mantén esa precisión!</p>
+              </div>
+            </div>
+          ) : (
+            <div className="text-[10.5px] text-gray-500 dark:text-gray-400 leading-relaxed text-center italic">
+              "La consistencia a largo plazo supera a la perfección a corto plazo. Mantente en rango."
+            </div>
+          )}
         </div>
 
         {/* 2. Macronutrients breakdown progress bars */}
