@@ -2,7 +2,7 @@ import React, { ButtonHTMLAttributes } from "react";
 import { RefreshCw } from "lucide-react";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "danger" | "ghost";
+  variant?: "primary" | "secondary" | "danger" | "ghost" | "white";
   size?: "sm" | "md" | "lg";
   isLoading?: boolean;
   leftIcon?: React.ComponentType<{ className?: string }>;
@@ -35,6 +35,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       secondary: "bg-white/5 hover:bg-white/10 border border-white/10 text-white active:bg-white/15",
       danger: "bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 active:bg-rose-500/30",
       ghost: "text-white/60 hover:bg-white/5 hover:text-white active:bg-white/10",
+      white: "bg-white hover:bg-gray-100 text-gray-900 active:bg-gray-200 disabled:bg-white/50 disabled:text-gray-900/50 shadow-lg shadow-white/5 border-none",
     };
 
     // Sizes

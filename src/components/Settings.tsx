@@ -301,7 +301,7 @@ export default function SettingsView({ profile, onUpdateProfile, onResetApp }: S
         </Button>
 
         {/* Reset App */}
-        <div className="border-t border-gray-800/80 pt-4">
+        <div className="border-t border-gray-800/80 pt-4 space-y-4">
           <Button
             variant="danger"
             onClick={() => {
@@ -315,6 +315,12 @@ export default function SettingsView({ profile, onUpdateProfile, onResetApp }: S
           >
             Cerrar Sesión (Reiniciar Datos)
           </Button>
+
+          <div className="text-center pt-2 text-[9px] text-white/20 font-mono tracking-wider">
+            <span>by Richard Bouryssieres</span>
+            <span className="mx-1.5">•</span>
+            <span>v0.0.1</span>
+          </div>
         </div>
 
       </div>

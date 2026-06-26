@@ -91,7 +91,8 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
         <Button
           onClick={handleGoogleLogin}
           isLoading={loading}
-          className="w-full bg-white text-gray-900 hover:bg-gray-100 active:bg-gray-200 font-bold shadow-lg shadow-white/5 border-none"
+          variant="white"
+          className="w-full font-bold"
           hoverScale={true}
           size="md"
         >
@@ -117,10 +118,17 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
           <span>Continuar con Google</span>
         </Button>
 
-        {/* Footer/Disclaimer */}
-        <p className="text-[10px] text-gray-500 text-center px-4 leading-normal">
-          Al continuar, aceptas la sincronización y el almacenamiento de tus métricas y registros en la base de datos segura de Trophia.
-        </p>
+        {/* Footer/Disclaimer with Developer Credits */}
+        <div className="space-y-3.5 text-center pt-2">
+          <p className="text-[10px] text-gray-500 px-4 leading-normal">
+            Al continuar, aceptas la sincronización y el almacenamiento de tus métricas y registros en la base de datos segura de Trophia.
+          </p>
+          <div className="text-[9px] text-white/20 font-mono tracking-wider">
+            <span>by Richard Bouryssieres</span>
+            <span className="mx-1.5">•</span>
+            <span>v0.0.1</span>
+          </div>
+        </div>
       </div>
 
     </div>
