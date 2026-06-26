@@ -273,7 +273,7 @@ export default function App() {
             <Onboarding 
               onComplete={handleOnboardingComplete} 
               userId={user.uid}
-              defaultName={user.displayName ? user.displayName.split(" ")[0] : undefined}
+              defaultName={user.displayName || undefined}
             />
           ) : (
             <>
