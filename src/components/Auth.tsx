@@ -1,16 +1,49 @@
-import React, { useState } from "react";
-import { AlertCircle } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { AlertCircle, AlertTriangle, Smartphone, ChevronRight } from "lucide-react";
 import { loginWithGoogle } from "../services/authService";
 import logo from "../assets/logo.png";
 import { Button } from "./ui/Button";
+
+interface DeviceInfo {
+  isIOS: boolean;
+  isAndroid: boolean;
+  isSafari: boolean;
+  isChrome: boolean;
+  isMobile: boolean;
+}
+
+const getDeviceInfo = (): DeviceInfo => {
+  if (typeof window === "undefined") {
+    return { isIOS: false, isAndroid: false, isSafari: false, isChrome: false, isMobile: false };
+  }
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+  const isAndroid = /Android/.test(ua);
+  const isMobile = isIOS || isAndroid;
+  const isSafari = isIOS && /Safari/.test(ua) && !/CriOS|FxiOS|OPiOS|mercury/i.test(ua);
+  const isChrome = /Chrome|CriOS/i.test(ua);
+
+  return { isIOS, isAndroid, isSafari, isChrome, isMobile };
+};
 
 interface AuthProps {
   onLoginSuccess: () => void;
 }
 
 export default function Auth({ onLoginSuccess }: AuthProps) {
+  const deviceInfo = getDeviceInfo();
+  const [isStandalone, setIsStandalone] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const checkStandalone = () => {
+      const isStandaloneMode = window.matchMedia("(display-mode: standalone)").matches || 
+                               (navigator as any).standalone === true;
+      setIsStandalone(isStandaloneMode);
+    };
+    checkStandalone();
+  }, []);
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -86,6 +119,70 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
             <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">Registro inteligente de alimentos</p>
           </div>
         </div>
+
+        {!isStandalone && (
+          <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl text-left space-y-3">
+            <div className="flex gap-2 items-start text-amber-400">
+              <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-extrabold text-xs block text-amber-300">⚠️ ¡Instala la App Primero!</span>
+                <p className="text-[10px] text-amber-400/90 leading-relaxed font-medium">
+                  {deviceInfo.isIOS ? (
+                    <>
+                      iOS aísla las sesiones del navegador. Si inicias sesión aquí y la instalas después, <span className="font-bold text-amber-300">se cerrará tu sesión</span> y tendrás que iniciar de nuevo. Por favor, agrega Trophia a tu pantalla de inicio primero y ábrela desde allí.
+                    </>
+                  ) : (
+                    <>
+                      Para disfrutar de una experiencia nativa sin barras de navegación, te recomendamos instalar la aplicación en tu dispositivo antes de iniciar sesión.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-amber-500/10 pt-2.5 space-y-2">
+              <span className="text-[10px] font-extrabold text-emerald-400 block uppercase tracking-wider">
+                Instrucciones de Instalación:
+              </span>
+              
+              {deviceInfo.isIOS && deviceInfo.isSafari && (
+                <div className="space-y-1.5 text-[9.5px] text-gray-300 leading-relaxed font-medium">
+                  <p>1. Presiona el botón de <b>Compartir</b> (icono 📤 en la barra inferior).</p>
+                  <p>2. Desplázate hacia abajo y selecciona <b>Agregar a Inicio</b> (icono con un <b>+</b>).</p>
+                  <p>3. Deja marcado "Abrir como app web" si aparece, y pulsa <b>Agregar</b> arriba a la derecha.</p>
+                </div>
+              )}
+
+              {deviceInfo.isIOS && deviceInfo.isChrome && (
+                <div className="space-y-1.5 text-[9.5px] text-gray-300 leading-relaxed font-medium">
+                  <p>1. Presiona el menú de tres puntos (<b>...</b>) al lado de la barra de direcciones.</p>
+                  <p>2. Selecciona <b>Compartir</b> y luego <b>Agregar a pantalla de inicio</b>.</p>
+                  <p>3. Pulsa <b>Agregar</b> para confirmar.</p>
+                </div>
+              )}
+
+              {deviceInfo.isIOS && !deviceInfo.isSafari && !deviceInfo.isChrome && (
+                <p className="text-[9.5px] text-gray-300 font-medium leading-relaxed">
+                  En iOS la instalación requiere abrir este enlace en <span className="font-bold text-white">Safari</span>. Cópialo y ábrelo allí para poder instalarlo.
+                </p>
+              )}
+
+              {deviceInfo.isAndroid && (
+                <div className="space-y-1.5 text-[9.5px] text-gray-300 leading-relaxed font-medium">
+                  <p>1. Abre el menú del navegador (los tres puntos <b>⋮</b> arriba a la derecha).</p>
+                  <p>2. Selecciona <b>Instalar aplicación</b> o <b>Agregar a pantalla de inicio</b>.</p>
+                </div>
+              )}
+
+              {!deviceInfo.isMobile && (
+                <div className="space-y-1.5 text-[9.5px] text-gray-300 leading-relaxed font-medium">
+                  <p>1. Haz clic en el icono de instalación (pantalla con flecha 📥) en la barra de direcciones.</p>
+                  <p>2. O abre el menú del navegador (<b>⋮</b>) y selecciona <b>Instalar Trophia...</b></p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Google Login Button */}
         <Button
