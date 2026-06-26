@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { X, Sparkles, RefreshCw, Check, MessageSquare, ChevronRight } from "lucide-react";
 import { UserProfile, LoggedMeal, MealType } from "../types";
 import { generateRecipeFromIngredientsByIA, adjustLoggedMealByChatByIA, suggestFoodSubstitutesByIA } from "../services/geminiService";

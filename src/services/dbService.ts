@@ -225,3 +225,59 @@ export const deletePushSubscription = async (userId: string, endpoint: string): 
   }
 };
 
+export const deleteUserAllData = async (userId: string): Promise<void> => {
+  try {
+    // 1. Delete meals
+    const mealsRef = collection(db, "users", userId, "meals");
+    const mealsSnap = await getDocs(mealsRef);
+    if (!mealsSnap.empty) {
+      const mealsBatch = writeBatch(db);
+      mealsSnap.docs.forEach((doc) => {
+        mealsBatch.delete(doc.ref);
+      });
+      await mealsBatch.commit();
+    }
+
+    // 2. Delete water logs
+    const waterRef = collection(db, "users", userId, "waterLogs");
+    const waterSnap = await getDocs(waterRef);
+    if (!waterSnap.empty) {
+      const waterBatch = writeBatch(db);
+      waterSnap.docs.forEach((doc) => {
+        waterBatch.delete(doc.ref);
+      });
+      await waterBatch.commit();
+    }
+
+    // 3. Delete workouts
+    const workoutsRef = collection(db, "users", userId, "workouts");
+    const workoutsSnap = await getDocs(workoutsRef);
+    if (!workoutsSnap.empty) {
+      const workoutsBatch = writeBatch(db);
+      workoutsSnap.docs.forEach((doc) => {
+        workoutsBatch.delete(doc.ref);
+      });
+      await workoutsBatch.commit();
+    }
+
+    // 4. Delete push subscriptions if any
+    const pushRef = collection(db, "users", userId, "push_subscriptions");
+    const pushSnap = await getDocs(pushRef);
+    if (!pushSnap.empty) {
+      const pushBatch = writeBatch(db);
+      pushSnap.docs.forEach((doc) => {
+        pushBatch.delete(doc.ref);
+      });
+      await pushBatch.commit();
+    }
+
+    // 5. Finally, delete the user profile document itself
+    const userDocRef = doc(db, "users", userId);
+    await deleteDoc(userDocRef);
+  } catch (error) {
+    console.error("Error deleting all user data from Firestore:", error);
+    throw error;
+  }
+};
+
+

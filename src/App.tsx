@@ -29,7 +29,8 @@ import {
   clearWaterLogs, 
   getWorkoutHistory, 
   saveWorkoutSession, 
-  clearWorkoutHistory 
+  clearWorkoutHistory,
+  deleteUserAllData
 } from "./services/dbService";
 
 export default function App() {
@@ -216,10 +217,27 @@ export default function App() {
   };
 
   const handleResetApp = async () => {
+    if (!user) return;
     try {
+      // 1. Delete all user data in Firestore while still authenticated
+      await deleteUserAllData(user.uid);
+      
+      // 2. Clear local storage settings & cache
+      localStorage.removeItem("trophia_api_key");
+      localStorage.removeItem("trophia_usda_api_key");
+      localStorage.removeItem("trophia_grocery_list");
+      localStorage.removeItem("trophia_progress_photos");
+
+      // 3. Log out to reset the authentication state
       await logout();
     } catch (e) {
-      console.error("Error logging out:", e);
+      console.error("Error resetting app data:", e);
+      // Fallback: sign out anyway so the user isn't stuck
+      try {
+        await logout();
+      } catch (logoutError) {
+        console.error("Error logging out after reset failure:", logoutError);
+      }
     }
   };
 
