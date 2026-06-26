@@ -138,10 +138,15 @@ export default function Dashboard({
   const fExceeded = totalFat > fTarget;
 
   // Percentage for Rings
-  const calPercentage = Math.min(100, (totalCalories / adjustedCalTarget) * 100);
-  const pPercentage = Math.min(100, (totalProtein / pTarget) * 100);
-  const cPercentage = Math.min(100, (totalCarbs / cTarget) * 100);
-  const fPercentage = Math.min(100, (totalFat / fTarget) * 100);
+  const calPercentage = adjustedCalTarget > 0 ? Math.min(100, (totalCalories / adjustedCalTarget) * 100) : 0;
+  const pPercentage = pTarget > 0 ? Math.min(100, (totalProtein / pTarget) * 100) : 0;
+  const cPercentage = cTarget > 0 ? Math.min(100, (totalCarbs / cTarget) * 100) : 0;
+  const fPercentage = fTarget > 0 ? Math.min(100, (totalFat / fTarget) * 100) : 0;
+
+  // Target Range (90% to 105% of adjusted daily calorie target)
+  const lowerOptBound = Math.round(adjustedCalTarget * 0.90);
+  const upperOptBound = Math.round(adjustedCalTarget * 1.05);
+  const inOptimalRange = totalCalories >= lowerOptBound && totalCalories <= upperOptBound && totalCalories > 0;
 
   const getMealEmoji = (type: MealType) => {
     switch (type) {
@@ -220,84 +225,163 @@ export default function Dashboard({
             </button>
           </motion.div>
         )}
-
-        {/* 1. Calorie Balance Progress Card */}
-        <div className="bg-white dark:bg-[#161824] p-5 rounded-3xl border border-gray-200 dark:border-gray-800 flex items-center justify-between gap-4 shadow-md dark:shadow-xl relative overflow-hidden">
+        {/* 1. Calorie Balance Progress Card (Concentric Macro Rings & Target Calorie Range) */}
+        <div className="bg-white dark:bg-[#161824] p-5 rounded-3xl border border-gray-200 dark:border-gray-800 flex items-center justify-between gap-5 shadow-md dark:shadow-xl relative overflow-hidden">
           
-          {/* Circular progress ring */}
+          {/* Concentric progress rings */}
           <div className="relative w-32 h-32 flex-shrink-0 flex items-center justify-center">
-            <svg className="absolute inset-0 w-full h-full">
+            <svg className="absolute inset-0 w-full h-full -rotate-90">
+              {/* Protein Ring (Outer - Blue) */}
               <circle
                 cx="64"
                 cy="64"
-                r="56"
-                className="stroke-gray-200 dark:stroke-gray-800"
-                strokeWidth="7"
+                r="54"
+                className="stroke-gray-100 dark:stroke-gray-850/30"
+                strokeWidth="6"
                 fill="transparent"
               />
               <circle
                 cx="64"
                 cy="64"
-                r="56"
-                className={calExceeded ? "stroke-rose-500" : "stroke-emerald-400"}
-                strokeWidth="7"
+                r="54"
+                className="stroke-blue-500"
+                strokeWidth="6"
                 fill="transparent"
-                strokeDasharray={2 * Math.PI * 56}
-                strokeDashoffset={2 * Math.PI * 56 * (1 - calPercentage / 100)}
+                strokeDasharray={2 * Math.PI * 54}
+                strokeDashoffset={2 * Math.PI * 54 * (1 - pPercentage / 100)}
+                strokeLinecap="round"
+              />
+
+              {/* Carbs Ring (Middle - Orange) */}
+              <circle
+                cx="64"
+                cy="64"
+                r="44"
+                className="stroke-gray-100 dark:stroke-gray-850/30"
+                strokeWidth="6"
+                fill="transparent"
+              />
+              <circle
+                cx="64"
+                cy="64"
+                r="44"
+                className="stroke-orange-500"
+                strokeWidth="6"
+                fill="transparent"
+                strokeDasharray={2 * Math.PI * 44}
+                strokeDashoffset={2 * Math.PI * 44 * (1 - cPercentage / 100)}
+                strokeLinecap="round"
+              />
+
+              {/* Fat Ring (Inner - Purple) */}
+              <circle
+                cx="64"
+                cy="64"
+                r="34"
+                className="stroke-gray-100 dark:stroke-gray-850/30"
+                strokeWidth="6"
+                fill="transparent"
+              />
+              <circle
+                cx="64"
+                cy="64"
+                r="34"
+                className="stroke-purple-500"
+                strokeWidth="6"
+                fill="transparent"
+                strokeDasharray={2 * Math.PI * 34}
+                strokeDashoffset={2 * Math.PI * 34 * (1 - fPercentage / 100)}
+                strokeLinecap="round"
               />
             </svg>
 
-            {/* Inner details */}
-            <div className="text-center z-10">
-              <span className="text-2xl font-black text-gray-900 dark:text-white tracking-tighter">
-                {totalCalories}
+            {/* Inner details (Calories) */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10 pointer-events-none select-none">
+              <span className="text-[7.5px] text-gray-400 dark:text-gray-500 font-extrabold uppercase tracking-widest leading-none">
+                KCAL
               </span>
-              <span className="block text-[9px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider">
-                de {adjustedCalTarget}
+              <span className="text-[17px] font-black text-gray-900 dark:text-white tracking-tighter mt-1 leading-none">
+                {totalCalories}
               </span>
             </div>
           </div>
 
-          <div className="flex-1 space-y-3">
+          {/* Calorie Range Progress Bar & Info */}
+          <div className="flex-1 space-y-3.5">
             <div>
-              <span className="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase">Calorías Restantes</span>
-              <div className="text-2xl font-black text-emerald-400 mt-0.5 tracking-tight">
-                {calExceeded ? (
-                  <span className="text-rose-400">Límite excedido</span>
+              <div className="flex justify-between items-end">
+                <span className="text-xs text-gray-550 dark:text-gray-400 font-black uppercase tracking-wider">Calorías</span>
+                {inOptimalRange ? (
+                  <span className="text-[9px] font-black text-emerald-500 dark:text-emerald-450 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 shadow-sm animate-pulse">
+                    🎯 RANGO ÓPTIMO
+                  </span>
+                ) : calExceeded ? (
+                  <span className="text-[9px] font-black text-rose-500 dark:text-rose-450 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
+                    ⚠️ EXCEDIDO
+                  </span>
                 ) : (
-                  `${remainingCalories} kcal`
+                  <span className="text-[9px] font-black text-blue-500 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/10">
+                    FALTAN {remainingCalories} KCAL
+                  </span>
                 )}
+              </div>
+
+              {/* Progress bar container */}
+              <div className="relative h-3 w-full bg-gray-100 dark:bg-gray-800/70 rounded-full mt-2.5 overflow-hidden border border-gray-150 dark:border-gray-800/40">
+                {/* Visual marker for target range (90% to 105%) */}
+                <div 
+                  className="absolute top-0 bottom-0 bg-emerald-500/15 dark:bg-emerald-500/10 border-l border-r border-emerald-450/20 dark:border-emerald-500/15"
+                  style={{ left: "90%", width: "15%" }}
+                />
+                
+                <div 
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    inOptimalRange 
+                      ? "bg-gradient-to-r from-emerald-500 to-emerald-400 shadow-sm shadow-emerald-500/20" 
+                      : calExceeded 
+                        ? "bg-gradient-to-r from-rose-500 to-rose-450" 
+                        : "bg-gradient-to-r from-blue-500 to-blue-400"
+                  }`}
+                  style={{ width: `${Math.min(100, (totalCalories / adjustedCalTarget) * 100)}%` }}
+                />
+              </div>
+
+              {/* Labels under progress bar */}
+              <div className="flex justify-between items-center text-[9px] text-gray-400 dark:text-gray-500 font-bold mt-1.5 px-0.5">
+                <span>0</span>
+                <span className="text-emerald-500 dark:text-emerald-450 font-black">Meta: {lowerOptBound} - {upperOptBound} kcal</span>
+                <span>Max</span>
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-gray-150 dark:border-gray-800/60 text-[9px] font-bold">
+            <div className="grid grid-cols-3 gap-1.5 pt-2.5 border-t border-gray-150 dark:border-gray-800/60 text-[9px] font-bold">
               <div>
-                <span className="text-[8px] text-gray-400 dark:text-gray-500 block uppercase tracking-wider">Objetivo</span>
-                <span className="text-gray-700 dark:text-gray-300">{calTarget}</span>
+                <span className="text-[8px] text-gray-400 dark:text-gray-555 block uppercase tracking-wider">Mantenimiento</span>
+                <span className="text-gray-700 dark:text-gray-300">{Math.round(adjustedCalTarget)}</span>
               </div>
               <div>
-                <span className="text-[8px] text-gray-400 dark:text-gray-500 block uppercase tracking-wider">Comida</span>
+                <span className="text-[8px] text-gray-400 dark:text-gray-555 block uppercase tracking-wider">Consumido</span>
                 <span className="text-blue-500">{totalCalories}</span>
               </div>
               <div>
-                <span className="text-[8px] text-gray-400 dark:text-gray-500 block uppercase tracking-wider">Quemado</span>
+                <span className="text-[8px] text-gray-400 dark:text-gray-555 block uppercase tracking-wider">Gasto Extra</span>
                 <span className="text-orange-500">+{totalBurnedCalories}</span>
               </div>
             </div>
 
             {calExceeded ? (
-              <div className="flex items-center gap-1.5 text-[10px] text-rose-400 bg-rose-500/10 py-1 px-2 rounded-lg border border-rose-500/20">
+              <div className="flex items-center gap-1.5 text-[10px] text-rose-400 bg-rose-500/10 py-1 px-2.5 rounded-lg border border-rose-500/20">
                 <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                <span>Excediste tu meta calórica hoy.</span>
+                <span>Superaste el límite calórico recomendado.</span>
               </div>
-            ) : remainingCalories < 150 ? (
-              <div className="flex items-center gap-1.5 text-[10px] text-amber-400 bg-amber-500/10 py-1 px-2 rounded-lg border border-amber-500/20">
+            ) : inOptimalRange ? (
+              <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 bg-emerald-500/10 py-1 px-2.5 rounded-lg border border-emerald-500/20">
                 <Check className="h-3.5 w-3.5 flex-shrink-0" />
-                <span>¡Casi logras la meta calórica!</span>
+                <span>¡Rango óptimo alcanzado! Buen trabajo.</span>
               </div>
             ) : (
-              <div className="text-[10px] text-gray-550 dark:text-gray-400">
-                Mantente en déficit de 500 kcal para perder grasa eficientemente.
+              <div className="text-[10px] text-gray-500 dark:text-gray-400 leading-normal">
+                Logra entre {lowerOptBound} y {upperOptBound} kcal hoy para estar en tu rango ideal.
               </div>
             )}
           </div>
@@ -308,62 +392,61 @@ export default function Dashboard({
           <span className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
             Distribución de Macronutrientes
           </span>
-
           <div className="grid grid-cols-3 gap-3">
             {/* Protein Card */}
             <div className="bg-white dark:bg-[#12131d] p-3 rounded-2xl border border-gray-200 dark:border-gray-800/80 flex flex-col justify-between shadow-sm">
-              <div className="flex justify-between items-center text-[10px] font-bold text-gray-500 dark:text-gray-400 mb-1">
-                <span>P (Muscular)</span>
-                <span className={pExceeded ? "text-emerald-400" : "text-gray-400 dark:text-gray-500"}>
-                  {totalProtein}g/{pTarget}g
+              <div className="flex flex-col mb-1 text-[10px]">
+                <span className="font-black text-gray-900 dark:text-white uppercase tracking-wider truncate">Proteína</span>
+                <span className={`font-mono text-[9.5px] font-bold mt-0.5 ${pExceeded ? "text-emerald-400" : "text-gray-450 dark:text-gray-500"}`}>
+                  {totalProtein}g / {pTarget}g
                 </span>
               </div>
-              <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-900 rounded-full overflow-hidden mb-1.5">
+              <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-900 rounded-full overflow-hidden mb-1.5 mt-1">
                 <div 
                   className="h-full bg-blue-500 rounded-full transition-all duration-300" 
                   style={{ width: `${pPercentage}%` }}
                 />
               </div>
-              <span className="text-[9px] text-gray-450 dark:text-gray-500 block text-right font-semibold">
-                {pExceeded ? "Meta lograda" : `${remainingProtein}g restantes`}
+              <span className="text-[9px] text-gray-400 dark:text-gray-550 block text-right font-semibold">
+                {pExceeded ? "Logrado" : `${remainingProtein}g faltan`}
               </span>
             </div>
 
             {/* Carbs Card */}
             <div className="bg-white dark:bg-[#12131d] p-3 rounded-2xl border border-gray-200 dark:border-gray-800/80 flex flex-col justify-between shadow-sm">
-              <div className="flex justify-between items-center text-[10px] font-bold text-gray-500 dark:text-gray-400 mb-1">
-                <span>C (Fuerza)</span>
-                <span className={cExceeded ? "text-rose-400" : "text-gray-400 dark:text-gray-500"}>
-                  {totalCarbs}g/{cTarget}g
+              <div className="flex flex-col mb-1 text-[10px]">
+                <span className="font-black text-gray-900 dark:text-white uppercase tracking-wider truncate">Carbohidratos</span>
+                <span className={`font-mono text-[9.5px] font-bold mt-0.5 ${cExceeded ? "text-rose-400" : "text-gray-450 dark:text-gray-500"}`}>
+                  {totalCarbs}g / {cTarget}g
                 </span>
               </div>
-              <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-900 rounded-full overflow-hidden mb-1.5">
+              <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-900 rounded-full overflow-hidden mb-1.5 mt-1">
                 <div 
                   className="h-full bg-orange-500 rounded-full transition-all duration-300" 
                   style={{ width: `${cPercentage}%` }}
                 />
               </div>
-              <span className="text-[9px] text-gray-450 dark:text-gray-500 block text-right font-semibold">
-                {cExceeded ? "Excedido" : `${remainingCarbs}g restantes`}
+              <span className="text-[9px] text-gray-400 dark:text-gray-550 block text-right font-semibold">
+                {cExceeded ? "Excedido" : `${remainingCarbs}g faltan`}
               </span>
             </div>
 
             {/* Fat Card */}
             <div className="bg-white dark:bg-[#12131d] p-3 rounded-2xl border border-gray-200 dark:border-gray-800/80 flex flex-col justify-between shadow-sm">
-              <div className="flex justify-between items-center text-[10px] font-bold text-gray-500 dark:text-gray-400 mb-1">
-                <span>G (Hormonal)</span>
-                <span className={fExceeded ? "text-rose-400" : "text-gray-400 dark:text-gray-500"}>
-                  {totalFat}g/{fTarget}g
+              <div className="flex flex-col mb-1 text-[10px]">
+                <span className="font-black text-gray-900 dark:text-white uppercase tracking-wider truncate">Grasas</span>
+                <span className={`font-mono text-[9.5px] font-bold mt-0.5 ${fExceeded ? "text-rose-400" : "text-gray-450 dark:text-gray-500"}`}>
+                  {totalFat}g / {fTarget}g
                 </span>
               </div>
-              <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-900 rounded-full overflow-hidden mb-1.5">
+              <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-900 rounded-full overflow-hidden mb-1.5 mt-1">
                 <div 
                   className="h-full bg-purple-500 rounded-full transition-all duration-300" 
                   style={{ width: `${fPercentage}%` }}
                 />
               </div>
-              <span className="text-[9px] text-gray-450 dark:text-gray-500 block text-right font-semibold">
-                {fExceeded ? "Excedido" : `${remainingFat}g restantes`}
+              <span className="text-[9px] text-gray-400 dark:text-gray-555 block text-right font-semibold">
+                {fExceeded ? "Excedido" : `${remainingFat}g faltan`}
               </span>
             </div>
           </div>
