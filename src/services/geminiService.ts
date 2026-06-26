@@ -234,7 +234,6 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   }
 }
 
-// 2. Recommend goal based on biometrics
 export async function recommendGoalByIA(
   apiKey: string,
   input: {
@@ -271,7 +270,7 @@ Basado en estos datos clínicos, recomiéndale uno de los siguientes 4 objetivos
 Debes responder estrictamente en formato JSON con la siguiente estructura:
 {
   "recommendedGoal": "lose_weight" | "gain_muscle" | "aesthetics" | "maintenance",
-  "reason": "Explicación muy motivadora, breve (máximo 2-3 oraciones en español) de por qué este objetivo es ideal para su fisionomía, citando su % de grasa de forma científica."
+  "reason": "Explicación muy motivadora, breve (máximo 2-3 oraciones en español) de por qué este objetivo es ideal para su fisionomía. Resalta los datos clave e importantes (porcentajes de grasa, objetivos recomendados, etc.) encerrándolos entre doble asteriscos como **dato importante** para poder aplicar formato visual."
 }`;
 
   try {
@@ -294,24 +293,24 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
     if (sex === "female") {
       if (estimatedFat > 30) {
         recommendedGoal = "lose_weight";
-        reason = `Con un porcentaje de grasa corporal estimado del ${estimatedFat}%, iniciar una fase de déficit calórico moderado te ayudará a reducir tejido graso de manera segura, optimizando tu composición corporal y energía diaria.`;
+        reason = `Con un porcentaje de grasa corporal estimado del **${estimatedFat}%**, iniciar una fase de **déficit calórico moderado** te ayudará a reducir tejido graso de manera segura, optimizando tu composición corporal y energía diaria.`;
       } else if (estimatedFat < 20) {
         recommendedGoal = "gain_muscle";
-        reason = `Tu porcentaje de grasa actual (${estimatedFat}%) te brinda un margen perfecto para entrar en superávit controlado, permitiéndote construir masa muscular limpia y ganar fuerza de forma óptima.`;
+        reason = `Tu porcentaje de grasa actual (**${estimatedFat}%**) te brinda un margen perfecto para entrar en **superávit controlado**, permitiéndote construir masa muscular limpia y ganar fuerza de forma óptima.`;
       } else {
         recommendedGoal = "aesthetics";
-        reason = `Con un % de grasa intermedio del ${estimatedFat}%, tu mejor opción es la recomposición corporal: comer cerca de tus calorías de mantenimiento con alta proteína para oxidar grasa y ganar tono muscular simultáneamente.`;
+        reason = `Con un % de grasa intermedio del **${estimatedFat}%**, tu mejor opción es la **recomposición corporal**: comer cerca de tus calorías de mantenimiento con alta proteína para oxidar grasa y ganar tono muscular simultáneamente.`;
       }
     } else {
       if (estimatedFat > 22) {
         recommendedGoal = "lose_weight";
-        reason = `Dado tu % de grasa estimado del ${estimatedFat}%, la recomendación científica es priorizar un déficit calórico progresivo. Esto reducirá tu grasa corporal, mejorará tu sensibilidad a la insulina y definirá tus músculos.`;
+        reason = `Dado tu % de grasa estimado del **${estimatedFat}%**, la recomendación científica es priorizar un **déficit calórico progresivo**. Esto reducirá tu grasa corporal, mejorará tu sensibilidad a la insulina y definirá tus músculos.`;
       } else if (estimatedFat < 13) {
         recommendedGoal = "gain_muscle";
-        reason = `Tienes un porcentaje de grasa óptimo e ideal (${estimatedFat}%) para un ciclo de volumen limpio. Podrás asimilar los nutrientes hacia la hipertrofia muscular minimizando la ganancia adiposa.`;
+        reason = `Tienes un porcentaje de grasa óptimo e ideal (**${estimatedFat}%**) para un ciclo de **volumen limpio**. Podrás asimilar los nutrientes hacia la hipertrofia muscular minimizando la ganancia adiposa.`;
       } else {
         recommendedGoal = "aesthetics";
-        reason = `Tu grasa del ${estimatedFat}% es perfecta para un proceso de recomposición estética. Te sugerimos entrenar pesado y comer en normocaloría para perder grasa rebelde mientras desarrollas masa muscular magra.`;
+        reason = `Tu grasa del **${estimatedFat}%** es perfecta para un proceso de **recomposición estética**. Te sugerimos entrenar pesado y comer en normocaloría para perder grasa rebelde mientras desarrollas masa muscular magra.`;
       }
     }
 

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   User, Weight, Ruler, ChevronRight, ChevronLeft, Sparkles, 
-  BookOpen, Key, AlertCircle, Camera, Check, Eye, Info, RefreshCw, Bell, Calendar
+  BookOpen, Key, AlertCircle, Camera, Check, Eye, Info, RefreshCw, Bell, Calendar,
+  Flame, Dumbbell, Zap
 } from "lucide-react";
 import { UserProfile, BiologicalSex, FitnessGoal, ExperienceLevel, TrainingEnvironment, DietType } from "../types";
 import { calculateBMI, getBMICategory, calculateNavyBodyFat, calculateCaliperBodyFat, calculateRequirements } from "../utils/fitnessUtils";
@@ -327,12 +328,25 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
         setIsSubscribed(true);
 
         try {
-          registration.showNotification("¡Bienvenido a Trophia! 🏆", {
-            body: "Tus notificaciones están activadas. Te recordaremos tus comidas, agua y entrenamientos.",
-            icon: "/favicon.ico",
-            badge: "/favicon.ico",
-            vibrate: [100, 50, 100]
-          } as any);
+          if ("Notification" in window && Notification.permission === "granted") {
+            try {
+              // Try direct constructor (great for desktop localhost/Mac Chrome)
+              new window.Notification("¡Bienvenido a Trophia! 🏆", {
+                body: "Tus notificaciones están activadas. Te recordaremos tus comidas, agua y entrenamientos.",
+                icon: "/favicon.ico"
+              });
+            } catch (ctorErr) {
+              console.warn("Constructor-based notification failed, falling back to Service Worker:", ctorErr);
+              // Fallback to Service Worker registration (essential for iOS Safari / Mobile Chrome PWA)
+              const reg = await navigator.serviceWorker.ready;
+              await reg.showNotification("¡Bienvenido a Trophia! 🏆", {
+                body: "Tus notificaciones están activadas. Te recordaremos tus comidas, agua y entrenamientos.",
+                icon: "/favicon.ico",
+                badge: "/favicon.ico",
+                vibrate: [100, 50, 100]
+              } as any);
+            }
+          }
         } catch (notifErr) {
           console.warn("Could not show welcome notification locally:", notifErr);
         }
@@ -1697,7 +1711,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                       </span>
                     </div>
                     <p className="text-[11px] text-white/80 leading-relaxed">
-                      {aiGoalRecommendation.reason}
+                      {formatAnalysisText(aiGoalRecommendation.reason)}
                     </p>
                   </div>
                 )}
@@ -1863,19 +1877,22 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                 <label className="block text-[10px] font-bold text-white/40 mb-2 uppercase tracking-widest">
                   3. Frecuencia Semanal
                 </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[3, 4, 5, 6].map((days) => (
+                <div className="grid grid-cols-7 gap-1.5">
+                  {[1, 2, 3, 4, 5, 6, 7].map((days) => (
                     <button
                       key={days}
                       type="button"
                       onClick={() => setWeeklyTrainingDays(days)}
-                      className={`p-3 rounded-xl border text-center transition cursor-pointer ${
+                      className={`py-2 px-1 rounded-xl border text-center transition cursor-pointer flex flex-col items-center justify-center ${
                         weeklyTrainingDays === days
                           ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
-                          : "bg-white/5 border-white/10 text-white/40 text-xs"
+                          : "bg-white/5 border-white/10 text-white/40"
                       }`}
                     >
-                      <span className="block text-xs font-bold">{days} días</span>
+                      <span className="block text-xs font-bold">{days}</span>
+                      <span className="block text-[7.5px] opacity-60 font-semibold leading-none mt-0.5">
+                        {days === 1 ? "día" : "días"}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -2006,29 +2023,49 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                   </div>
 
                   <div className="space-y-3 text-[11px] text-white/60 leading-relaxed">
-                    <p>
+                    <p className="px-1 text-[11.5px]">
                       ¡Excelente! Vamos a nivelarte rápido con 3 pilares sencillos que te harán ver resultados hoy mismo:
                     </p>
                     
-                    <div className="bg-black/30 p-3 rounded-xl border border-white/5 space-y-0.5">
-                      <span className="font-bold text-emerald-400 block text-xs">1. Balance Calórico ⚖️</span>
-                      <span>
-                        Tu peso se rige por la energía. Ingerir <b>menos</b> de las recomendadas te pondrá en <b>Déficit</b> para perder grasa; e ingerir <b>más</b> te dará un <b>Superávit</b> para muscular.
-                      </span>
-                    </div>
+                    <div className="space-y-3">
+                      {/* Pilar 1: Balance Calórico */}
+                      <div className="bg-gradient-to-r from-white/[0.03] to-white/[0.01] border border-white/5 rounded-2xl p-3.5 flex gap-3.5 items-start transition hover:border-emerald-500/20 shadow-md">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-400 shrink-0 mt-0.5 shadow-sm shadow-emerald-500/5">
+                          <Flame className="h-4 w-4" />
+                        </div>
+                        <div className="space-y-1">
+                          <span className="font-extrabold text-white text-[11px] tracking-wide block">1. Balance Calórico ⚖️</span>
+                          <p className="text-[10px] text-white/50 leading-relaxed font-medium">
+                            Tu peso se rige por la energía. Ingerir <span className="text-emerald-400 font-bold">menos</span> calorías de las recomendadas te pondrá en <span className="text-emerald-400 font-bold">Déficit</span> para perder grasa, e ingerir <span className="text-emerald-400 font-bold">más</span> te dará un <span className="text-emerald-400 font-bold">Superávit</span> para ganar músculo.
+                          </p>
+                        </div>
+                      </div>
 
-                    <div className="bg-black/30 p-3 rounded-xl border border-white/5 space-y-0.5">
-                      <span className="font-bold text-emerald-400 block text-xs">2. Proteínas (Músculo) 💪</span>
-                      <span>
-                        Son los ladrillos de tu cuerpo. Indispensables para reparar los tejidos musculares tras el ejercicio y para mantenerte saciado por más tiempo.
-                      </span>
-                    </div>
+                      {/* Pilar 2: Proteínas */}
+                      <div className="bg-gradient-to-r from-white/[0.03] to-white/[0.01] border border-white/5 rounded-2xl p-3.5 flex gap-3.5 items-start transition hover:border-emerald-500/20 shadow-md">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-400 shrink-0 mt-0.5 shadow-sm shadow-emerald-500/5">
+                          <Dumbbell className="h-4 w-4" />
+                        </div>
+                        <div className="space-y-1">
+                          <span className="font-extrabold text-white text-[11px] tracking-wide block">2. Proteínas (Músculo) 💪</span>
+                          <p className="text-[10px] text-white/50 leading-relaxed font-medium">
+                            Son los <span className="text-emerald-400 font-bold">ladrillos</span> de tu cuerpo. Indispensables para reparar y desarrollar tejidos musculares tras entrenar, además de mantenerte saciado por más tiempo.
+                          </p>
+                        </div>
+                      </div>
 
-                    <div className="bg-black/30 p-3 rounded-xl border border-white/5 space-y-0.5">
-                      <span className="font-bold text-emerald-400 block text-xs">3. Carbohidratos y Grasas 🔋</span>
-                      <span>
-                        Los <b>Carbos</b> representan el combustible explosivo y las <b>Grasas</b> optimizan tu salud hormonal y celular general.
-                      </span>
+                      {/* Pilar 3: Carbos y Grasas */}
+                      <div className="bg-gradient-to-r from-white/[0.03] to-white/[0.01] border border-white/5 rounded-2xl p-3.5 flex gap-3.5 items-start transition hover:border-emerald-500/20 shadow-md">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-400 shrink-0 mt-0.5 shadow-sm shadow-emerald-500/5">
+                          <Zap className="h-4 w-4" />
+                        </div>
+                        <div className="space-y-1">
+                          <span className="font-extrabold text-white text-[11px] tracking-wide block">3. Carbohidratos y Grasas 🔋</span>
+                          <p className="text-[10px] text-white/50 leading-relaxed font-medium">
+                            Los <span className="text-emerald-400 font-bold">Carbohidratos</span> representan tu combustible explosivo para rendir al máximo, mientras que las <span className="text-emerald-400 font-bold">Grasas</span> optimizan tu entorno celular y salud hormonal.
+                          </p>
+                        </div>
+                      </div>
                     </div>
 
                     {randomNutritionTip && (
