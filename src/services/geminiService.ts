@@ -23,6 +23,40 @@ function cleanBase64Image(dataURI: string): { mimeType: string; data: string } {
   };
 }
 
+// Helper to clean and translate raw Gemini API error messages for the user
+function cleanErrorMessage(rawMessage: string, status?: number): string {
+  const msg = rawMessage.toLowerCase();
+  
+  if (
+    status === 429 ||
+    msg.includes("quota") ||
+    msg.includes("rate limit") ||
+    msg.includes("limit exceeded") ||
+    msg.includes("resource exhausted")
+  ) {
+    const secondsMatch = rawMessage.match(/retry in ([\d\.]+)\s*s/i);
+    if (secondsMatch && secondsMatch[1]) {
+      const sec = Math.ceil(parseFloat(secondsMatch[1]));
+      return `Límite de consultas alcanzado. Por favor, espera ${sec} segundos aproximados antes de reintentarlo (Trophia utiliza canales libres de cobro para tu cuenta).`;
+    }
+    return "Límite de consultas alcanzado. Por favor, espera unos segundos y vuelve a intentarlo (Trophia utiliza canales libres de cobro para tu cuenta).";
+  }
+  
+  if (msg.includes("api key") || msg.includes("invalid key") || msg.includes("key not found")) {
+    return "Tu API Key de Gemini es inválida o no tiene permisos. Por favor, revísala en la configuración de la app.";
+  }
+  
+  if (msg.includes("not found") || msg.includes("supported")) {
+    return "El modelo de Inteligencia Artificial configurado no está disponible actualmente o es incompatible.";
+  }
+
+  if (status && status >= 500) {
+    return "El servidor de IA de Google está temporalmente sobrecargado. Por favor, reintenta en unos instantes.";
+  }
+
+  return rawMessage;
+}
+
 // Main helper to call Gemini API directly from browser via HTTP fetch
 async function callGeminiAPI(
   apiKey: string,
@@ -44,24 +78,29 @@ async function callGeminiAPI(
     });
   }
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      contents: [{ parts }],
-      generationConfig: {
-        responseMimeType: "application/json",
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-    }),
-  });
+      body: JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: {
+          responseMimeType: "application/json",
+        },
+      }),
+    });
+  } catch (netError: any) {
+    console.error("Network error calling Gemini:", netError);
+    throw new Error("No hay conexión a internet. Revisa tu red y vuelve a intentarlo.");
+  }
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(
-      errorData?.error?.message || `Error en la comunicación con la IA (${response.status})`
-    );
+    const rawMessage = errorData?.error?.message || `Error en la comunicación con la IA (${response.status})`;
+    throw new Error(cleanErrorMessage(rawMessage, response.status));
   }
 
   const data = await response.json();
