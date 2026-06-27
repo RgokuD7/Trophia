@@ -130,13 +130,47 @@ interface OnboardingProps {
 }
 
 const formatAnalysisText = (text: string) => {
-  const parts = text.split(/(\*\*.*?\*\*)/g);
-  return parts.map((part, index) => {
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return <strong key={index} className="font-extrabold text-emerald-400">{part.slice(2, -2)}</strong>;
-    }
-    return part;
-  });
+  const lines = text.split("\n");
+  
+  const formatBold = (str: string) => {
+    const parts = str.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return <strong key={index} className="font-extrabold text-emerald-400">{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+  };
+
+  const hasBullets = lines.some(l => l.trim().startsWith("*") || l.trim().startsWith("-"));
+
+  if (hasBullets || lines.length > 1) {
+    return (
+      <div className="space-y-1.5 mt-1">
+        {lines.map((line, idx) => {
+          const trimmed = line.trim();
+          const isBullet = trimmed.startsWith("*") || trimmed.startsWith("-");
+          const cleanLine = isBullet ? trimmed.replace(/^[\*\-]\s*/, "") : line;
+          
+          if (isBullet) {
+            return (
+              <div key={idx} className="flex items-start gap-2 pl-2">
+                <span className="text-emerald-400 mt-1 select-none text-[10px]">•</span>
+                <span className="flex-1 text-[11px] leading-relaxed text-white/80">{formatBold(cleanLine)}</span>
+              </div>
+            );
+          }
+          
+          if (!trimmed) return <div key={idx} className="h-1" />;
+          return (
+            <p key={idx} className="text-[11px] leading-relaxed text-white/80">{formatBold(line)}</p>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return formatBold(text);
 };
 
 const getCleanedAnalysis = (text: string) => {

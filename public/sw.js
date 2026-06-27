@@ -1,4 +1,4 @@
-const CACHE_NAME = "trophia-cache-v1";
+const CACHE_NAME = "trophia-cache-v0.0.3";
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",

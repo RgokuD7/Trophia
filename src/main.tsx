@@ -15,9 +15,20 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js')
       .then(reg => {
         console.log('Service Worker registrado con éxito:', reg);
+        // Proactively check for Service Worker updates
+        reg.update();
       })
       .catch(err => {
         console.error('Error al registrar Service Worker:', err);
       });
+
+    // Automatically reload page when a new service worker takes control
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!refreshing) {
+        refreshing = true;
+        window.location.reload();
+      }
+    });
   });
 }
