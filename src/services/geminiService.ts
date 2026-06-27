@@ -524,21 +524,46 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   }
 }
 
-// 5. Analyze meal photo
+// 5. Analyze meal photo with optional description and correction capability
 export async function analyzeFoodByIA(
   apiKey: string,
   input: {
-    image: string; // base64 data URI
+    image?: string | null; // base64 data URI (optional for corrections)
     mealType: string;
+    description?: string;
+    correction?: string;
+    existingIngredients?: string[];
   }
 ): Promise<any> {
-  const { image, mealType } = input;
-  const cleaned = cleanBase64Image(image);
-  const images = [{ mimeType: cleaned.mimeType, data: cleaned.data }];
+  const { image, mealType, description, correction, existingIngredients } = input;
 
-  const prompt = `Analiza esta fotografía de comida para un registro de nutrición del tipo: ${mealType || "comida"}.
-Identifica el plato y sus componentes principales. Estima de forma muy conservadora las calorías totales, carbohidratos (g), proteínas (g) y grasas (g).
-Queremos un enfoque estricto y preciso para evitar subestimar la ingesta calórica.
+  const images: GeminiImage[] = [];
+  if (image) {
+    const cleaned = cleanBase64Image(image);
+    images.push({ mimeType: cleaned.mimeType, data: cleaned.data });
+  }
+
+  let prompt = "";
+  
+  if (correction && existingIngredients && existingIngredients.length > 0) {
+    prompt = `El análisis de comida previo del tipo ${mealType || "comida"} identificó los siguientes ingredientes:
+${existingIngredients.map(ing => `- ${ing}`).join("\n")}
+
+El usuario indica la siguiente corrección o aclaración sobre los ingredientes o porciones:
+"${correction}"
+
+${image ? "Analiza la fotografía de comida adjunta junto con esta corrección." : "Re-evalúa el plato basándote en esta corrección."}
+Ajusta la lista de ingredientes identificados y recalcula con precisión y de forma muy conservadora las calorías totales, carbohidratos (g), proteínas (g) y grasas (g). Queremos evitar subestimar la ingesta calórica.`;
+  } else {
+    prompt = `Analiza esta fotografía de comida para un registro de nutrición del tipo: ${mealType || "comida"}.`;
+    if (description) {
+      prompt += `\nEl usuario indica que el plato contiene o se describe como: "${description}". Utiliza esta descripción para guiar tu identificación de ingredientes.`;
+    }
+    prompt += `\nIdentifica el plato y sus componentes principales. Estima de forma muy conservadora las calorías totales, carbohidratos (g), proteínas (g) y grasas (g).
+Queremos un enfoque estricto y preciso para evitar subestimar la ingesta calórica.`;
+  }
+
+  prompt += `
 
 Debes responder estrictamente en formato JSON con la siguiente estructura:
 {
@@ -547,26 +572,12 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   "protein": número (proteínas estimadas en gramos, entero),
   "carbs": número (carbohidratos estimados en gramos, entero),
   "fat": número (grasas estimadas en gramos, entero),
+  "ingredients": ["ingrediente 1", "ingrediente 2", "ingrediente 3", ...],
   "analysis": "Análisis de los ingredientes identificados, calidad nutricional del plato y consejos para optimizarlo según metas fitness."
 }`;
 
-  try {
-    return await callGeminiAPI(apiKey, prompt, images);
-  } catch (apiError: any) {
-    console.warn("Gemini API error in analyzeFoodByIA, using smart fallback:", apiError);
-    
-    const isBreakfast = mealType === "desayuno";
-    const isDinner = mealType === "cena" || mealType === "colación";
-
-    return {
-      name: isBreakfast ? "Desayuno Equilibrado Registrado" : isDinner ? "Cena Liviana Registrada" : "Almuerzo Proteico Registrado",
-      calories: isBreakfast ? 420 : isDinner ? 380 : 620,
-      protein: isBreakfast ? 22 : isDinner ? 28 : 38,
-      carbs: isBreakfast ? 48 : isDinner ? 22 : 55,
-      fat: isBreakfast ? 14 : isDinner ? 16 : 18,
-      analysis: `[Estimación Rápida de Respaldo] Hemos registrado tu fotografía correctamente. Al estimar tu plato tipo ${mealType || "comida"}, asignamos un balance macro-nutricional estándar saludable. Este plato aporta un excelente balance de proteínas para tu síntesis muscular y carbohidratos complejos de absorción lenta. Puedes ajustar manualmente las porciones en tu bitácora si deseas mayor precisión.`,
-    };
-  }
+  // No custom fallback, let the error bubble up so the UI displays it properly and prompts the user to save/retry.
+  return await callGeminiAPI(apiKey, prompt, images);
 }
 
 export async function generateRecipeFromIngredientsByIA(

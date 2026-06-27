@@ -43,6 +43,9 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
   const [foodPhoto, setFoodPhoto] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [description, setDescription] = useState("");
+  const [correction, setCorrection] = useState("");
+  const [isCorrecting, setIsCorrecting] = useState(false);
 
   // Favorites / Personal History
   const [personalHistory, setPersonalHistory] = useState<FoodItem[]>([]);
@@ -207,6 +210,8 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
     reader.onloadend = () => {
       setFoodPhoto(reader.result as string);
       setAiError(null);
+      setDescription(""); // Reset description for a new photo
+      setCorrection("");
     };
     reader.readAsDataURL(file);
   };
@@ -219,7 +224,8 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
     try {
       const data = await analyzeFoodByIA(apiKey || "", {
         image: foodPhoto,
-        mealType: selectedMealType
+        mealType: selectedMealType,
+        description: description.trim() || undefined
       });
       if (data) {
         const foodItem: FoodItem = {
@@ -229,7 +235,8 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
           carbs: data.carbs,
           fat: data.fat,
           servingSize: "1 Plato",
-          source: "local"
+          source: "local",
+          ingredients: data.ingredients
         };
         setSelectedFood(foodItem);
         setPortionGrams(100);
@@ -239,12 +246,54 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
         setCustomCarbs(data.carbs);
         setCustomFat(data.fat);
       } else {
-        setAiError("No se pudo conectar con el motor de IA.");
+        setAiError("La IA no pudo procesar la imagen de comida. Reintenta o ingresa los detalles manuales.");
       }
     } catch (err: any) {
-      setAiError(`Error de red: ${err.message || "Fallo de conexión"}`);
+      setAiError(`La IA de Gemini no pudo analizar la imagen. Por favor guarda la foto e inténtalo más tarde. Detalles: ${err.message || "Fallo de conexión"}`);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleCorrectFood = async () => {
+    if (!correction.trim() || !selectedFood) return;
+    setIsCorrecting(true);
+    setAiError(null);
+
+    try {
+      const data = await analyzeFoodByIA(apiKey || "", {
+        image: foodPhoto,
+        mealType: selectedMealType,
+        existingIngredients: selectedFood.ingredients || [],
+        correction: correction.trim()
+      });
+
+      if (data) {
+        const foodItem: FoodItem = {
+          name: data.name,
+          calories: data.calories,
+          protein: data.protein,
+          carbs: data.carbs,
+          fat: data.fat,
+          servingSize: "1 Plato",
+          source: "local",
+          ingredients: data.ingredients
+        };
+        setSelectedFood(foodItem);
+        setPortionGrams(100);
+        setCustomName(data.name);
+        setCustomCalories(data.calories);
+        setCustomProtein(data.protein);
+        setCustomCarbs(data.carbs);
+        setCustomFat(data.fat);
+        setCorrection(""); // Clear correction input
+      } else {
+        setAiError("No se pudo procesar la corrección por IA.");
+      }
+    } catch (err: any) {
+      setAiError(`Error al procesar la corrección: ${err.message || "Fallo de conexión"}`);
+    } finally {
+      setIsCorrecting(false);
     }
   };
 
@@ -485,14 +534,32 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                   </div>
 
                   {foodPhoto && !isAnalyzing && (
-                    <button
-                      type="button"
-                      onClick={handleAnalyzeFood}
-                      className="w-full bg-emerald-500 text-white text-xs font-bold py-2.5 rounded-xl transition shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: "3s" }} />
-                      Analizar Plato con IA
-                    </button>
+                    <div className="space-y-3">
+                      <div className="bg-gray-50 dark:bg-white/5 p-3 rounded-2xl border border-gray-200 dark:border-white/10 space-y-1">
+                        <label className="block text-[9.5px] font-black text-gray-500 dark:text-white/40 uppercase tracking-wider">
+                          Descripción Opcional (Recomendado)
+                        </label>
+                        <Input
+                          type="text"
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
+                          placeholder="Ej: almuerzo arroz con pollo..."
+                          className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl focus:border-emerald-500/40 text-xs px-3 h-8.5"
+                          size="md"
+                        />
+                        <span className="text-[8.5px] text-gray-400 dark:text-white/30 block">
+                          Ayuda a la IA a identificar ingredientes ocultos o específicos.
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleAnalyzeFood}
+                        className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-xl transition shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5 animate-pulse" />
+                        Analizar Plato con IA
+                      </button>
+                    </div>
                   )}
 
                   {isAnalyzing && (
@@ -661,7 +728,58 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                   </div>
                   <span className="block text-[8px] text-[#eab308]/60 font-bold font-mono">{selectedFood.name === "" ? "-" : `${fPct}%`}</span>
                 </div>
-              </div>                {/* Portion Control panel (Only shown for database items) */}
+              </div>
+
+              {/* Identified Ingredients & Corrections (only for AI analyzed foods) */}
+              {selectedFood.ingredients && selectedFood.ingredients.length > 0 && (
+                <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-2xl border border-gray-200 dark:border-white/10 space-y-3">
+                  <span className="block text-[10px] font-black text-gray-550 dark:text-white/40 uppercase tracking-widest leading-none">
+                    Ingredientes Encontrados
+                  </span>
+                  
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedFood.ingredients.map((ing, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2.5 py-1 bg-white dark:bg-[#0c0d15] border border-gray-200 dark:border-white/10 text-gray-800 dark:text-gray-250 rounded-xl text-[10.5px] font-medium"
+                      >
+                        • {ing}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Correction input */}
+                  <div className="border-t border-gray-150 dark:border-white/5 pt-3.5 space-y-2">
+                    <label className="block text-[9.5px] font-bold text-gray-500 dark:text-white/40 uppercase tracking-wider">
+                      ¿Corregir ingredientes?
+                    </label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="text"
+                        value={correction}
+                        onChange={(e) => setCorrection(e.target.value)}
+                        placeholder="Ej: este ingrediente es mayo no queso..."
+                        className="flex-1 bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 text-xs rounded-xl focus:border-emerald-500/40 px-3 h-8.5"
+                        size="md"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCorrectFood}
+                        disabled={isCorrecting || !correction.trim()}
+                        className="px-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-200 dark:disabled:bg-white/5 text-white disabled:text-gray-400 dark:disabled:text-white/30 text-[10.5px] font-bold rounded-xl transition flex items-center justify-center gap-1 cursor-pointer shrink-0 shadow-md h-8.5"
+                      >
+                        {isCorrecting ? (
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          "Recalcular"
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Portion Control panel (Only shown for database items) */}
               {selectedFood.name !== "" && (
                 <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-2xl border border-gray-205 dark:border-white/5 space-y-3.5">
                   <div className="flex justify-between items-center">

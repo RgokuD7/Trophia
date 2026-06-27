@@ -129,6 +129,7 @@ export interface FoodItem {
   brand?: string;
   image?: string;
   barcode?: string;
+  ingredients?: string[];
 }
 
 export interface FrequentRoute {
