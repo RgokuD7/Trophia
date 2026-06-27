@@ -621,43 +621,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
     };
   };
 
-  // Reset AI recommendation if key metrics change, so it recalculates with correct data
-  useEffect(() => {
-    setAiGoalRecommendation(null);
-    setRecommendGoalError(null);
-  }, [sex, age, weight, height, bodyFat]);
 
-  // Fetch AI Goal Recommendation on Step 4 mount/reset
-  useEffect(() => {
-    if (step === 4 && !aiGoalRecommendation && !isRecommendingGoal && !recommendGoalError) {
-      const fetchGoalRecommendation = async () => {
-        setIsRecommendingGoal(true);
-        setRecommendGoalError(null);
-        try {
-          const data = await recommendGoalByIA(apiKey, {
-            sex,
-            age,
-            weight,
-            height,
-            bmi,
-            bodyFat,
-          });
-          if (data.recommendedGoal && data.reason) {
-            setAiGoalRecommendation(data);
-            setGoal(data.recommendedGoal);
-          }
-        } catch (err: any) {
-          console.error("Error recommending goal:", err);
-          setRecommendGoalError(err.message || "Error al obtener la recomendación.");
-        } finally {
-          setIsRecommendingGoal(false);
-        }
-      };
-
-      fetchGoalRecommendation();
-    }
-  }, [step, sex, age, weight, height, bodyFat, bmi, apiKey, aiGoalRecommendation, isRecommendingGoal, recommendGoalError]);
- 
   // Cycle fitness tips during the 5-second calculation loading phase
   useEffect(() => {
     if (!isCalculatingBF) {
@@ -801,6 +765,12 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   };
 
   const handleCalculateBodyFat = async () => {
+    // Reset previous AI state
+    setAiGoalRecommendation(null);
+    setRecommendGoalError(null);
+    setAnalysisError(null);
+    setAnalysisResult(null);
+
     setIsCalculatingBF(true);
     setShowCreatineScreen(true);
     const startTime = Date.now();
@@ -2125,7 +2095,16 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                   Selecciona tu objetivo primordial. Esto adaptará tus macronutrientes recomendados (proteínas, carbohidratos y grasas) y el tipo de entrenamiento sugerido.
                 </p>
 
-
+                {!aiGoalRecommendation && (
+                  <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-left space-y-1">
+                    <span className="text-[10px] text-amber-400 font-extrabold uppercase tracking-widest block">
+                      ℹ️ Sin Recomendación de IA
+                    </span>
+                    <p className="text-[10.5px] text-white/60 leading-normal">
+                      Omitiste el cálculo de grasa corporal por fotos o cinta métrica (o el servicio no está disponible). Por favor, inténtalo más adelante si deseas un análisis automatizado. Por ahora, selecciona tu objetivo de forma manual:
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-2.5">
                   {[

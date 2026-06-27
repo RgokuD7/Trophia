@@ -188,18 +188,18 @@ ${metricsInfo}
 
 Por favor, cruza las imágenes visuales con estas mediciones físicas para dar una estimación de grasa corporal extremadamente precisa y coherente. El usuario te ha dado permiso y confía en tu criterio clínico-deportivo. Si alguna medida parece incoherente o difícil de calibrar, haz una síntesis lógica ponderando las imágenes visuales y los cálculos de fórmulas.
 
-Además, basándote en su fisionomía y datos, recomiéndale el mejor objetivo de fitness para su estado actual (escoge estrictamente uno de estos 4 valores exactos para la clave JSON: "lose_weight", "gain_muscle", "aesthetics", "maintenance") y justifica tu recomendación de manera sumamente motivadora e inteligente.
-
-CRÍTICO: En el texto de justificación o análisis ("analysis" o "recommendedGoalReason"), NUNCA menciones los códigos internos en inglés (como "lose_weight", "gain_muscle", "aesthetics", "maintenance"). En su lugar, utiliza siempre sus nombres legibles en español: "Bajar de Peso / Definición", "Ganar Masa Muscular / Volumen", "Recomposición Estética" o "Mantenimiento / Salud".
+Además, basándote en su fisionomía y datos, recomiéndale el mejor objetivo de fitness para su estado actual (escoge estrictamente uno de estos 4 valores exactos para la clave JSON: "lose_weight", "gain_muscle", "aesthetics", "maintenance") y justifica tu recomendación. CRÍTICO: En el texto de justificación o análisis ("analysis" o "recommendedGoalReason"), NUNCA menciones los códigos internos en inglés (como "lose_weight", "gain_muscle", "aesthetics", "maintenance"). En su lugar, utiliza siempre sus nombres legibles en español: "Bajar de Peso / Definición", "Ganar Masa Muscular / Volumen", "Recomposición Estética" o "Mantenimiento / Salud".
 
 CRÍTICO DE CLARIDAD: Si utilizas conceptos técnicos de somatotipos o fisiología (como por ejemplo "somatotipo endomórfico con potencial mesomórfico", "ectomorfo", "recomposición", etc.), NO los elimines ya que dan valor clínico, pero debes agregar inmediatamente después una explicación en palabras sumamente simples, cotidianas y claras para que cualquier usuario lo entienda a la primera (por ejemplo: "es decir, que aunque acumulas grasa fácilmente, tienes una excelente base genética para crear músculo y lucir atlético una vez definas").
+
+CRÍTICO DE FORMATO: En el texto de "analysis", si incluyes viñetas o listas, usa estrictamente guiones simples "- " (ej: "- **Grasa**: Descripción"). NUNCA uses asteriscos "*" como marcadores de viñeta para evitar conflictos de parseo con los doble asteriscos de negrita "**".
 
 Adopta un tono profesional, empático, científico y motivador. Si las imágenes no parecen ser de un cuerpo humano o no permiten realizar la estimación con suficiente certeza, indica un estimado promedio razonable según tu criterio clínico visual y la información biométrica y describe en el texto de 'analysis' cómo lograr una mejor estimación.
 
 Debes responder estrictamente en formato JSON con la siguiente estructura:
 {
   "bodyFat": número (porcentaje de grasa estimado, ej: 18.5, o null si es completamente imposible de estimar),
-  "analysis": "Explicación detallada de la composición observada (somatotipo, masa muscular, distribución de grasa en torso y extremidades inferiores si se aprecian, y su relación con los rasgos visibles y mediciones proporcionadas) junto a recomendaciones de entrenamiento/alimentación coherentes. Utiliza formato de Markdown básico (como **negrita** para resaltar hallazgos clave o métricas importantes) dentro del texto.",
+  "analysis": "Explicación detallada de la composición observada (somatotipo, masa muscular, distribución de grasa en torso y extremidades inferiores si se aprecian, y su relación con los rasgos visibles y mediciones proporcionadas) junto a recomendaciones de entrenamiento/alimentación coherentes. Utiliza formato de Markdown básico (como **negrita** para resaltar hallazgos clave o métricas importantes) dentro del texto. Recuerda usar únicamente guiones simples para listas.",
   "recommendedGoal": "lose_weight" | "gain_muscle" | "aesthetics" | "maintenance",
   "recommendedGoalReason": "Explicación muy motivadora, breve (máximo 2-3 oraciones en español) de por qué este objetivo es ideal para su fisionomía, basándote en su grasa y composición corporal. Usa los nombres descriptivos en español."
 }`;
