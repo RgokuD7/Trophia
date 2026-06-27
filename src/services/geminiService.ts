@@ -169,68 +169,8 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   try {
     return await callGeminiAPI(apiKey, prompt, images);
   } catch (apiError: any) {
-    console.warn("Gemini API error in analyzeFatByIA, using smart fallback:", apiError);
-    
-    // Calculate fallback estimated fat percent based on inputs
-    let estimatedFat = 15;
-    if (caliperEstimatedFat !== undefined && caliperEstimatedFat > 0) {
-      estimatedFat = caliperEstimatedFat;
-    } else if (navyEstimatedFat !== undefined && navyEstimatedFat > 0) {
-      estimatedFat = navyEstimatedFat;
-    } else {
-      if (sex === "female") {
-        estimatedFat = 24;
-        if (waist && height) {
-          const ratio = Number(waist) / height;
-          estimatedFat = Math.round((ratio * 100 - 18) * 10) / 10;
-        }
-      } else {
-        if (waist && height) {
-          const ratio = Number(waist) / height;
-          estimatedFat = Math.round((ratio * 100 - 28) * 10) / 10;
-        }
-      }
-    }
-
-    if (sex === "female") {
-      estimatedFat = Math.max(12, Math.min(estimatedFat, 45));
-    } else {
-      estimatedFat = Math.max(5, Math.min(estimatedFat, 40));
-    }
-
-    let recommendedGoal: FitnessGoal = "aesthetics";
-    let recommendedGoalReason = "";
-
-    if (sex === "female") {
-      if (estimatedFat > 30) {
-        recommendedGoal = "lose_weight";
-        recommendedGoalReason = `Tu porcentaje de grasa estimado del ${estimatedFat}% se encuentra por encima del rango óptimo. Priorizar un déficit calórico moderado te ayudará a reducir grasa preservando tu masa muscular.`;
-      } else if (estimatedFat < 20) {
-        recommendedGoal = "gain_muscle";
-        recommendedGoalReason = `Con un porcentaje de grasa del ${estimatedFat}%, tienes un excelente margen para enfocarte en un superávit calórico controlado y construir masa muscular magra.`;
-      } else {
-        recommendedGoal = "aesthetics";
-        recommendedGoalReason = `Tu grasa corporal del ${estimatedFat}% es ideal para una recomposición corporal. Mantener calorías cercanas al mantenimiento te permitirá perder grasa y tonificar simultáneamente.`;
-      }
-    } else {
-      if (estimatedFat > 22) {
-        recommendedGoal = "lose_weight";
-        recommendedGoalReason = `Tu porcentaje de grasa estimado del ${estimatedFat}% indica exceso de tejido adiposo. Un enfoque de definición controlado optimizará tu entorno hormonal y salud general.`;
-      } else if (estimatedFat < 13) {
-        recommendedGoal = "gain_muscle";
-        recommendedGoalReason = `Tu bajo porcentaje de grasa (${estimatedFat}%) es idóneo para iniciar una etapa de volumen limpio, maximizando las ganancias de fuerza y tamaño muscular.`;
-      } else {
-        recommendedGoal = "aesthetics";
-        recommendedGoalReason = `Tu porcentaje de grasa del ${estimatedFat}% está en rango intermedio, perfecto para una recomposición estética. Podrás perder grasa rebelde mientras construyes músculo con entrenamientos intensos.`;
-      }
-    }
-
-    return {
-      bodyFat: estimatedFat,
-      analysis: `[Estimación Biométrica Inteligente] Analizamos tus medidas y perfil físico para asegurar un diagnóstico preciso: **${sex === "female" ? "Mujer" : "Varón"}** de **${age || 25} años** con un porcentaje de grasa calculado de **${estimatedFat}%**. Se aprecia una **base corporal sólida** con excelente potencial para optimizar tu masa muscular y reducir tejido graso de manera progresiva. Te sugerimos seguir los **macros diarios** y planificar entrenamientos constantes con **sobrecarga progresiva**.`,
-      recommendedGoal: recommendedGoal,
-      recommendedGoalReason: recommendedGoalReason,
-    };
+    console.error("Gemini API error in analyzeFatByIA:", apiError);
+    throw apiError;
   }
 }
 
@@ -276,45 +216,8 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   try {
     return await callGeminiAPI(apiKey, prompt);
   } catch (apiError: any) {
-    console.warn("Gemini API error in recommendGoalByIA, using smart fallback:", apiError);
-    
-    let estimatedFat = bodyFat;
-    if (estimatedFat === undefined || estimatedFat === null) {
-      if (bmi !== undefined && bmi !== null) {
-        estimatedFat = bmi > 25 ? 24 : 15;
-      } else {
-        estimatedFat = sex === "female" ? 24 : 15;
-      }
-    }
-
-    let recommendedGoal: FitnessGoal = "aesthetics";
-    let reason = "";
-
-    if (sex === "female") {
-      if (estimatedFat > 30) {
-        recommendedGoal = "lose_weight";
-        reason = `Con un porcentaje de grasa corporal estimado del **${estimatedFat}%**, iniciar una fase de **déficit calórico moderado** te ayudará a reducir tejido graso de manera segura, optimizando tu composición corporal y energía diaria.`;
-      } else if (estimatedFat < 20) {
-        recommendedGoal = "gain_muscle";
-        reason = `Tu porcentaje de grasa actual (**${estimatedFat}%**) te brinda un margen perfecto para entrar en **superávit controlado**, permitiéndote construir masa muscular limpia y ganar fuerza de forma óptima.`;
-      } else {
-        recommendedGoal = "aesthetics";
-        reason = `Con un % de grasa intermedio del **${estimatedFat}%**, tu mejor opción es la **recomposición corporal**: comer cerca de tus calorías de mantenimiento con alta proteína para oxidar grasa y ganar tono muscular simultáneamente.`;
-      }
-    } else {
-      if (estimatedFat > 22) {
-        recommendedGoal = "lose_weight";
-        reason = `Dado tu % de grasa estimado del **${estimatedFat}%**, la recomendación científica es priorizar un **déficit calórico progresivo**. Esto reducirá tu grasa corporal, mejorará tu sensibilidad a la insulina y definirá tus músculos.`;
-      } else if (estimatedFat < 13) {
-        recommendedGoal = "gain_muscle";
-        reason = `Tienes un porcentaje de grasa óptimo e ideal (**${estimatedFat}%**) para un ciclo de **volumen limpio**. Podrás asimilar los nutrientes hacia la hipertrofia muscular minimizando la ganancia adiposa.`;
-      } else {
-        recommendedGoal = "aesthetics";
-        reason = `Tu grasa del **${estimatedFat}%** es perfecta para un proceso de **recomposición estética**. Te sugerimos entrenar pesado y comer en normocaloría para perder grasa rebelde mientras desarrollas masa muscular magra.`;
-      }
-    }
-
-    return { recommendedGoal, reason };
+    console.error("Gemini API error in recommendGoalByIA:", apiError);
+    throw apiError;
   }
 }
 
@@ -351,19 +254,16 @@ export async function generateRecommendationsByIA(
     mediterranean: "Mediterránea",
   };
 
-  const prompt = `Actúa como un Coach de Fitness y Nutrición Clínico de élite. Tu tarea es generar recomendaciones personalizadas detalladas y altamente profesionales para el usuario basándote en su perfil físico, nivel y sus metas deportivas.
+  const prompt = `Actúas como un Asesor Deportivo de Élite, Fisiólogo y Nutricionista Senior de la aplicación Trophia. Tu objetivo es brindarle al usuario recomendaciones personalizadas de primer nivel para sus metas.
 
-[DATOS DEL USUARIO]:
-- Nombre: ${profile.name || "Usuario"}
-- Edad: ${profile.age || 25} años
+[DATOS DEL PERFIL DEL USUARIO]:
+- Edad: ${profile.age} años
 - Sexo Biológico: ${profile.sex === "female" ? "Femenino" : "Masculino"}
-- Peso: ${profile.weight || 70} kg
-- Altura: ${profile.height || 170} cm
-- Índice de Masa Corporal (IMC): ${profile.bmi || "No calculado"}
-- Porcentaje de Grasa Corporal estimado: ${profile.bodyFat !== undefined ? `${profile.bodyFat}%` : "No provisto aún"}
-- Objetivo Principal: ${goalLabels[profile.goal] || profile.goal || "Mantenimiento"}
-- Nivel de experiencia: ${levelLabels[profile.level] || profile.level || "Principiante"}
-- Entorno de entrenamiento: ${envLabels[profile.environment] || profile.environment || "Casa"}
+- Peso: ${profile.weight} kg
+- Altura: ${profile.height} cm
+- Meta de Fitness: ${goalLabels[profile.goal] || profile.goal}
+- Nivel de Experiencia: ${levelLabels[profile.level] || profile.level}
+- Entorno de Entrenamiento: ${envLabels[profile.environment] || profile.environment}
 - Equipamiento disponible: ${Array.isArray(profile.equipment) ? profile.equipment.join(", ") : "Peso corporal"}
 - Nivel de conocimiento nutricional: ${profile.nutritionKnowledge || "Medio"}
 - Tipo de Dieta: ${dietLabels[profile.dietType || ""] || profile.dietType || "Estándar (Todo / Sin restricciones)"}
@@ -382,18 +282,8 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   try {
     return await callGeminiAPI(apiKey, prompt);
   } catch (apiError: any) {
-    console.warn("Gemini API error in generateRecommendationsByIA, using smart fallback:", apiError);
-    
-    const goalName = goalLabels[profile.goal] || profile.goal || "Mantenimiento";
-    const levelName = levelLabels[profile.level] || profile.level || "Principiante";
-    const envName = envLabels[profile.environment] || profile.environment || "Gimnasio";
-
-    return {
-      summary: `Con tu meta de "${goalName}" y un nivel de experiencia "${levelName}", tu fisionomía actual ofrece un excelente punto de partida para tu recomposición física. Ponderando tu grasa corporal estimada del ${profile.bodyFat !== undefined ? `${profile.bodyFat}%` : "nivel óptimo"}, estructurar un plan disciplinado te asegurará un progreso continuo sin riesgo de estancamientos.`,
-      nutritionAdvice: `Te recomendamos mantener tu ingesta objetivo en ${profile.dailyCalorieTarget || 2000} kcal, con un reparto estratégico de tus macronutrientes: ${profile.proteinTarget || 140}g de proteínas para mantener tu estructura muscular activa, ${profile.carbsTarget || 200}g de carbohidratos complejos y ${profile.fatTarget || 60}g de grasas esenciales para tu óptimo balance endocrino.`,
-      trainingAdvice: `Enfócate en estructurar tu entrenamiento en "${envName}" con los recursos disponibles (${Array.isArray(profile.equipment) ? profile.equipment.join(", ") : "Peso corporal"}). Planifica de 3 a 5 sesiones semanales de fuerza o acondicionamiento, concentrando tu energía en la sobrecarga progresiva y el control técnico de cada movimiento.`,
-      healthCheck: `Asegura entre 7 y 8 horas diarias de sueño de calidad para promover la regeneración muscular y hormonal. Mantén una ingesta de líquidos constante (alrededor de 35 ml de agua por cada kg de peso corporal) para optimizar tu rendimiento y evitar la fatiga neuromuscular.`,
-    };
+    console.error("Gemini API error in generateRecommendationsByIA:", apiError);
+    throw apiError;
   }
 }
 
@@ -465,62 +355,8 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   try {
     return await callGeminiAPI(apiKey, prompt);
   } catch (apiError: any) {
-    console.warn("Gemini API error in generateRoutineByIA, using smart fallback:", apiError);
-    
-    let name = "Rutina de Acondicionamiento Físico";
-    let warmup = ["Movilidad articular general de hombros, caderas - 2 min", "Activación cardiovascular suave - 2 min"];
-    let exercises = [];
-    let cooldown = ["Estiramientos estáticos suaves - 2 min", "Respiraciones de vuelta a la calma - 1 min"];
-
-    if (environment === "home") {
-      name = goal === "gain_muscle" ? "Volumen Muscular en Casa (Alta Densidad)" : "Definición y Cardio en Casa";
-      
-      const pushupEx = jointPainAreas.includes("shoulder") 
-        ? { name: "Flexiones de pecho sobre pared o rodillas (rango controlado)", sets: 3, reps: 10, weight: 0, caloriesBurnedPerSet: 5 }
-        : { name: "Flexiones de pecho (Push-ups) con codos a 45 grados", sets: 3, reps: 12, weight: 0, caloriesBurnedPerSet: 6 };
-      
-      const squatEx = jointPainAreas.includes("knee")
-        ? { name: "Sentadillas parciales de 60-90 grados (stance ancho)", sets: 4, reps: 12, weight: 0, caloriesBurnedPerSet: 5 }
-        : jointPainAreas.includes("back")
-        ? { name: "Sentadillas búlgaras divididas con peso corporal", sets: 3, reps: 10, weight: 0, caloriesBurnedPerSet: 6 }
-        : { name: "Sentadillas libres (Air Squats) profundas", sets: 4, reps: 15, weight: 0, caloriesBurnedPerSet: 7 };
-
-      const lungeEx = jointPainAreas.includes("knee") || jointPainAreas.includes("back")
-        ? { name: "Puentes de glúteos en el suelo (Glute Bridges)", sets: 3, reps: 15, weight: 0, caloriesBurnedPerSet: 5 }
-        : { name: "Zancadas dinámicas alternas (Lunges)", sets: 3, reps: 12, weight: 0, caloriesBurnedPerSet: 6 };
-
-      exercises = [
-        pushupEx,
-        squatEx,
-        lungeEx,
-        { name: "Plancha abdominal isométrica", sets: 3, reps: 45, weight: 0, caloriesBurnedPerSet: 4 },
-        { name: "Fondos en silla para tríceps (rango parcial)", sets: 3, reps: 10, weight: 0, caloriesBurnedPerSet: 5 },
-      ];
-    } else {
-      name = goal === "gain_muscle" ? "Hipertrofia Elite de Cuerpo Completo" : "Fuerza y Gasto Calórico en Gimnasio";
-      
-      const mainSquat = jointPainAreas.includes("knee")
-        ? { name: "Prensa de piernas inclinada a 45 grados (pies altos y separados)", sets: 4, reps: 12, weight: level === "advanced" ? 80 : level === "intermediate" ? 50 : 25, caloriesBurnedPerSet: 7 }
-        : jointPainAreas.includes("back")
-        ? { name: "Sentadilla búlgara con mancuernas (columna erguida)", sets: 3, reps: 10, weight: level === "advanced" ? 18 : level === "intermediate" ? 12 : 6, caloriesBurnedPerSet: 6 }
-        : { name: "Sentadilla libre con barra trasera", sets: 4, reps: 10, weight: level === "advanced" ? 60 : level === "intermediate" ? 40 : 20, caloriesBurnedPerSet: 8 };
-
-      const mainPress = jointPainAreas.includes("shoulder")
-        ? { name: "Press de banca con agarre estrecho cerrado (codos pegados)", sets: 4, reps: 10, weight: level === "advanced" ? 45 : level === "intermediate" ? 25 : 12, caloriesBurnedPerSet: 6 }
-        : { name: "Press de banca plano con barra o mancuernas", sets: 4, reps: 10, weight: level === "advanced" ? 50 : level === "intermediate" ? 30 : 15, caloriesBurnedPerSet: 7 };
-
-      const mainRow = { name: "Remo prono apoyado en banco o polea baja", sets: 3, reps: 12, weight: level === "advanced" ? 45 : level === "intermediate" ? 25 : 12, caloriesBurnedPerSet: 6 };
-      
-      exercises = [
-        mainSquat,
-        mainPress,
-        mainRow,
-        { name: "Curl de bíceps alterno con mancuernas de pie", sets: 3, reps: 12, weight: level === "advanced" ? 14 : level === "intermediate" ? 10 : 6, caloriesBurnedPerSet: 5 },
-        { name: "Elevaciones laterales para hombro lateral con polea o mancuerna", sets: 3, reps: 15, weight: level === "advanced" ? 10 : level === "intermediate" ? 6 : 3, caloriesBurnedPerSet: 5 },
-      ];
-    }
-
-    return { name, warmup, exercises, cooldown };
+    console.error("Gemini API error in generateRoutineByIA:", apiError);
+    throw apiError;
   }
 }
 
@@ -612,28 +448,8 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   try {
     return await callGeminiAPI(apiKey, prompt);
   } catch (apiError: any) {
-    console.warn("Gemini API error in generateRecipeFromIngredientsByIA, using fallback:", apiError);
-    
-    // Quick fallback recipe based on what was selected
-    const mainIngredient = ingredients.length > 0 ? ingredients[0] : "Ingredientes seleccionados";
-    const name = `Plato Rápido de ${mainIngredient.charAt(0).toUpperCase() + mainIngredient.slice(1)}`;
-    
-    return {
-      name: `${name} Trophia`,
-      ingredientsList: ingredients.map(ing => `100g de ${ing} fresco`),
-      instructions: [
-        "Lava y corta los ingredientes seleccionados.",
-        "Cocínalos en una sartén antiadherente con un hilo de aceite a fuego medio por 8-12 minutos.",
-        "Sazona al gusto con una pizca de sal, pimienta o tus especias favoritas.",
-        "Sirve caliente en un plato y disfruta."
-      ],
-      calories: 320,
-      protein: 18,
-      carbs: 25,
-      fat: 12,
-      servingSize: "1 plato hondo",
-      tip: "Receta rápida de respaldo. Aporta carbohidratos de fácil absorción y una base proteica moderada ideal para mantener tu energía estable."
-    };
+    console.error("Gemini API error in generateRecipeFromIngredientsByIA:", apiError);
+    throw apiError;
   }
 }
 
@@ -674,41 +490,8 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   try {
     return await callGeminiAPI(apiKey, prompt);
   } catch (apiError: any) {
-    console.warn("Gemini API error in adjustLoggedMealByChatByIA, using simple client-side parsing fallback:", apiError);
-    
-    // Quick client-side regex fallback
-    let multiplier = 0.75; // default fallback adjustment
-    let explanation = "Se redujo la porción a un 75% aproximado de forma preventiva.";
-    
-    const msg = userMessage.toLowerCase();
-    if (msg.includes("mitad") || msg.includes("50%")) {
-      multiplier = 0.5;
-      explanation = "Se dividieron las porciones al 50% (mitad de plato).";
-    } else if (msg.includes("doble") || msg.includes("2 veces") || msg.includes("200%")) {
-      multiplier = 2.0;
-      explanation = "Se duplicaron las porciones (2x).";
-    } else if (msg.includes("tercio") || msg.includes("30%")) {
-      multiplier = 0.66;
-      explanation = "Se descontó un tercio del plato (consumido 66%).";
-    } else if (msg.includes("cuarto") || msg.includes("25%")) {
-      multiplier = 0.25;
-      explanation = "Se redujo al 25% (un cuarto de porción).";
-    } else if (msg.includes("tres cuartos") || msg.includes("75%")) {
-      multiplier = 0.75;
-      explanation = "Se estimó un 75% consumido (dejó un cuarto).";
-    } else if (msg.includes("todo") || msg.includes("completo") || msg.includes("entero")) {
-      multiplier = 1.0;
-      explanation = "Se mantuvo el registro de plato entero (100%).";
-    }
-    
-    return {
-      name: `${meal.name} (Ajustado)`,
-      calories: Math.round(meal.calories * multiplier),
-      protein: Math.round(meal.protein * multiplier),
-      carbs: Math.round(meal.carbs * multiplier),
-      fat: Math.round(meal.fat * multiplier),
-      adjustmentExplanation: `[Filtro Rápido] ${explanation}`
-    };
+    console.error("Gemini API error in adjustLoggedMealByChatByIA:", apiError);
+    throw apiError;
   }
 }
 
@@ -747,88 +530,8 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   try {
     return await callGeminiAPI(apiKey, prompt);
   } catch (apiError: any) {
-    console.warn("Gemini API error in suggestAlternativeExercisesByIA, using fallback:", apiError);
-    
-    // Quick fallback alternatives based on name matching
-    const name = exerciseName.toLowerCase();
-    let alternatives = [];
-    
-    if (name.includes("pecho") || name.includes("bench") || name.includes("press") || name.includes("militar") || name.includes("push")) {
-      alternatives = [
-        {
-          name: "Flexiones de Brazos Clásicas",
-          equipmentNeeded: "Peso corporal",
-          difficulty: "Fácil",
-          repsText: "3 series de 12 repeticiones",
-          justification: "Excelente ejercicio básico para trabajar pectorales y tríceps utilizando únicamente la gravedad."
-        },
-        {
-          name: "Fondos en Paralelas / Silla",
-          equipmentNeeded: "Peso corporal o Silla",
-          difficulty: "Medio",
-          repsText: "3 series de 10 repeticiones",
-          justification: "Enfoca el esfuerzo en la porción inferior del pecho y tríceps, fácil de hacer en casa con un mueble estable."
-        },
-        {
-          name: "Flexiones con Manos Juntas (Diamante)",
-          equipmentNeeded: "Peso corporal",
-          difficulty: "Difícil",
-          repsText: "3 series de 8 repeticiones",
-          justification: "Aumenta la carga en la porción interna del pectoral y demanda gran estabilidad de tríceps."
-        }
-      ];
-    } else if (name.includes("sentadilla") || name.includes("pierna") || name.includes("zancada") || name.includes("squat") || name.includes("femoral") || name.includes("gluteo")) {
-      alternatives = [
-        {
-          name: "Sentadillas Búlgaras",
-          equipmentNeeded: "Peso corporal o Silla/Banco",
-          difficulty: "Medio",
-          repsText: "3 series de 10 repeticiones por pierna",
-          justification: "Excelente trabajo de aislamiento de cuádriceps y glúteos, reduciendo la carga en la columna lumbar."
-        },
-        {
-          name: "Zancadas en Reversa (Lunges)",
-          equipmentNeeded: "Peso corporal",
-          difficulty: "Fácil",
-          repsText: "3 series de 12 repeticiones por lado",
-          justification: "Movimiento funcional dinámico enfocado en el equilibrio, cuádriceps, glúteos e isquiotibiales."
-        },
-        {
-          name: "Puente de Glúteos Unilateral",
-          equipmentNeeded: "Peso corporal",
-          difficulty: "Fácil",
-          repsText: "3 series de 15 repeticiones",
-          justification: "Excelente trabajo enfocado en la cadena posterior (glúteos e isquiotibiales) sin riesgo de sobrecarga."
-        }
-      ];
-    } else {
-      // General/Core/Back
-      alternatives = [
-        {
-          name: "Plancha Abdominal Activa",
-          equipmentNeeded: "Peso corporal",
-          difficulty: "Fácil",
-          repsText: "3 series de 40 segundos",
-          justification: "Fortalece todo el core y los estabilizadores escapulares de forma estática y segura."
-        },
-        {
-          name: "Superman (Extensión Lumbar)",
-          equipmentNeeded: "Peso corporal",
-          difficulty: "Fácil",
-          repsText: "3 series de 15 repeticiones",
-          justification: "Trabaja la cadena lumbar y dorsal para mejorar la postura y balancear el desarrollo muscular posterior."
-        },
-        {
-          name: "Flexiones del Caminante (Walkouts)",
-          equipmentNeeded: "Peso corporal",
-          difficulty: "Medio",
-          repsText: "3 series de 8 repeticiones",
-          justification: "Movimiento dinámico de cuerpo entero que trabaja core, hombros y flexibilidad de la cadena posterior."
-        }
-      ];
-    }
-    
-    return { alternatives };
+    console.error("Gemini API error in suggestAlternativeExercisesByIA:", apiError);
+    throw apiError;
   }
 }
 
@@ -859,27 +562,8 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   try {
     return await callGeminiAPI(apiKey, prompt);
   } catch (apiError: any) {
-    console.warn("Gemini API error in analyzeInjuryByIA, using fallback:", apiError);
-    
-    return {
-      possibleCauses: [
-        "Sobrecarga de tendones o fatiga acumulada en las fibras musculares locales.",
-        "Tensión por mala técnica o desbalance muscular durante ejercicios pesados."
-      ],
-      exercisesToAvoid: [
-        "Cualquier ejercicio con carga directa que reproduzca el dolor original.",
-        "Movimientos explosivos o que estiren excesivamente el músculo lesionado."
-      ],
-      safeAlternatives: [
-        "Entrenamientos de bajo impacto que mantengan la circulación sin dolor.",
-        "Trabajar otros grupos musculares sanos para evitar la atrofia por desuso."
-      ],
-      warmupTips: [
-        "Calentamiento dinámico prolongado (10-15 minutos) específico para la zona.",
-        "Iniciar con series de aproximación muy ligeras antes de meter peso."
-      ],
-      medicalWarning: "ADVERTENCIA: Esta es una recomendación educativa generada por IA. Si la molestia persiste, limita tu movilidad o se acompaña de hinchazón, calor local u hormigueos, suspende inmediatamente el ejercicio y consulta a un especialista médico o fisioterapeuta."
-    };
+    console.error("Gemini API error in analyzeInjuryByIA:", apiError);
+    throw apiError;
   }
 }
 
@@ -916,143 +600,8 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   try {
     return await callGeminiAPI(apiKey, prompt);
   } catch (apiError: any) {
-    console.warn("Gemini API error in generateGroceryListByIA, using smart fallback:", apiError);
-    
-    const diet = profile.dietType || "standard";
-    let categories = [];
-    
-    if (diet === "vegan") {
-      categories = [
-        {
-          name: "Proteínas Veganas y Legumbres",
-          items: [
-            { name: "Tofu firme orgánico", quantity: "1.0 kg", nutritionalValue: "Proteína vegetal básica versátil" },
-            { name: "Lentejas secas o en conserva", quantity: "500g", nutritionalValue: "Proteína y fibra de lenta digestión" },
-            { name: "Garbanzos", quantity: "500g", nutritionalValue: "Excelente carbohidrato complejo proteico" },
-            { name: "Tempeh o Seitán", quantity: "400g", nutritionalValue: "Alta densidad de proteína vegetal" }
-          ]
-        },
-        {
-          name: "Cereales y Tubérculos",
-          items: [
-            { name: "Avena arrollada integral", quantity: "800g", nutritionalValue: "Carbohidratos complejos de avena" },
-            { name: "Arroz integral o Quinoa", quantity: "600g", nutritionalValue: "Cereal completo con aminoácidos esenciales" },
-            { name: "Camote o Boniato", quantity: "1.2 kg", nutritionalValue: "Carbohidratos ricos en vitamina A y potasio" }
-          ]
-        },
-        {
-          name: "Verdulería y Frutas",
-          items: [
-            { name: "Espinacas frescas", quantity: "300g", nutritionalValue: "Vitaminas, hierro y minerales" },
-            { name: "Plátanos / Bananos", quantity: "1 docena", nutritionalValue: "Energía rápida y potasio para entrenar" },
-            { name: "Manzanas o Arándanos", quantity: "500g", nutritionalValue: "Antioxidantes y fibra" },
-            { name: "Brócoli o Coliflor", quantity: "1.0 kg", nutritionalValue: "Crucíferas ricas en micronutrientes" }
-          ]
-        },
-        {
-          name: "Frutos Secos, Semillas y Grasas",
-          items: [
-            { name: "Palta / Aguacate", quantity: "4 unidades", nutritionalValue: "Grasas monoinsaturadas saludables" },
-            { name: "Mantequilla de maní o almendras", quantity: "1 frasco", nutritionalValue: "Grasas densas y aporte proteico" },
-            { name: "Semillas de chía o linaza", quantity: "200g", nutritionalValue: "Ácidos grasos esenciales Omega-3" }
-          ]
-        }
-      ];
-    } else if (diet === "vegetarian") {
-      categories = [
-        {
-          name: "Huevos, Lácteos y Tofu",
-          items: [
-            { name: "Huevos enteros de gallina", quantity: "2 docenas", nutritionalValue: "Proteína de referencia y grasas saludables" },
-            { name: "Queso cottage o Yogur griego", quantity: "1.2 kg", nutritionalValue: "Proteína de caseína de liberación lenta" },
-            { name: "Tofu firme", quantity: "500g", nutritionalValue: "Proteína vegetal densa" }
-          ]
-        },
-        {
-          name: "Cereales, Tubérculos y Legumbres",
-          items: [
-            { name: "Avena integral", quantity: "700g", nutritionalValue: "Energía estable y fibra saciante" },
-            { name: "Quinoa", quantity: "500g", nutritionalValue: "Carbohidrato completo" },
-            { name: "Lentejas o Frijoles negros", quantity: "600g", nutritionalValue: "Base proteica de lenta absorción" }
-          ]
-        },
-        {
-          name: "Verduras, Frutas y Grasas",
-          items: [
-            { name: "Palta / Aguacate", quantity: "4 unidades", nutritionalValue: "Grasas cardiosaludables" },
-            { name: "Espinaca o Brócoli", quantity: "800g", nutritionalValue: "Micronutrientes esenciales" },
-            { name: "Plátanos", quantity: "10 unidades", nutritionalValue: "Carbohidratos pre-entrenamiento" },
-            { name: "Nueces o Almendras", quantity: "250g", nutritionalValue: "Grasas esenciales y saciedad" }
-          ]
-        }
-      ];
-    } else if (diet === "keto") {
-      categories = [
-        {
-          name: "Carnes, Pescados y Proteínas",
-          items: [
-            { name: "Pechuga o Muslo de pollo", quantity: "1.5 kg", nutritionalValue: "Proteína básica para hipertrofia" },
-            { name: "Carne de res molida magra", quantity: "800g", nutritionalValue: "Proteína y hierro" },
-            { name: "Salmón o Atún en agua", quantity: "600g", nutritionalValue: "Proteína de alta calidad y grasas omega-3" },
-            { name: "Huevos de gallina", quantity: "2 docenas", nutritionalValue: "La mejor fuente de grasas y proteínas grasas" }
-          ]
-        },
-        {
-          name: "Lácteos y Grasas Saludables",
-          items: [
-            { name: "Aceite de coco o de oliva extra virgen", quantity: "1 botella", nutritionalValue: "Grasas saludables básicas para cetosis" },
-            { name: "Palta / Aguacate", quantity: "6 unidades", nutritionalValue: "Grasas y potasio esencial" },
-            { name: "Mantequilla o Ghee", quantity: "250g", nutritionalValue: "Grasas saturadas estables para cocinar" },
-            { name: "Queso parmesano o cheddar", quantity: "300g", nutritionalValue: "Grasas, sodio y proteínas" }
-          ]
-        },
-        {
-          name: "Verduras Bajas en Carbohidratos",
-          items: [
-            { name: "Espinacas o Acelgas", quantity: "500g", nutritionalValue: "Fibra, magnesio y potasio" },
-            { name: "Brócoli o Espárragos", quantity: "800g", nutritionalValue: "Fibra saciante baja en carbohidratos" }
-          ]
-        }
-      ];
-    } else {
-      categories = [
-        {
-          name: "Proteínas y Carnes",
-          items: [
-            { name: "Pechuga de pollo fileteada", quantity: "1.5 kg", nutritionalValue: "Proteína magra para construcción muscular" },
-            { name: "Lomo de cerdo o res magra", quantity: "800g", nutritionalValue: "Proteína, zinc y hierro" },
-            { name: "Atún al agua en conserva", quantity: "4 latas", nutritionalValue: "Proteína rápida, baja en grasas" },
-            { name: "Huevos enteros", quantity: "2 docenas", nutritionalValue: "Proteína y grasas esenciales" }
-          ]
-        },
-        {
-          name: "Cereales y Tubérculos",
-          items: [
-            { name: "Arroz integral o Quinoa", quantity: "800g", nutritionalValue: "Carbohidratos complejos" },
-            { name: "Avena integral", quantity: "1.0 kg", nutritionalValue: "Carbohidratos de avena saciantes" },
-            { name: "Patatas o Camotes", quantity: "1.5 kg", nutritionalValue: "Carbohidratos de fácil digestión" }
-          ]
-        },
-        {
-          name: "Lácteos y Derivados",
-          items: [
-            { name: "Yogur griego natural sin azúcar", quantity: "1.0 kg", nutritionalValue: "Proteínas lácteas y probióticos" },
-            { name: "Leche descremada o vegetal", quantity: "2 litros", nutritionalValue: "Base líquida proteica" }
-          ]
-        },
-        {
-          name: "Verdulería y Grasas",
-          items: [
-            { name: "Plátanos", quantity: "1 docena", nutritionalValue: "Potasio y energía pre-entreno" },
-            { name: "Brócoli y Espinacas", quantity: "1.2 kg", nutritionalValue: "Fito-nutrientes y fibra" },
-            { name: "Palta / Aguacate", quantity: "4 unidades", nutritionalValue: "Grasas monoinsaturadas" },
-            { name: "Aceite de oliva extra virgen", quantity: "1 botella", nutritionalValue: "Grasas saludables de cocina" }
-          ]
-        }
-      ];
-    }
-    
-    return { categories };
+    console.error("Gemini API error in generateGroceryListByIA:", apiError);
+    throw apiError;
   }
 }
 
@@ -1085,87 +634,8 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   try {
     return await callGeminiAPI(apiKey, prompt);
   } catch (apiError: any) {
-    console.warn("Gemini API error in suggestFoodSubstitutesByIA, using fallback:", apiError);
-    
-    // Quick fallback based on common ingredient matches
-    const name = foodOrIngredient.toLowerCase();
-    let substitutes = [];
-    
-    if (name.includes("azucar") || name.includes("azúcar") || name.includes("dulce")) {
-      substitutes = [
-        {
-          name: dietType === "keto" ? "Eritritol o Alulosa" : "Miel de Abeja Orgánica",
-          ratioText: dietType === "keto" ? "1 a 1 en volumen" : "3/4 de la cantidad original",
-          benefit: dietType === "keto" ? "Libre de calorías y no eleva la glucosa en sangre." : "Aporta enzimas activas y antioxidantes naturales."
-        },
-        {
-          name: "Stevia natural en hojas o extracto",
-          ratioText: "Unas pocas gotas al gusto",
-          benefit: "Endulzante sin calorías que no altera la respuesta insulínica."
-        },
-        {
-          name: dietType === "vegan" || dietType === "vegetarian" ? "Jarabe de arce puro (Maple syrup)" : "Puré de manzana o plátano maduro",
-          ratioText: "1 a 1 en volumen",
-          benefit: "Aporta dulzor natural junto con fibra alimentaria que ralentiza la absorción."
-        }
-      ];
-    } else if (name.includes("leche") || name.includes("lácteo") || name.includes("lacteo") || name.includes("queso")) {
-      substitutes = [
-        {
-          name: "Bebida de almendras sin azúcar",
-          ratioText: "1 a 1 en volumen",
-          benefit: "Baja en calorías, libre de lactosa y apta para regímenes veganos/keto."
-        },
-        {
-          name: "Bebida de avena integral",
-          ratioText: "1 a 1 en volumen",
-          benefit: "Aporta carbohidratos complejos y una textura cremosa ideal para batidos."
-        },
-        {
-          name: "Leche de coco light (en lata o cartón)",
-          ratioText: "1 a 1 en volumen",
-          benefit: "Aporta ácidos grasos de cadena media (MCT) altamente saciantes y energía limpia."
-        }
-      ];
-    } else if (name.includes("huevo")) {
-      substitutes = [
-        {
-          name: "Semillas de chía o linaza activadas (Huevo de chía)",
-          ratioText: "1 cucharada de chía + 3 de agua por cada huevo",
-          benefit: "Excelente aglutinante vegetal rico en ácidos grasos omega-3 y fibra soluble."
-        },
-        {
-          name: "Tofu suave (Silken tofu)",
-          ratioText: "1/4 taza (aprox. 60g) por cada huevo",
-          benefit: "Ideal para horneados, aporta una consistencia suave y una buena dosis de proteína vegetal."
-        },
-        {
-          name: "Puré de plátano maduro",
-          ratioText: "1/2 plátano machacado por cada huevo",
-          benefit: "Funciona como aglutinante aportando humedad, potasio y dulzor natural."
-        }
-      ];
-    } else {
-      substitutes = [
-        {
-          name: "Aguacate / Palta",
-          ratioText: "Sustituye grasas como mantequilla o aceites en proporción 1 a 1",
-          benefit: "Aporta grasas monoinsaturadas cardiosaludables, potasio y gran cremosidad."
-        },
-        {
-          name: "Quinoa cocida",
-          ratioText: "Sustituye cereales refinados en proporción 1 a 1",
-          benefit: "Proteína completa con todos los aminoácidos esenciales y carbohidratos lentos."
-        },
-        {
-          name: "Levadura nutricional",
-          ratioText: "Sustituye queso rallado al gusto",
-          benefit: "Aporta un delicioso sabor a queso, rico en vitaminas del complejo B y proteínas."
-        }
-      ];
-    }
-    
-    return { substitutes };
+    console.error("Gemini API error in suggestFoodSubstitutesByIA:", apiError);
+    throw apiError;
   }
 }
 
