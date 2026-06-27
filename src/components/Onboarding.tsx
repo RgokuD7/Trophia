@@ -370,7 +370,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   };
 
   useEffect(() => {
-    if (step === 8) {
+    if (step === 7) {
       checkPushSubscription();
     }
   }, [step]);
@@ -1163,7 +1163,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
       <div className="p-6 pb-4 flex items-center justify-between border-b border-white/5 z-20 bg-[#050505] flex-shrink-0">
         <div>
           <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-widest">
-            Paso {step} de 8
+            Paso {step} de 7
           </span>
           <h2 className="text-xl font-black text-white tracking-tight italic">
             {step === 1 && "Asistente Inteligente"}
@@ -1172,14 +1172,13 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             {step === 4 && "Análisis Biométrico"}
             {step === 5 && "Tus Objetivos"}
             {step === 6 && "Perfil Nutricional"}
-            {step === 7 && "Evaluación de Salud"}
-            {step === 8 && "Recordatorios"}
+            {step === 7 && "Recordatorios"}
           </h2>
         </div>
         
         {/* Step Indicator dots */}
         <div className="flex gap-1.5">
-          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+          {[1, 2, 3, 4, 5, 6, 7].map((i) => (
             <div 
               key={i} 
               className={`h-1 rounded-full transition-all duration-300 ${
@@ -2555,134 +2554,11 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             </motion.div>
           )}
 
+          {/* TODO: Reintegrar PAR-Q+ (Evaluación de Salud) cuando se implemente el módulo de entrenamiento */}
+
           {step === 7 && (
             <motion.div
               key="step7"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-4 text-left"
-            >
-              <p className="text-xs text-white/50 leading-relaxed">
-                Completa este breve tamizaje oficial de aptitud física (PAR-Q+) para entrenar de forma 100% segura y libre de riesgos.
-              </p>
-
-              <div className="space-y-3.5 pr-1 border border-white/5 p-3 rounded-2xl bg-black/20">
-                {[
-                  { id: "q1", text: "1. ¿Alguna vez un médico te ha indicado que padeces de una afección cardíaca o presión arterial alta?" },
-                  { id: "q2", text: "2. ¿Sientes dolor, opresión o pesadez en el pecho en reposo o al realizar actividad física?" },
-                  { id: "q3", text: "3. ¿Experimentas pérdidas de equilibrio por mareos frecuentes o has perdido el conocimiento en los últimos 12 meses?" },
-                  { id: "q4", text: "4. ¿Se te ha diagnosticado otra afección médica de carácter crónico?" },
-                  { id: "q5", text: "5. ¿Tomas actualmente medicamentos recetados para alguna condición médica crónica?" },
-                  { id: "q6", text: "6. ¿Tienes algún problema óseo, articular o muscular que pueda agravarse al hacer ejercicio más intenso?" },
-                  { id: "q7", text: "7. ¿Alguna vez un especialista te ha indicado que solo debes hacer ejercicio bajo supervisión médica estricta?" }
-                ].map((q) => {
-                  const val = (parqAnswers as any)[q.id];
-                  return (
-                    <div key={q.id} className="bg-white/[0.02] border border-white/5 rounded-xl p-3 space-y-2 flex flex-col justify-between font-sans">
-                      <span className="text-[10px] text-white/80 leading-normal font-medium">{q.text}</span>
-                      <div className="flex gap-2 h-8">
-                        <button
-                          key={`${q.id}-yes`}
-                          type="button"
-                          onClick={() => setParqAnswers(prev => ({ ...prev, [q.id]: true }))}
-                          className={`flex-1 rounded-lg text-[10px] font-bold transition cursor-pointer flex items-center justify-center ${
-                            val === true
-                              ? "bg-rose-500/20 border border-rose-500/40 text-rose-400"
-                              : "bg-white/5 border border-white/10 text-white/40"
-                          }`}
-                        >
-                          Sí
-                        </button>
-                        <button
-                          key={`${q.id}-no`}
-                          type="button"
-                          onClick={() => setParqAnswers(prev => ({ ...prev, [q.id]: false }))}
-                          className={`flex-1 rounded-lg text-[10px] font-bold transition cursor-pointer flex items-center justify-center ${
-                            val === false
-                              ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-400"
-                              : "bg-white/5 border border-white/10 text-white/40"
-                          }`}
-                        >
-                          No
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Dynamic Anatomical Areas affected if Q6 is true */}
-              {parqAnswers.q6 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-amber-500/5 p-4 rounded-2xl border border-amber-500/15 space-y-3 text-left font-sans"
-                >
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>¿Qué zona articular o muscular te afecta?</span>
-                  </div>
-                  <p className="text-[9.5px] text-white/50 leading-normal">
-                    Selecciona las áreas afectadas para que nuestra IA adapte tus rutinas eliminando ejercicios contraindicados:
-                  </p>
-                  
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { id: "knee", label: "Rodilla" },
-                      { id: "back", label: "Espalda Baja" },
-                      { id: "shoulder", label: "Hombro" }
-                    ].map((area) => {
-                      const selected = jointPainAreas.includes(area.id as any);
-                      return (
-                        <button
-                          key={area.id}
-                          type="button"
-                          onClick={() => {
-                            const newArea = area.id as any;
-                            if (selected) {
-                              setJointPainAreas(jointPainAreas.filter(a => a !== newArea));
-                            } else {
-                              setJointPainAreas([...jointPainAreas, newArea]);
-                            }
-                          }}
-                          className={`py-2 px-1 rounded-xl border text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                            selected
-                              ? "bg-amber-500/15 border-amber-500/45 text-amber-400 font-bold"
-                              : "bg-white/5 border border-white/10 text-white/40 text-xs"
-                          }`}
-                        >
-                          <div className={`w-3 h-3 rounded flex items-center justify-center border transition ${
-                            selected ? "bg-amber-500 border-amber-500 text-black" : "border-white/20"
-                          }`}>
-                            {selected && <Check className="h-2 w-2 stroke-[4px]" />}
-                          </div>
-                          <span className="text-[10px]">{area.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Cardiovascular / Neurological alert if Q1/Q2/Q3/Q7 is true */}
-              {requiresMedicalClearance && (
-                <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl text-left space-y-1.5 font-sans">
-                  <span className="text-xs font-extrabold text-red-400 flex items-center gap-1.5">
-                    <AlertCircle className="h-4 w-4 shrink-0" />
-                    <span>Aviso de Seguridad Médica</span>
-                  </span>
-                  <p className="text-[10px] text-white/60 leading-relaxed font-medium">
-                    Has indicado antecedentes o síntomas cardiovasculares o neurológicos. Por tu seguridad, <b>Trophia congelará la generación de rutinas de alta intensidad</b>. Te recomendamos fuertemente obtener autorización de un médico antes de iniciar actividad física vigorosa.
-                  </p>
-                </div>
-              )}
-            </motion.div>
-          )}
-
-          {step === 8 && (
-            <motion.div
-              key="step8"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
@@ -2873,7 +2749,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             >
               Siguiente
             </Button>
-          ) : step < 8 ? (
+          ) : step < 7 ? (
             <Button
               variant="primary"
               onClick={handleNext}
