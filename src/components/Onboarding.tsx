@@ -370,7 +370,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   };
 
   useEffect(() => {
-    if (step === 9) {
+    if (step === 8) {
       checkPushSubscription();
     }
   }, [step]);
@@ -839,7 +839,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   };
 
   const handleNext = () => {
-    if (step === 7 && !showEducationTutorial) {
+    if (step === 6 && !showEducationTutorial) {
       setShowEducationTutorial(true);
     } else {
       setShowEducationTutorial(false);
@@ -1163,7 +1163,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
       <div className="p-6 pb-4 flex items-center justify-between border-b border-white/5 z-20 bg-[#050505] flex-shrink-0">
         <div>
           <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-widest">
-            Paso {step} de 9
+            Paso {step} de 8
           </span>
           <h2 className="text-xl font-black text-white tracking-tight italic">
             {step === 1 && "Asistente Inteligente"}
@@ -1171,16 +1171,15 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             {step === 3 && "Actividad & Movimiento"}
             {step === 4 && "Análisis Biométrico"}
             {step === 5 && "Tus Objetivos"}
-            {step === 6 && "Entrenamiento"}
-            {step === 7 && "Perfil Nutricional"}
-            {step === 8 && "Evaluación de Salud"}
-            {step === 9 && "Recordatorios"}
+            {step === 6 && "Perfil Nutricional"}
+            {step === 7 && "Evaluación de Salud"}
+            {step === 8 && "Recordatorios"}
           </h2>
         </div>
         
         {/* Step Indicator dots */}
         <div className="flex gap-1.5">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
             <div 
               key={i} 
               className={`h-1 rounded-full transition-all duration-300 ${
@@ -2009,7 +2008,11 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
                         {/* Projection Info */}
                         <div className="bg-black/30 border border-white/5 rounded-2xl p-3 text-left space-y-1">
-                          {proj.currentBF <= proj.targetBF ? (
+                          {!bodyFat ? (
+                            <p className="text-[9.5px] text-white/50 leading-relaxed italic">
+                              Omitiste el cálculo de porcentaje de grasa corporal, por lo que no es posible realizar una proyección temporal exacta. Utilizaremos valores promedio de tu perfil físico para estructurar tus calorías.
+                            </p>
+                          ) : proj.currentBF <= proj.targetBF ? (
                             <p className="text-[10px] text-white/50 leading-relaxed">
                               ¡Tu porcentaje de grasa actual ({proj.currentBF}%) ya es óptimo! Se sugiere un déficit controlado muy leve.
                             </p>
@@ -2258,170 +2261,6 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
           {step === 6 && (
             <motion.div
               key="step6"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="block text-[10px] font-bold text-white/40 mb-2 uppercase tracking-widest">
-                  1. Historial Deportivo y Nivel
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { id: "beginner", label: "Principiante", desc: "0-1 año continuo" },
-                    { id: "intermediate", label: "Intermedio", desc: "1-3 años sólidos" },
-                    { id: "advanced", label: "Avanzado", desc: "3+ años continuos" }
-                  ].map((lvl) => (
-                    <button
-                      key={lvl.id}
-                      type="button"
-                      onClick={() => setLevel(lvl.id as ExperienceLevel)}
-                      className={`p-3 rounded-xl border text-center transition cursor-pointer ${
-                        level === lvl.id
-                          ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
-                          : "bg-white/5 border-white/10 text-white/40 text-xs"
-                      }`}
-                    >
-                      <span className="block text-xs font-bold">{lvl.label}</span>
-                      <span className="text-[8px] opacity-60 font-normal">{lvl.desc}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-white/40 mb-2 uppercase tracking-widest">
-                  2. Entornos de Entrenamiento (Puedes elegir varios)
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { id: "home", label: "Casa", emoji: "🏠" },
-                    { id: "gym", label: "Gimnasio", emoji: "🏋️" },
-                    { id: "outdoor", label: "Aire Libre", emoji: "🌳" }
-                  ].map((env) => {
-                    const active = selectedEnvironments.includes(env.id as TrainingEnvironment);
-                    return (
-                      <button
-                        key={env.id}
-                        type="button"
-                        onClick={() => {
-                          const newEnv = env.id as TrainingEnvironment;
-                          let updatedEnvs: TrainingEnvironment[];
-                          if (active) {
-                            if (selectedEnvironments.length > 1) {
-                              updatedEnvs = selectedEnvironments.filter(e => e !== newEnv);
-                            } else {
-                              return; // keep at least one
-                            }
-                          } else {
-                            updatedEnvs = [...selectedEnvironments, newEnv];
-                          }
-                          setSelectedEnvironments(updatedEnvs);
-                          
-                          // Dynamically append default equipment for newly checked environments
-                          let newEq = [...equipment];
-                          if (!active) {
-                            if (newEnv === "gym") {
-                              newEq = Array.from(new Set([...newEq, ...HYBRID_EQUIPMENT, ...GYM_EQUIPMENT]));
-                            } else if (newEnv === "home") {
-                              newEq = Array.from(new Set([
-                                ...newEq,
-                                "Peso corporal / Calistenia básica",
-                                "Mancuernas de peso fijo",
-                                "Bandas de resistencia elásticas largas",
-                                "Colchoneta de alta densidad / Mat de yoga"
-                              ]));
-                            } else if (newEnv === "outdoor") {
-                              newEq = Array.from(new Set([
-                                ...newEq,
-                                "Peso corporal / Calistenia básica",
-                                "Barras fijas altas de exterior",
-                                "Barras paralelas de exterior",
-                                "Colchoneta de alta densidad / Mat de yoga"
-                              ]));
-                            }
-                          }
-                          setEquipment(newEq);
-                        }}
-                        className={`p-3 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
-                          active
-                            ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
-                            : "bg-white/5 border-white/10 text-white/40 text-xs"
-                        }`}
-                      >
-                        <span className="text-base">{env.emoji}</span>
-                        <span className="text-xs font-bold">{env.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-white/40 mb-2 uppercase tracking-widest">
-                  3. Frecuencia Semanal
-                </label>
-                <div className="grid grid-cols-7 gap-1.5">
-                  {[1, 2, 3, 4, 5, 6, 7].map((days) => (
-                    <button
-                      key={days}
-                      type="button"
-                      onClick={() => setWeeklyTrainingDays(days)}
-                      className={`py-2 px-1 rounded-xl border text-center transition cursor-pointer flex flex-col items-center justify-center ${
-                        weeklyTrainingDays === days
-                          ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
-                          : "bg-white/5 border-white/10 text-white/40"
-                      }`}
-                    >
-                      <span className="block text-xs font-bold">{days}</span>
-                      <span className="block text-[7.5px] opacity-60 font-semibold leading-none mt-0.5">
-                        {days === 1 ? "día" : "días"}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-white/40 mb-2 uppercase tracking-widest flex items-center justify-between">
-                  <span>4. Equipamiento Disponible</span>
-                  <span className="text-[9px] text-emerald-400 font-mono font-normal">
-                    {equipment.length} elegidos
-                  </span>
-                </label>
-                
-                <div className="grid grid-cols-2 gap-2 border border-white/5 p-2 rounded-2xl bg-black/30">
-                  {availableEquipmentOptions.map((eq) => {
-                    const selected = equipment.includes(eq);
-                    return (
-                      <button
-                        key={eq}
-                        type="button"
-                        onClick={() => handleToggleEquipment(eq)}
-                        className={`flex items-center gap-2 p-2 rounded-xl border text-left transition cursor-pointer ${
-                          selected
-                            ? "bg-emerald-500/10 border-emerald-500/30 text-white"
-                            : "bg-white/5 border-white/10 text-white/40"
-                        }`}
-                      >
-                        <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border transition ${
-                          selected ? "bg-emerald-500 border-emerald-500 text-white" : "border-white/20"
-                        }`}>
-                          {selected && <Check className="h-2.5 w-2.5 stroke-[3px]" />}
-                        </div>
-                        <span className="text-[10px] truncate">{eq}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {step === 7 && (
-            <motion.div
-              key="step7"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
@@ -2716,9 +2555,9 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             </motion.div>
           )}
 
-          {step === 8 && (
+          {step === 7 && (
             <motion.div
-              key="step8"
+              key="step7"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
@@ -2841,9 +2680,9 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             </motion.div>
           )}
 
-          {step === 9 && (
+          {step === 8 && (
             <motion.div
-              key="step9"
+              key="step8"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
@@ -3034,7 +2873,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             >
               Siguiente
             </Button>
-          ) : step < 9 ? (
+          ) : step < 8 ? (
             <Button
               variant="primary"
               onClick={handleNext}
