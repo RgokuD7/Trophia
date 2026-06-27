@@ -1901,35 +1901,34 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
                 <div className="border-t border-white/5 pt-3 text-[11px] text-white/50 leading-relaxed max-w-xs mx-auto">
                   {isCalculatingBF ? (
-                    "Por favor espera un momento mientras nuestro algoritmo de IA procesa tus imágenes para una estimación precisa..."
-                  ) : analysisError ? (
-                    <div className="text-rose-400 space-y-1">
-                      <span className="font-bold block">⚠️ Error al calcular con imágenes</span>
-                      <p className="text-[10px] text-white/60">{analysisError}</p>
-                      <p className="text-[10px] text-emerald-400 font-semibold mt-1">
-                        No te preocupes, puedes pulsar "Continuar" abajo para seguir con tus datos físicos básicos.
-                      </p>
-                    </div>
-                  ) : bodyFat !== undefined ? (
-                    sex === "male" ? (
-                      bodyFat < 8 ? "Posees un nivel extremadamente bajo de grasa. Tu prioridad debe ser el mantenimiento saludable o superávit calórico controlado." :
-                      bodyFat <= 14 ? "Tu nivel de grasa es atlético y óptimo. Tienes un entorno hormonal idóneo para enfocarte en ganar masa muscular limpia." :
-                      bodyFat <= 21 ? "Te encuentras en un rango saludable de fitness general. Puedes optar por recomposición estética o definición para mayor nitidez." :
-                      "Tu porcentaje de grasa está por encima del óptimo sugerido. Priorizar un déficit calórico ligero a moderado te brindará mejoras dramáticas en salud y estética."
-                    ) : (
-                      bodyFat < 14 ? "Posees un nivel extremadamente bajo de grasa para una mujer. Tu prioridad debe ser el mantenimiento saludable o superávit calórico controlado." :
-                      bodyFat <= 21 ? "Tu nivel de grasa es atlético y óptimo. Tienes un entorno hormonal excelente para enfocarte en ganar masa muscular o fuerza." :
-                      bodyFat <= 29 ? "Te encuentras en un rango saludable de fitness general. Puedes optar por recomposición estética o definición moderada si buscas mayor tono." :
-                      "Tu porcentaje de grasa está por encima del rango óptimo. Priorizar un déficit calórico ligero a moderado te brindará mejoras dramáticas en salud, energía y tono muscular."
-                    )
+                    "Por favor espera un momento mientras procesamos tus datos..."
                   ) : (
-                    "No se pudo realizar la estimación por imagen. Pulsa Continuar para avanzar y definir tus objetivos con tus datos físicos."
+                    "Composición corporal calculada exitosamente a partir de tu perfil antropométrico."
                   )}
                 </div>
               </div>
 
+              {/* Error Card if IA fails */}
+              {(analysisError || recommendGoalError) && (
+                <div className="bg-rose-500/10 border border-rose-500/20 rounded-3xl p-5 text-left space-y-3 shadow-xl">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-rose-400">
+                    <AlertCircle className="h-4 w-4 animate-pulse" />
+                    <span>Error de Asistente de IA:</span>
+                  </div>
+                  <p className="text-[11px] text-white/80 leading-relaxed bg-black/20 p-3.5 rounded-xl border border-white/5">
+                    {analysisError || recommendGoalError}
+                  </p>
+                  <p className="text-[10px] text-white/40 leading-relaxed italic">
+                    {hasUploadedPhotos 
+                      ? "Te sugerimos guardar tus fotos en tu dispositivo e intentarlo más tarde. Puedes continuar el proceso con tus medidas físicas tradicionales."
+                      : "Por favor, inténtalo de nuevo más tarde. Puedes continuar con el onboarding sin la recomendación de la IA."
+                    }
+                  </p>
+                </div>
+              )}
+
               {/* Unified AI Analysis & Goal Recommendation Card */}
-              {(aiGoalRecommendation || (hasUploadedPhotos && analysisResult)) && (
+              {!analysisError && !recommendGoalError && (aiGoalRecommendation || (hasUploadedPhotos && analysisResult)) && (
                 <div className="bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 rounded-3xl p-5 text-left space-y-3 shadow-xl">
                   {/* Header */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-2">
