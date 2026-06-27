@@ -517,6 +517,72 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   const [recommendGoalError, setRecommendGoalError] = useState<string | null>(null);
   const [skipGoalStep, setSkipGoalStep] = useState(false);
 
+  const getEstimatedDateString = (weeksOrMonths: number, unit: "weeks" | "months"): string => {
+    const targetDate = new Date();
+    if (unit === "weeks") {
+      targetDate.setDate(targetDate.getDate() + weeksOrMonths * 7);
+    } else {
+      targetDate.setMonth(targetDate.getMonth() + weeksOrMonths);
+    }
+    const day = targetDate.getDate();
+    const spanishMonths = [
+      "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    ];
+    return `${day} de ${spanishMonths[targetDate.getMonth()]}, ${targetDate.getFullYear()}`;
+  };
+
+  const getProjections = () => {
+    const currentBF = bodyFat || (sex === "male" ? 20 : 28);
+    const targetBF = sex === "male" ? 12 : 22;
+    
+    // LBM and weight target calculation
+    const lbm = weight * (1 - (currentBF / 100));
+    const targetWeight = lbm / (1 - (targetBF / 100));
+    const weightToLose = Math.max(0.5, weight - targetWeight);
+
+    // Deficit rate logic matching fitnessUtils
+    const isHighAdiposity = sex === "male" ? currentBF > 25 : currentBF > 35;
+    const isLean = sex === "male" ? currentBF < 15 : currentBF < 25;
+    
+    let weeklyRate = 0.0085;
+    if (isHighAdiposity) {
+      if (deficitPace === "conservative") weeklyRate = 0.010;
+      else if (deficitPace === "moderate") weeklyRate = 0.0125;
+      else if (deficitPace === "aggressive") weeklyRate = 0.015;
+    } else if (isLean) {
+      if (deficitPace === "conservative") weeklyRate = 0.003;
+      else if (deficitPace === "moderate") weeklyRate = 0.005;
+      else if (deficitPace === "aggressive") weeklyRate = 0.007;
+    } else {
+      if (deficitPace === "conservative") weeklyRate = 0.007;
+      else if (deficitPace === "moderate") weeklyRate = 0.0085;
+      else if (deficitPace === "aggressive") weeklyRate = 0.010;
+    }
+
+    const weeklyLossKg = weight * weeklyRate;
+    const weeks = Math.ceil(weightToLose / weeklyLossKg);
+
+    // Muscle rate
+    let monthlyRate = 0.0075;
+    if (level === "beginner") monthlyRate = 0.0125;
+    else if (level === "advanced") monthlyRate = 0.0035;
+    const monthlyGainKg = weight * monthlyRate;
+    const months = Math.ceil(4 / monthlyGainKg);
+
+    return {
+      currentBF,
+      targetBF,
+      weightToLose,
+      weeklyLossKg,
+      weeks,
+      monthlyGainKg,
+      months,
+      lossDateStr: getEstimatedDateString(weeks, "weeks"),
+      gainDateStr: getEstimatedDateString(months, "months")
+    };
+  };
+
   // Reset AI recommendation if key metrics change, so it recalculates with correct data
   useEffect(() => {
     setAiGoalRecommendation(null);
@@ -1903,34 +1969,57 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                   </div>
 
                   {/* If recommended goal is lose_weight, show the pace selector directly in the card */}
-                  {aiGoalRecommendation && aiGoalRecommendation.recommendedGoal === "lose_weight" && (
-                    <div className="border-t border-white/5 pt-3 space-y-2">
-                      <label className="block text-[9px] font-bold text-white/40 uppercase tracking-widest">
-                        Ritmo de Pérdida de Grasa
-                      </label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[
-                          { id: "conservative", label: "Conservador", desc: "Sostenible" },
-                          { id: "moderate", label: "Moderado", desc: "Clínico" },
-                          { id: "aggressive", label: "Agresivo", desc: "Rápido" }
-                        ].map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => setDeficitPace(item.id as any)}
-                            className={`p-2.5 rounded-xl border text-center transition flex flex-col justify-between items-center h-[46px] cursor-pointer ${
-                              deficitPace === item.id
-                                ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
-                                : "bg-white/5 border-white/10 text-white/40 text-xs"
-                            }`}
-                          >
-                            <span className="block text-[10px] font-bold leading-tight">{item.label}</span>
-                            <span className="text-[8px] opacity-60 font-normal block leading-tight mt-0.5">{item.desc}</span>
-                          </button>
-                        ))}
+                  {aiGoalRecommendation && aiGoalRecommendation.recommendedGoal === "lose_weight" && (() => {
+                    const proj = getProjections();
+                    return (
+                      <div className="border-t border-white/5 pt-3 space-y-3">
+                        <div className="space-y-2">
+                          <label className="block text-[9px] font-bold text-white/40 uppercase tracking-widest">
+                            Ritmo de Pérdida de Grasa
+                          </label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { id: "conservative", label: "Conservador", desc: "Sostenible" },
+                              { id: "moderate", label: "Moderado", desc: "Clínico" },
+                              { id: "aggressive", label: "Agresivo", desc: "Rápido" }
+                            ].map((item) => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => setDeficitPace(item.id as any)}
+                                className={`p-2.5 rounded-xl border text-center transition flex flex-col justify-between items-center h-[46px] cursor-pointer ${
+                                  deficitPace === item.id
+                                    ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
+                                    : "bg-white/5 border-white/10 text-white/40 text-xs"
+                                }`}
+                              >
+                                <span className="block text-[10px] font-bold leading-tight">{item.label}</span>
+                                <span className="text-[8px] opacity-60 font-normal block leading-tight mt-0.5">{item.desc}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Projection Info */}
+                        <div className="bg-black/30 border border-white/5 rounded-2xl p-3 text-left space-y-1">
+                          {proj.currentBF <= proj.targetBF ? (
+                            <p className="text-[10px] text-white/50 leading-relaxed">
+                              ¡Tu porcentaje de grasa actual ({proj.currentBF}%) ya es óptimo! Se sugiere un déficit controlado muy leve.
+                            </p>
+                          ) : (
+                            <>
+                              <p className="text-[10px] text-white/90 font-bold leading-tight">
+                                Meta estimada: <span className="text-emerald-400 font-black">{proj.weeks} semanas</span> ({proj.lossDateStr})
+                              </p>
+                              <p className="text-[9px] text-white/50 leading-normal">
+                                Perdiendo aprox. <b>{proj.weeklyLossKg.toFixed(2)} kg/semana</b> (reducción de <b>{proj.weightToLose.toFixed(1)} kg</b> de grasa preservando tu tejido muscular).
+                              </p>
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               )}
 
@@ -2084,63 +2173,68 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                 )}
 
                 {/* Proyección Científica de Resultados */}
-                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 space-y-2 text-left font-sans mt-3">
-                  <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-widest block">
-                    📈 Proyección Científica de Resultados
-                  </span>
-                  {goal === "lose_weight" ? (
-                    currentBF <= targetBF ? (
-                      <div className="space-y-1">
-                        <p className="text-[11px] text-white font-bold leading-tight">
-                          ¡Tu porcentaje de grasa actual ({currentBF}%) ya es óptimo!
-                        </p>
-                        <p className="text-[9.5px] text-white/50 leading-normal">
-                          Se recomienda un déficit muy leve y controlado para preservación muscular total y definición de detalles.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-1">
-                        <p className="text-[11px] text-white font-bold leading-tight">
-                          Llegarás a tu grasa óptima ({targetBF}%) en aprox. <span className="text-emerald-400 font-black">{weeks} semanas</span>.
-                        </p>
-                        <p className="text-[9.5px] text-white/50 leading-normal">
-                          Perdiendo unos <b>{weeklyLossKg.toFixed(2)} kg/semana</b> de forma segura (reducción total de <b>{weightToLose.toFixed(1)} kg</b> de grasa preservando tu tejido muscular).
-                        </p>
-                      </div>
-                    )
-                  ) : goal === "gain_muscle" ? (
-                    <div className="space-y-1">
-                      <p className="text-[11px] text-white font-bold leading-tight">
-                        Para construir 4 kg de masa muscular limpia: <span className="text-emerald-400 font-black">{months} meses</span>.
-                      </p>
-                      <p className="text-[9.5px] text-white/50 leading-normal">
-                        Ganando unos <b>{monthlyGainKg.toFixed(2)} kg/mes</b> de músculo limpio de forma fisiológicamente óptima y limitando la acumulación de grasa.
+                {(() => {
+                  const proj = getProjections();
+                  return (
+                    <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 space-y-2 text-left font-sans mt-3">
+                      <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-widest block">
+                        📈 Proyección Científica de Resultados
+                      </span>
+                      {goal === "lose_weight" ? (
+                        proj.currentBF <= proj.targetBF ? (
+                          <div className="space-y-1">
+                            <p className="text-[11px] text-white font-bold leading-tight">
+                              ¡Tu porcentaje de grasa actual ({proj.currentBF}%) ya es óptimo!
+                            </p>
+                            <p className="text-[9.5px] text-white/50 leading-normal">
+                              Se recomienda un déficit muy leve y controlado para preservación muscular total y definición de detalles.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <p className="text-[11px] text-white font-bold leading-tight">
+                              Llegarás a tu grasa óptima ({proj.targetBF}%) en aprox. <span className="text-emerald-400 font-black">{proj.weeks} semanas</span> ({proj.lossDateStr}).
+                            </p>
+                            <p className="text-[9.5px] text-white/50 leading-normal">
+                              Perdiendo unos <b>{proj.weeklyLossKg.toFixed(2)} kg/semana</b> de forma segura (reducción total de <b>{proj.weightToLose.toFixed(1)} kg</b> de grasa preservando tu tejido muscular).
+                            </p>
+                          </div>
+                        )
+                      ) : goal === "gain_muscle" ? (
+                        <div className="space-y-1">
+                          <p className="text-[11px] text-white font-bold leading-tight">
+                            Para construir 4 kg de masa muscular limpia: <span className="text-emerald-400 font-black">{proj.months} meses</span> ({proj.gainDateStr}).
+                          </p>
+                          <p className="text-[9.5px] text-white/50 leading-normal">
+                            Ganando unos <b>{proj.monthlyGainKg.toFixed(2)} kg/mes</b> de músculo limpio de forma fisiológicamente óptima y limitando la acumulación de grasa.
+                          </p>
+                        </div>
+                      ) : goal === "aesthetics" ? (
+                        <div className="space-y-1">
+                          <p className="text-[11px] text-white font-bold leading-tight">
+                            Recomposición corporal recomendada: <span className="text-emerald-400 font-black">12 a 16 semanas</span> (Fecha: {getEstimatedDateString(14, "weeks")}).
+                          </p>
+                          <p className="text-[9.5px] text-white/50 leading-normal">
+                            Fase ideal para notar reducciones visibles en el porcentaje de grasa y ganancias moderadas de tono y firmeza muscular simultáneamente.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <p className="text-[11px] text-white font-bold leading-tight">
+                            Fase de estabilización recomendada: <span className="text-emerald-400 font-black">8 a 12 semanas</span> (Fecha: {getEstimatedDateString(10, "weeks")}).
+                          </p>
+                          <p className="text-[9.5px] text-white/50 leading-normal">
+                            Ideal para consolidar tus resultados anteriores, regular hormonas del apetito y optimizar tu metabolismo antes de volver a definir o volumen.
+                          </p>
+                        </div>
+                      )}
+                      
+                      <p className="text-[8px] text-white/35 italic leading-normal border-t border-white/5 pt-1.5 mt-1.5 text-center font-sans">
+                        * Estimación teórica basada en un 100% de adherencia y consistencia en el déficit calórico y entrenamiento recomendados.
                       </p>
                     </div>
-                  ) : goal === "aesthetics" ? (
-                    <div className="space-y-1">
-                      <p className="text-[11px] text-white font-bold leading-tight">
-                        Recomposición corporal recomendada: <span className="text-emerald-400 font-black">12 a 16 semanas</span>.
-                      </p>
-                      <p className="text-[9.5px] text-white/50 leading-normal">
-                        Fase ideal para notar reducciones visibles en el porcentaje de grasa y ganancias moderadas de tono y firmeza muscular simultáneamente.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-1">
-                      <p className="text-[11px] text-white font-bold leading-tight">
-                        Fase de estabilización recomendada: <span className="text-emerald-400 font-black">8 a 12 semanas</span>.
-                      </p>
-                      <p className="text-[9.5px] text-white/50 leading-normal">
-                        Ideal para consolidar tus resultados anteriores, regular hormonas del apetito y optimizar tu metabolismo antes de volver a definir o volumen.
-                      </p>
-                    </div>
-                  )}
-                  
-                  <p className="text-[8px] text-white/35 italic leading-normal border-t border-white/5 pt-1.5 mt-1.5 text-center font-sans">
-                    * Estimación teórica basada en un 100% de adherencia y consistencia en el déficit calórico y entrenamiento recomendados.
-                  </p>
-                </div>
+                  );
+                })()}
               </motion.div>
             );
           })()}
