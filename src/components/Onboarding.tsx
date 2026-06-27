@@ -1901,6 +1901,36 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                       )
                     )}
                   </div>
+
+                  {/* If recommended goal is lose_weight, show the pace selector directly in the card */}
+                  {aiGoalRecommendation && aiGoalRecommendation.recommendedGoal === "lose_weight" && (
+                    <div className="border-t border-white/5 pt-3 space-y-2">
+                      <label className="block text-[9px] font-bold text-white/40 uppercase tracking-widest">
+                        Ritmo de Pérdida de Grasa
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { id: "conservative", label: "Conservador", desc: "Sostenible" },
+                          { id: "moderate", label: "Moderado", desc: "Clínico" },
+                          { id: "aggressive", label: "Agresivo", desc: "Rápido" }
+                        ].map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setDeficitPace(item.id as any)}
+                            className={`p-2.5 rounded-xl border text-center transition flex flex-col justify-between items-center h-[46px] cursor-pointer ${
+                              deficitPace === item.id
+                                ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
+                                : "bg-white/5 border-white/10 text-white/40 text-xs"
+                            }`}
+                          >
+                            <span className="block text-[10px] font-bold leading-tight">{item.label}</span>
+                            <span className="text-[8px] opacity-60 font-normal block leading-tight mt-0.5">{item.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2788,7 +2818,15 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
           {step === 4 ? (
             showStep2Results ? (
-              aiGoalRecommendation ? (
+              (isRecommendingGoal || isAnalyzingFat || isCalculatingBF || (!aiGoalRecommendation && !recommendGoalError && !analysisError)) ? (
+                <Button
+                  variant="primary"
+                  isLoading={true}
+                  className="flex-1 opacity-70 cursor-not-allowed text-xs font-bold font-sans"
+                >
+                  Analizando composición...
+                </Button>
+              ) : aiGoalRecommendation ? (
                 <div className="flex gap-2 w-full flex-1">
                   <Button
                     variant="secondary"
@@ -2816,13 +2854,14 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                   </Button>
                 </div>
               ) : (
+                // AI Failed, allow skipping/continuing
                 <Button
                   variant="primary"
                   onClick={handleNext}
                   rightIcon={ChevronRight}
                   className="flex-1 cursor-pointer"
                 >
-                  Continuar
+                  Continuar (Sin Recomendación)
                 </Button>
               )
             ) : isCalculatingBF ? (
