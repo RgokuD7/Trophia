@@ -515,6 +515,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   } | null>(null);
   const [isRecommendingGoal, setIsRecommendingGoal] = useState(false);
   const [recommendGoalError, setRecommendGoalError] = useState<string | null>(null);
+  const [skipGoalStep, setSkipGoalStep] = useState(false);
 
   // Reset AI recommendation if key metrics change, so it recalculates with correct data
   useEffect(() => {
@@ -726,33 +727,31 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
       setBodyFat(fatToUse);
     }
 
-    // Trigger AI Goal recommendation in background (do not await) if not using photos
+    // Trigger AI Goal recommendation and await it if not using photos
     if (!hasUploadedPhotos) {
       const finalFat = fatToUse !== undefined ? fatToUse : bodyFat;
       setIsRecommendingGoal(true);
       setRecommendGoalError(null);
       
-      recommendGoalByIA(apiKey, {
-        sex,
-        age,
-        weight,
-        height,
-        bmi,
-        bodyFat: finalFat,
-      })
-        .then((data) => {
-          if (data.recommendedGoal && data.reason) {
-            setAiGoalRecommendation(data);
-            setGoal(data.recommendedGoal);
-          }
-        })
-        .catch((err: any) => {
-          console.error("Error recommending goal:", err);
-          setRecommendGoalError(err.message || "Error al obtener la recomendación.");
-        })
-        .finally(() => {
-          setIsRecommendingGoal(false);
+      try {
+        const data = await recommendGoalByIA(apiKey, {
+          sex,
+          age,
+          weight,
+          height,
+          bmi,
+          bodyFat: finalFat,
         });
+        if (data.recommendedGoal && data.reason) {
+          setAiGoalRecommendation(data);
+          setGoal(data.recommendedGoal);
+        }
+      } catch (err: any) {
+        console.error("Error recommending goal:", err);
+        setRecommendGoalError(err.message || "Error al obtener la recomendación.");
+      } finally {
+        setIsRecommendingGoal(false);
+      }
     }
 
     // Enforce 5-second minimum loading duration to let tips be read
@@ -777,6 +776,13 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   const handlePrev = () => {
     if (showEducationTutorial) {
       setShowEducationTutorial(false);
+    } else if (step === 6 && skipGoalStep) {
+      // If we skipped Step 5 by accepting the suggested goal, go back to Step 4 results screen
+      setStep(4);
+      setShowStep2Results(true);
+    } else if (step === 4 && showStep2Results) {
+      // Go back to measurements form
+      setShowStep2Results(false);
     } else {
       setStep(prev => Math.max(1, prev - 1));
     }
@@ -1876,6 +1882,29 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
 
 
+              {/* AI Goal Recommendation Card */}
+              {aiGoalRecommendation && (
+                <div className="bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 rounded-3xl p-5 text-left space-y-3 shadow-xl">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                    <Sparkles className="h-4 w-4 text-emerald-400 animate-pulse" />
+                    <span>Recomendación de Meta por IA (Gemini):</span>
+                  </div>
+                  
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl text-center">
+                    <span className="text-xs text-emerald-400 font-extrabold uppercase tracking-wide">
+                      {aiGoalRecommendation.recommendedGoal === "lose_weight" && "Bajar de Peso / Definición"}
+                      {aiGoalRecommendation.recommendedGoal === "gain_muscle" && "Ganar Masa Muscular / Volumen"}
+                      {aiGoalRecommendation.recommendedGoal === "aesthetics" && "Recomposición Estética"}
+                      {aiGoalRecommendation.recommendedGoal === "maintenance" && "Mantenimiento / Salud"}
+                    </span>
+                  </div>
+                  
+                  <p className="text-[11px] text-white/70 leading-relaxed bg-black/20 p-3.5 rounded-xl border border-white/5">
+                    {formatAnalysisText(aiGoalRecommendation.reason)}
+                  </p>
+                </div>
+              )}
+
               {/* Button to edit and recalculate */}
               <button
                 type="button"
@@ -1941,67 +1970,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                   Selecciona tu objetivo primordial. Esto adaptará tus macronutrientes recomendados (proteínas, carbohidratos y grasas) y el tipo de entrenamiento sugerido.
                 </p>
 
-                {/* AI Goal Recommendation Box */}
-                <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-2xl p-4 space-y-2.5 text-left">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
-                      <Sparkles className="h-4 w-4 animate-pulse" />
-                      <span>Recomendación de Meta por IA</span>
-                    </div>
-                    {isRecommendingGoal && (
-                      <div className="flex items-center gap-1 text-[10px] text-white/50">
-                        <RefreshCw className="h-3 w-3 animate-spin" />
-                        <span>Analizando composición...</span>
-                      </div>
-                    )}
-                  </div>
 
-                  {isRecommendingGoal && (
-                    <div className="space-y-2 py-1">
-                      <div className="h-3 w-3/4 bg-white/10 rounded animate-pulse"></div>
-                      <div className="h-3 w-1/2 bg-white/10 rounded animate-pulse"></div>
-                    </div>
-                  )}
-
-                  {recommendGoalError && (
-                    <div className="space-y-2">
-                      <p className="text-[10.5px] text-rose-400 leading-relaxed">
-                        ⚠️ {recommendGoalError}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setRecommendGoalError(null)}
-                        className="text-[10px] bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer active:scale-[0.98]"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        <span>Reintentar Recomendación</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {aiGoalRecommendation && (
-                    <div className="space-y-1">
-                      <div className="text-[10px] text-white/40 font-bold uppercase tracking-wider">
-                        Objetivo Sugerido:{" "}
-                        <span className="text-emerald-400 font-black">
-                          {aiGoalRecommendation.recommendedGoal === "lose_weight" && "Bajar de Peso / Definición"}
-                          {aiGoalRecommendation.recommendedGoal === "gain_muscle" && "Ganar Masa Muscular / Volumen"}
-                          {aiGoalRecommendation.recommendedGoal === "aesthetics" && "Recomposición Estética"}
-                          {aiGoalRecommendation.recommendedGoal === "maintenance" && "Mantenimiento / Salud"}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-white/80 leading-relaxed">
-                        {formatAnalysisText(aiGoalRecommendation.reason)}
-                      </p>
-                    </div>
-                  )}
-
-                  {!isRecommendingGoal && !aiGoalRecommendation && !recommendGoalError && (
-                    <p className="text-[11px] text-white/50 leading-relaxed">
-                      Sube tus fotos o ingresa tus medidas en el paso anterior para que Gemini analice tu composición corporal y te recomiende la meta perfecta.
-                    </p>
-                  )}
-                </div>
 
                 <div className="space-y-2.5">
                   {[
@@ -2807,7 +2776,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
       {/* Navigation Buttons footer */}
       {!showEducationTutorial && (
         <div className="px-6 pt-4 pb-8 flex gap-3 border-t border-white/5 bg-[#050505] max-w-md mx-auto w-full z-20 flex-shrink-0 shadow-[0_-15px_30px_rgba(0,0,0,0.8)]">
-          {step > 1 && (
+          {step > 1 && !(step === 4 && showStep2Results) && (
             <Button
               variant="secondary"
               onClick={handlePrev}
@@ -2820,14 +2789,43 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
           {step === 4 ? (
             showStep2Results ? (
-              <Button
-                variant="primary"
-                onClick={handleNext}
-                rightIcon={ChevronRight}
-                className="flex-1 cursor-pointer"
-              >
-                Continuar
-              </Button>
+              aiGoalRecommendation ? (
+                <div className="flex gap-2 w-full flex-1">
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setSkipGoalStep(false);
+                      setShowStep2Results(false);
+                      setStep(5);
+                    }}
+                    className="flex-1 text-[11px] font-black cursor-pointer text-center"
+                  >
+                    Elegir mi propio objetivo
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setGoal(aiGoalRecommendation.recommendedGoal);
+                      setSkipGoalStep(true);
+                      setShowStep2Results(false);
+                      setStep(6);
+                    }}
+                    rightIcon={ChevronRight}
+                    className="flex-1 text-[11px] font-black cursor-pointer text-center"
+                  >
+                    Aceptar sugerencia
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="primary"
+                  onClick={handleNext}
+                  rightIcon={ChevronRight}
+                  className="flex-1 cursor-pointer"
+                >
+                  Continuar
+                </Button>
+              )
             ) : isCalculatingBF ? (
               <Button
                 variant="primary"
