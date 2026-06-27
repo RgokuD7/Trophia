@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
-  Dumbbell, Calendar, RefreshCw, Check, Play, Square, Pause, Flame, Info, ChevronRight, Sparkles, Timer, RotateCcw, Award, Trash, Star
+  Dumbbell, Calendar, RefreshCw, Check, Play, Square, Pause, Flame, Info, ChevronRight, Sparkles, Timer, RotateCcw, Award, Trash, Star, Activity, X
 } from "lucide-react";
 import { WorkoutSession, WorkoutExercise, MuscleRecovery, UserProfile } from "../types";
 import { generateRoutineByIA, suggestAlternativeExercisesByIA } from "../services/geminiService";
+import { SPORTS_METS } from "./Dashboard";
 
 interface WorkoutsProps {
   apiKey?: string;
@@ -19,6 +20,47 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
   const [activeTab, setActiveTab] = useState<"routine" | "recovery" | "timer">("routine");
   const [selectedDay, setSelectedDay] = useState<string>(new Date().toISOString().split("T")[0]);
   const [activeSession, setActiveSession] = useState<WorkoutSession | null>(null);
+
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  // Sports logging states
+  const [isSportModalOpen, setIsSportModalOpen] = useState(false);
+  const [selectedSportKey, setSelectedSportKey] = useState("soccer");
+  const [sportDuration, setSportDuration] = useState<number | "">(45);
+  const [customSportNameInput, setCustomSportNameInput] = useState("");
+
+  const handleLogSport = () => {
+    const duration = Number(sportDuration);
+    if (!duration || duration <= 0) return;
+
+    const sportInfo = SPORTS_METS[selectedSportKey];
+    const name = selectedSportKey === "other" && customSportNameInput.trim() !== ""
+      ? customSportNameInput.trim()
+      : sportInfo.label;
+
+    // METs * 0.0175 * weight * duration
+    const caloriesBurned = Math.round(sportInfo.met * 0.0175 * userProfile.weight * duration);
+
+    const newSportLog = {
+      id: Math.random().toString(36).substring(2, 9),
+      name,
+      durationMinutes: duration,
+      caloriesBurned,
+      date: todayStr
+    };
+
+    const currentSports = userProfile.loggedSportsToday || [];
+    onUpdateProfile({
+      ...userProfile,
+      loggedSportsToday: [...currentSports, newSportLog]
+    });
+
+    // Reset and close
+    setIsSportModalOpen(false);
+    setSportDuration(45);
+    setCustomSportNameInput("");
+    setSelectedSportKey("soccer");
+  };
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   
@@ -532,10 +574,19 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
       {/* Tab Header Selector */}
       <div className="px-6 pt-5 border-b border-gray-200 dark:border-gray-800/40">
         <span className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider">Módulo Fitness</span>
-        <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-1.5 mt-0.5">
-          <Dumbbell className="h-5 w-5 text-emerald-400" />
-          <span>Plan de Entrenamiento</span>
-        </h2>
+        <div className="flex justify-between items-center mt-0.5">
+          <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-1.5">
+            <Dumbbell className="h-5 w-5 text-emerald-400" />
+            <span>Plan de Entrenamiento</span>
+          </h2>
+          <button
+            onClick={() => setIsSportModalOpen(true)}
+            className="py-1.5 px-3 bg-orange-500 hover:bg-orange-655 text-white rounded-xl text-[10px] font-extrabold transition flex items-center gap-1 cursor-pointer shadow-lg shadow-orange-500/10 border-none"
+          >
+            <Activity className="h-3.5 w-3.5" />
+            <span>Reg. Deporte</span>
+          </button>
+        </div>
 
         <div className="flex gap-4 mt-3 border-b border-gray-200 dark:border-gray-800/20">
           <button
@@ -1233,6 +1284,102 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
         </div>
       )}
 
+      {/* Log Sport Modal */}
+      {isSportModalOpen && (
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-sm bg-white dark:bg-[#0c0d14] border border-gray-200 dark:border-gray-800 rounded-3xl shadow-2xl overflow-hidden text-gray-900 dark:text-white"
+          >
+            <div className="p-5 border-b border-gray-100 dark:border-gray-800/60 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-orange-500" />
+                <h3 className="text-sm font-black tracking-tight uppercase">Registrar Actividad</h3>
+              </div>
+              <button 
+                onClick={() => setIsSportModalOpen(false)}
+                className="p-1.5 bg-gray-50 hover:bg-gray-100 dark:bg-white/5 dark:hover:bg-white/10 rounded-xl text-gray-400 hover:text-gray-655 dark:hover:text-white transition cursor-pointer border-none"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Select Sport */}
+              <div className="space-y-1.5 text-left">
+                <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Deporte / Actividad</label>
+                <select
+                  value={selectedSportKey}
+                  onChange={(e) => setSelectedSportKey(e.target.value)}
+                  className="w-full p-2.5 bg-gray-50 dark:bg-black/40 border border-gray-200 dark:border-gray-800 rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none focus:border-orange-500/50 transition cursor-pointer"
+                >
+                  {Object.entries(SPORTS_METS).map(([key, info]) => (
+                    <option key={key} value={key} className="bg-white dark:bg-[#0c0d14]">
+                      {info.emoji} {info.label} (MET: {info.met})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Custom Name (Only if "other" is selected) */}
+              {selectedSportKey === "other" && (
+                <div className="space-y-1.5 text-left animate-fadeIn">
+                  <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nombre del Deporte</label>
+                  <input
+                    type="text"
+                    value={customSportNameInput}
+                    onChange={(e) => setCustomSportNameInput(e.target.value)}
+                    placeholder="Ej: Fútbol de salón, Pilates aéreo..."
+                    className="w-full p-2.5 bg-gray-50 dark:bg-black/40 border border-gray-200 dark:border-gray-800 rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none focus:border-orange-500/50 transition placeholder-gray-400"
+                  />
+                </div>
+              )}
+
+              {/* Duration Input */}
+              <div className="space-y-1.5 text-left">
+                <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Duración (minutos)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={sportDuration}
+                    onChange={(e) => setSportDuration(e.target.value === "" ? "" : Math.max(1, Number(e.target.value)))}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-black/40 border border-gray-200 dark:border-gray-800 rounded-xl text-xs text-gray-900 dark:text-white font-mono focus:outline-none focus:border-orange-500/50 transition"
+                  />
+                </div>
+              </div>
+
+              {/* Estimation Preview */}
+              {Number(sportDuration) > 0 && (
+                <div className="bg-orange-500/5 border border-orange-500/10 p-3 rounded-xl flex items-center justify-between">
+                  <span className="text-[10px] text-gray-555 dark:text-gray-400 font-bold uppercase">Calorías estimadas quemadas:</span>
+                  <span className="text-xs font-black text-orange-500 font-mono">
+                    -{Math.round(SPORTS_METS[selectedSportKey].met * 0.0175 * userProfile.weight * Number(sportDuration))} kcal
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="p-5 border-t border-gray-100 dark:border-gray-800/60 bg-gray-50 dark:bg-black/20 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setIsSportModalOpen(false)}
+                className="flex-1 py-2 border border-gray-200 dark:border-gray-800 text-gray-550 dark:text-gray-400 text-xs font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleLogSport}
+                disabled={!sportDuration}
+                className="flex-1 py-2 bg-orange-500 hover:bg-orange-600 text-white disabled:bg-gray-200 dark:disabled:bg-white/5 disabled:text-gray-400 dark:disabled:text-white/30 text-xs font-bold rounded-xl transition cursor-pointer shadow-lg shadow-orange-500/10"
+              >
+                Guardar registro
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

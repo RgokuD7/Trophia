@@ -8,6 +8,7 @@ export type DietType = "standard" | "vegetarian" | "vegan" | "keto" | "paleo" | 
 export interface UserProfile {
   name: string;
   age: number;
+  birthdate?: string; // Format YYYY-MM-DD
   sex: BiologicalSex;
   weight: number; // in kg
   height: number; // in cm

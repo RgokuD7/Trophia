@@ -553,22 +553,13 @@ export default function Dashboard({
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <button
-                onClick={() => onNavigateToTab("workouts")}
-                className="flex-1 py-1.5 bg-emerald-500/15 hover:bg-emerald-500 text-emerald-400 hover:text-white rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
-              >
-                <span>Ver Rutinas</span>
-                <ChevronRight className="h-3 w-3" />
-              </button>
-              <button
-                onClick={() => setIsSportModalOpen(true)}
-                className="flex-1 py-1.5 bg-orange-500/15 hover:bg-orange-500 text-orange-400 hover:text-white rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
-              >
-                <Activity className="h-3 w-3" />
-                <span>Reg. Deporte</span>
-              </button>
-            </div>
+            <button
+              onClick={() => onNavigateToTab("workouts")}
+              className="w-full py-1.5 bg-emerald-500/15 hover:bg-emerald-500 text-emerald-400 hover:text-white rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+            >
+              <span>Ver Rutinas</span>
+              <ChevronRight className="h-3 w-3" />
+            </button>
           </div>
 
         </div>

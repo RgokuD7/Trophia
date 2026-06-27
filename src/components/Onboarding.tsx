@@ -176,9 +176,40 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
     return (savedKey && savedKey.trim().length >= 15) ? 2 : 1;
   });
 
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [step]);
+
 
   const [name, setName] = useState(defaultName || "Richard");
+  const [birthDay, setBirthDay] = useState(1);
+  const [birthMonth, setBirthMonth] = useState(1);
+  const [birthYear, setBirthYear] = useState(1999);
+  const [birthdate, setBirthdate] = useState("1999-01-01");
   const [age, setAge] = useState(25);
+
+  useEffect(() => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const formatted = `${birthYear}-${pad(birthMonth)}-${pad(birthDay)}`;
+    setBirthdate(formatted);
+  }, [birthDay, birthMonth, birthYear]);
+
+  useEffect(() => {
+    if (!birthdate) return;
+    const today = new Date();
+    const birthDate = new Date(birthdate);
+    let calculatedAge = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      calculatedAge--;
+    }
+    setAge(Math.max(1, calculatedAge));
+  }, [birthdate]);
+
   const [sex, setSex] = useState<BiologicalSex>("male");
   const [weight, setWeight] = useState<number>(75);
   const [height, setHeight] = useState<number>(175);
@@ -769,6 +800,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
     const finalProfile: UserProfile = {
       name: name || "Usuario",
       age: age || 25,
+      birthdate: birthdate || undefined,
       sex,
       weight,
       height,
@@ -1080,7 +1112,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
       </div>
 
       {/* Main Form content */}
-      <div className="flex-1 overflow-y-auto no-scrollbar px-6 py-6 flex flex-col justify-start z-10 max-w-md mx-auto w-full pb-8">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar px-6 py-6 flex flex-col justify-start z-10 max-w-md mx-auto w-full pb-8">
         <AnimatePresence mode="wait">
           {step === 2 && (
             <motion.div
@@ -1107,15 +1139,69 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-white/40 mb-1.5 uppercase tracking-wider">Edad</label>
-                <Input
-                  type="number"
-                  icon={Calendar}
-                  value={age || ""}
-                  onChange={(e) => setAge(parseInt(e.target.value) || 0)}
-                  placeholder="25"
-                  size="lg"
-                />
+                <label className="block text-[10px] font-bold text-white/40 mb-1.5 uppercase tracking-wider">Fecha de Nacimiento</label>
+                <div className="flex gap-2">
+                  {/* Día */}
+                  <div className="flex-1 space-y-1">
+                    <span className="block text-[8px] text-white/30 uppercase font-black tracking-widest text-center">Día</span>
+                    <select
+                      value={birthDay}
+                      onChange={(e) => setBirthDay(Number(e.target.value))}
+                      className="w-full h-11 bg-white/5 border border-white/10 rounded-2xl px-3 text-xs text-white/80 font-bold focus:outline-none focus:border-emerald-500 transition cursor-pointer"
+                    >
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                        <option key={d} value={d} className="bg-[#0c0d14] text-white font-bold">{d}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Mes */}
+                  <div className="flex-[2] space-y-1">
+                    <span className="block text-[8px] text-white/30 uppercase font-black tracking-widest text-center">Mes</span>
+                    <select
+                      value={birthMonth}
+                      onChange={(e) => setBirthMonth(Number(e.target.value))}
+                      className="w-full h-11 bg-white/5 border border-white/10 rounded-2xl px-3 text-xs text-white/80 font-bold focus:outline-none focus:border-emerald-500 transition cursor-pointer"
+                    >
+                      {[
+                        { v: 1, l: "Enero" },
+                        { v: 2, l: "Febrero" },
+                        { v: 3, l: "Marzo" },
+                        { v: 4, l: "Abril" },
+                        { v: 5, l: "Mayo" },
+                        { v: 6, l: "Junio" },
+                        { v: 7, l: "Julio" },
+                        { v: 8, l: "Agosto" },
+                        { v: 9, l: "Septiembre" },
+                        { v: 10, l: "Octubre" },
+                        { v: 11, l: "Noviembre" },
+                        { v: 12, l: "Diciembre" }
+                      ].map((m) => (
+                        <option key={m.v} value={m.v} className="bg-[#0c0d14] text-white font-bold">{m.l}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Año */}
+                  <div className="flex-[1.5] space-y-1">
+                    <span className="block text-[8px] text-white/30 uppercase font-black tracking-widest text-center">Año</span>
+                    <select
+                      value={birthYear}
+                      onChange={(e) => setBirthYear(Number(e.target.value))}
+                      className="w-full h-11 bg-white/5 border border-white/10 rounded-2xl px-3 text-xs text-white/80 font-bold focus:outline-none focus:border-emerald-500 transition cursor-pointer"
+                    >
+                      {Array.from({ length: 90 }, (_, i) => new Date().getFullYear() - 10 - i).map((y) => (
+                        <option key={y} value={y} className="bg-[#0c0d14] text-white font-bold">{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                {/* Age preview */}
+                <div className="mt-2 text-right">
+                  <span className="text-[10px] text-emerald-400 font-bold font-mono">
+                    Edad calculada: {age} años
+                  </span>
+                </div>
               </div>
 
               <div>
@@ -1193,6 +1279,16 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                 Tu actividad física diaria no relacionada con el entrenamiento (NEAT) determina una parte fundamental de tus requerimientos calóricos diarios.
               </p>
 
+              {/* Educational info for background vs sports activity */}
+              <div className="bg-emerald-500/10 border border-emerald-500/20 p-3.5 rounded-2xl space-y-1 text-left">
+                <span className="block text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <span>💡 Consejo de Nutrición Deportiva</span>
+                </span>
+                <p className="text-[10px] text-white/70 leading-relaxed">
+                  Si tu trabajo es sedentario (oficina/escritorio) pero entrenas deportes de forma regular (como fútbol, boxeo, natación, etc.), te recomendamos mantener tu actividad diaria como <strong>"Sedentaria"</strong>. De esta manera, mantendrás tus requerimientos base controlados y podrás registrar tus sesiones de deporte específicas cada día en tu panel. Así, la app aumentará tus calorías de forma dinámica solo en los días que entrenas, optimizando tu recuperación.
+                </p>
+              </div>
+
               {/* NEAT - Actividad Diaria */}
               <div className="space-y-3">
                 <label className="block text-[10px] font-bold text-white/40 mb-1 uppercase tracking-wider">
@@ -1250,16 +1346,6 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                     </button>
                   ))}
                 </div>
-              </div>
-
-              {/* Educational info for background vs sports activity */}
-              <div className="bg-emerald-500/10 border border-emerald-500/20 p-3.5 rounded-2xl space-y-1 text-left">
-                <span className="block text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
-                  <span>💡 Consejo de Nutrición Deportiva</span>
-                </span>
-                <p className="text-[10px] text-white/70 leading-relaxed">
-                  Si tu trabajo es sedentario (oficina/escritorio) pero entrenas deportes de forma regular (como fútbol, boxeo, natación, etc.), te recomendamos mantener tu actividad diaria como <strong>"Sedentaria"</strong>. De esta manera, mantendrás tus requerimientos base controlados y podrás registrar tus sesiones de deporte específicas cada día en tu panel. Así, la app aumentará tus calorías de forma dinámica solo en los días que entrenas, optimizando tu recuperación.
-                </p>
               </div>
             </motion.div>
           )}
