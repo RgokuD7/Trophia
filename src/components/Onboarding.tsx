@@ -1197,8 +1197,8 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                   </div>
                 </div>
                 {/* Age preview */}
-                <div className="mt-2 text-right">
-                  <span className="text-[10px] text-emerald-400 font-bold font-mono">
+                <div className="mt-2 text-left">
+                  <span className="text-xs text-emerald-400 font-extrabold font-mono">
                     Edad calculada: {age} años
                   </span>
                 </div>
