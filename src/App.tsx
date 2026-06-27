@@ -1,19 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { 
-  Heart, Flame, Utensils, Droplets, Dumbbell, Settings, Sparkles, Key, AlertCircle, Info, RefreshCw, ShoppingCart
+  Utensils, Droplets, Dumbbell, Settings, Lock, CookingPot
 } from "lucide-react";
 import { User } from "firebase/auth";
 import { UserProfile, LoggedMeal, WaterLog, WorkoutSession, MealType } from "./types";
 import Onboarding from "./components/Onboarding";
 import Dashboard from "./components/Dashboard";
-import Workouts from "./components/Workouts";
 import Hydration from "./components/Hydration";
 import SettingsView from "./components/Settings";
 import FoodLogger from "./components/FoodLogger";
 import Auth from "./components/Auth";
 import RecipeAssistantModal from "./components/RecipeAssistantModal";
-import HealthWellness from "./components/HealthWellness";
-import GroceryPlanner from "./components/GroceryPlanner";
+import NutritionHub from "./components/NutritionHub";
 import { getSuggestedMealTypeByTime } from "./utils/fitnessUtils";
 
 // Import Firebase services
@@ -36,7 +34,7 @@ import {
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "workouts" | "hydration" | "settings" | "health" | "grocery">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "nutrition" | "hydration" | "workouts" | "settings">("dashboard");
   const [loggedMeals, setLoggedMeals] = useState<LoggedMeal[]>([]);
   const [waterLogs, setWaterLogs] = useState<WaterLog[]>([]);
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
@@ -283,7 +281,7 @@ export default function App() {
                   loggedMeals={loggedMeals}
                   waterLogs={waterLogs}
                   workoutHistory={workoutHistory}
-                  onOpenFoodLogger={handleOpenFoodLogger}
+                  onOpenFoodLogger={() => setActiveTab("nutrition")}
                   onOpenRecipeAssistant={() => setIsRecipeAssistantOpen(true)}
                   onAddWaterQuick={handleAddWater}
                   onDeleteMeal={handleDeleteMeal}
@@ -296,14 +294,15 @@ export default function App() {
                 />
               )}
 
-              {activeTab === "workouts" && (
-                <Workouts
-                  apiKey={profile.apiKey}
-                  userProfile={profile}
-                  workoutHistory={workoutHistory}
-                  onAddWorkout={handleAddWorkout}
-                  onClearWorkouts={handleClearWorkouts}
-                  onUpdateProfile={handleUpdateProfile}
+              {activeTab === "nutrition" && user && (
+                <NutritionHub
+                  profile={profile}
+                  userId={user.uid}
+                  loggedMeals={loggedMeals}
+                  onAddMeal={handleAddMeal}
+                  onDeleteMeal={handleDeleteMeal}
+                  onOpenFoodLogger={handleOpenFoodLogger}
+                  onOpenRecipeAssistant={() => setIsRecipeAssistantOpen(true)}
                 />
               )}
 
@@ -316,19 +315,22 @@ export default function App() {
                 />
               )}
 
-              {activeTab === "health" && (
-                <HealthWellness
-                  apiKey={profile.apiKey}
-                  userProfile={profile}
-                  onUpdateProfile={handleUpdateProfile}
-                />
-              )}
-
-              {activeTab === "grocery" && (
-                <GroceryPlanner
-                  apiKey={profile.apiKey}
-                  userProfile={profile}
-                />
+              {activeTab === "workouts" && (
+                <div className="flex-1 flex flex-col items-center justify-center px-8 text-center space-y-5">
+                  <div className="w-20 h-20 rounded-full bg-white/[0.03] border border-white/10 flex items-center justify-center">
+                    <Lock className="h-8 w-8 text-white/20" />
+                  </div>
+                  <div className="space-y-2">
+                    <h2 className="text-lg font-black text-white tracking-tight">Próximamente</h2>
+                    <p className="text-[11px] text-white/40 leading-relaxed max-w-[260px] mx-auto">
+                      Estamos perfeccionando tu módulo de entrenamiento personalizado con IA. ¡Pronto estará disponible!
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                    <Dumbbell className="h-4 w-4 text-emerald-400" />
+                    <span className="text-[10px] font-bold text-emerald-400">Rutinas · Ejercicios · Progresión</span>
+                  </div>
+                </div>
               )}
 
               {activeTab === "settings" && user && (
@@ -377,13 +379,13 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setActiveTab("workouts")}
+              onClick={() => setActiveTab("nutrition")}
               className={`flex flex-col items-center gap-1 py-1.5 transition ${
-                activeTab === "workouts" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"
+                activeTab === "nutrition" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"
               }`}
             >
-              <Dumbbell className="h-5 w-5" />
-              <span className="text-[9px] font-bold uppercase tracking-wide">Rutinas</span>
+              <CookingPot className="h-5 w-5" />
+              <span className="text-[9px] font-bold uppercase tracking-wide">Alimentación</span>
             </button>
 
             <button
@@ -397,23 +399,16 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setActiveTab("health")}
-              className={`flex flex-col items-center gap-1 py-1.5 transition ${
-                activeTab === "health" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"
+              onClick={() => setActiveTab("workouts")}
+              className={`relative flex flex-col items-center gap-1 py-1.5 transition ${
+                activeTab === "workouts" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"
               }`}
             >
-              <Heart className="h-5 w-5" />
-              <span className="text-[9px] font-bold uppercase tracking-wide">Salud</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("grocery")}
-              className={`flex flex-col items-center gap-1 py-1.5 transition ${
-                activeTab === "grocery" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"
-              }`}
-            >
-              <ShoppingCart className="h-5 w-5" />
-              <span className="text-[9px] font-bold uppercase tracking-wide">Compras</span>
+              <div className="relative">
+                <Dumbbell className="h-5 w-5" />
+                <Lock className="h-2.5 w-2.5 absolute -top-1 -right-1.5 text-amber-400" />
+              </div>
+              <span className="text-[9px] font-bold uppercase tracking-wide">Rutinas</span>
             </button>
 
             <button

@@ -11,7 +11,7 @@ import {
   serverTimestamp
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { UserProfile, LoggedMeal, WaterLog, WorkoutSession } from "../types";
+import { UserProfile, LoggedMeal, WaterLog, WorkoutSession, CustomFood } from "../types";
 
 // User Profile Operations
 export const getUserProfile = async (userId: string): Promise<UserProfile | null> => {
@@ -260,6 +260,17 @@ export const deleteUserAllData = async (userId: string): Promise<void> => {
       await workoutsBatch.commit();
     }
 
+    // Delete custom foods
+    const customFoodsRef = collection(db, "users", userId, "customFoods");
+    const customFoodsSnap = await getDocs(customFoodsRef);
+    if (!customFoodsSnap.empty) {
+      const customFoodsBatch = writeBatch(db);
+      customFoodsSnap.docs.forEach((doc) => {
+        customFoodsBatch.delete(doc.ref);
+      });
+      await customFoodsBatch.commit();
+    }
+
     // 4. Delete push subscriptions if any
     const pushRef = collection(db, "users", userId, "push_subscriptions");
     const pushSnap = await getDocs(pushRef);
@@ -280,4 +291,42 @@ export const deleteUserAllData = async (userId: string): Promise<void> => {
   }
 };
 
+// Custom Foods Operations (Firestore-backed personal food database)
+export const getCustomFoods = async (userId: string): Promise<CustomFood[]> => {
+  try {
+    const foodsRef = collection(db, "users", userId, "customFoods");
+    const q = query(foodsRef, orderBy("createdAt", "desc"));
+    const querySnapshot = await getDocs(q);
+    const foods: CustomFood[] = [];
+    querySnapshot.forEach((doc) => {
+      foods.push({ id: doc.id, ...doc.data() } as CustomFood);
+    });
+    return foods;
+  } catch (error) {
+    console.error("Error getting custom foods:", error);
+    return [];
+  }
+};
 
+export const addCustomFood = async (userId: string, food: Omit<CustomFood, "id">): Promise<CustomFood> => {
+  try {
+    const foodsRef = collection(db, "users", userId, "customFoods");
+    const newDocRef = doc(foodsRef);
+    const newFood: CustomFood = { ...food, id: newDocRef.id };
+    await setDoc(newDocRef, newFood);
+    return newFood;
+  } catch (error) {
+    console.error("Error adding custom food:", error);
+    throw error;
+  }
+};
+
+export const deleteCustomFood = async (userId: string, foodId: string): Promise<void> => {
+  try {
+    const foodDocRef = doc(db, "users", userId, "customFoods", foodId);
+    await deleteDoc(foodDocRef);
+  } catch (error) {
+    console.error("Error deleting custom food:", error);
+    throw error;
+  }
+};

@@ -149,3 +149,15 @@ export interface LoggedSport {
   caloriesBurned: number;
   date: string; // YYYY-MM-DD
 }
+
+export interface CustomFood {
+  id: string;
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  servingSize: string;
+  category?: "dish" | "product" | "recipe";
+  createdAt: string;
+}
