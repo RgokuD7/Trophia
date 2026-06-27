@@ -1041,14 +1041,14 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#050505] text-white overflow-y-auto no-scrollbar pb-8 select-none relative">
+    <div className="flex flex-col h-full bg-[#050505] text-white select-none relative overflow-hidden">
       {/* Background Neon Ambiance */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-[15%] -left-[10%] w-[350px] h-[350px] bg-emerald-500 opacity-[0.05] rounded-full blur-[90px]"></div>
       </div>
 
       {/* Step Header */}
-      <div className="p-6 pb-4 flex items-center justify-between border-b border-white/5 z-10 bg-[#050505]/80 backdrop-blur-xl sticky top-0">
+      <div className="p-6 pb-4 flex items-center justify-between border-b border-white/5 z-20 bg-[#050505] flex-shrink-0">
         <div>
           <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-widest">
             Paso {step} de 9
@@ -1080,7 +1080,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
       </div>
 
       {/* Main Form content */}
-      <div className="flex-1 px-6 py-6 flex flex-col justify-start z-10 max-w-md mx-auto w-full">
+      <div className="flex-1 overflow-y-auto no-scrollbar px-6 py-6 flex flex-col justify-start z-10 max-w-md mx-auto w-full pb-8">
         <AnimatePresence mode="wait">
           {step === 2 && (
             <motion.div
@@ -2720,7 +2720,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
       {/* Navigation Buttons footer */}
       {!showEducationTutorial && (
-        <div className="px-6 pt-4 pb-6 flex gap-3 border-t border-white/5 mt-auto bg-[#050505]/95 backdrop-blur-xl max-w-md mx-auto w-full sticky bottom-0 z-30 shadow-[0_-15px_30px_rgba(0,0,0,0.6)]">
+        <div className="px-6 pt-4 pb-8 flex gap-3 border-t border-white/5 bg-[#050505] max-w-md mx-auto w-full z-20 flex-shrink-0 shadow-[0_-15px_30px_rgba(0,0,0,0.8)]">
           {step > 1 && (
             <Button
               variant="secondary"
