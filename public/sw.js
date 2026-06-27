@@ -68,9 +68,22 @@ self.addEventListener("fetch", (e) => {
 // Push Event - Receive notification from server
 self.addEventListener("push", (e) => {
   let data = { title: "Trophia", body: "¡Es hora de registrar tus comidas y agua de hoy!" };
+  let icon = "/logo.png";
+  let badge = "/logo.png";
+
   if (e.data) {
     try {
-      data = e.data.json();
+      const parsed = e.data.json();
+      if (parsed && parsed.notification) {
+        data = {
+          title: parsed.notification.title || "Trophia",
+          body: parsed.notification.body || ""
+        };
+        if (parsed.notification.icon) icon = parsed.notification.icon;
+        if (parsed.notification.badge) badge = parsed.notification.badge;
+      } else {
+        data = parsed;
+      }
     } catch (err) {
       data = { title: "Trophia", body: e.data.text() };
     }
@@ -78,8 +91,8 @@ self.addEventListener("push", (e) => {
 
   const options = {
     body: data.body,
-    icon: "/logo.png",
-    badge: "/logo.png",
+    icon: icon,
+    badge: badge,
     vibrate: [100, 50, 100],
     data: {
       dateOfArrival: Date.now(),
