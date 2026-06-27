@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkDeficitNight = exports.checkHydrationAfternoon = exports.checkCreatineAndFoodLunch = exports.checkCreatineMorning = void 0;
+exports.checkBirthdayCongrats = exports.checkDeficitNight = exports.checkHydrationAfternoon = exports.checkCreatineAndFoodLunch = exports.checkCreatineMorning = void 0;
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 const webpush = require("web-push");
@@ -192,6 +192,35 @@ exports.checkDeficitNight = (0, scheduler_1.onSchedule)({
             const title = "⚠️ Alerta de Ingesta Calórica";
             const body = `Hola ${user.name}, hoy has consumido muy pocas calorías (${totalCalories} kcal de ${Math.round(adjustedTarget)}). Considera una merienda proteica para proteger tu masa muscular.`;
             await sendPushToUser(doc.id, title, body);
+        }
+    }
+});
+// 5. Cumpleaños - 00:01 AM (Chile)
+exports.checkBirthdayCongrats = (0, scheduler_1.onSchedule)({
+    schedule: "1 0 * * *",
+    timeZone: "America/Santiago",
+    memory: "256MiB"
+}, async (event) => {
+    console.log("Running checkBirthdayCongrats schedule...");
+    const santiagoDateStr = new Date().toLocaleString("en-US", { timeZone: "America/Santiago" });
+    const d = new Date(santiagoDateStr);
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const todayMMDD = `${month}-${day}`; // e.g. "06-27"
+    const usersSnap = await db.collection("users").get();
+    for (const doc of usersSnap.docs) {
+        const user = doc.data();
+        if (user.isOnboardingCompleted && user.birthdate) {
+            // birthdate format is YYYY-MM-DD
+            const parts = user.birthdate.split("-");
+            if (parts.length === 3) {
+                const userMMDD = `${parts[1]}-${parts[2]}`;
+                if (userMMDD === todayMMDD) {
+                    const title = `🎂 ¡Feliz Cumpleaños, ${user.name}! 🥳`;
+                    const body = "¡El equipo de Trophia te desea un día espectacular! Que hoy sea un día lleno de energía, salud y mucho entrenamiento. ¡A celebrar! 🏆";
+                    await sendPushToUser(doc.id, title, body);
+                }
+            }
         }
     }
 });

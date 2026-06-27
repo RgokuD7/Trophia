@@ -245,3 +245,36 @@ export const checkDeficitNight = onSchedule({
     }
   }
 });
+
+// 5. Cumpleaños - 00:01 AM (Chile)
+export const checkBirthdayCongrats = onSchedule({
+  schedule: "1 0 * * *",
+  timeZone: "America/Santiago",
+  memory: "256MiB"
+}, async (event) => {
+  console.log("Running checkBirthdayCongrats schedule...");
+  const santiagoDateStr = new Date().toLocaleString("en-US", { timeZone: "America/Santiago" });
+  const d = new Date(santiagoDateStr);
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const todayMMDD = `${month}-${day}`; // e.g. "06-27"
+
+  const usersSnap = await db.collection("users").get();
+
+  for (const doc of usersSnap.docs) {
+    const user = doc.data() as UserProfile & { birthdate?: string };
+    if (user.isOnboardingCompleted && user.birthdate) {
+      // birthdate format is YYYY-MM-DD
+      const parts = user.birthdate.split("-");
+      if (parts.length === 3) {
+        const userMMDD = `${parts[1]}-${parts[2]}`;
+        if (userMMDD === todayMMDD) {
+          const title = `🎂 ¡Feliz Cumpleaños, ${user.name}! 🥳`;
+          const body = "¡El equipo de Trophia te desea un día espectacular! Que hoy sea un día lleno de energía, salud y mucho entrenamiento. ¡A celebrar! 🏆";
+          await sendPushToUser(doc.id, title, body);
+        }
+      }
+    }
+  }
+});
+
