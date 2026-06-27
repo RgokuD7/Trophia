@@ -148,6 +148,10 @@ export default function Dashboard({
   const upperOptBound = Math.round(adjustedCalTarget * 1.05);
   const inOptimalRange = totalCalories >= lowerOptBound && totalCalories <= upperOptBound && totalCalories > 0;
 
+  // Undereating warning when it is late (after 20:00) and calories are below the target range
+  const isLate = new Date().getHours() >= 20;
+  const isUndereatingLate = isLate && totalCalories < lowerOptBound;
+
   // Dynamic scale for the calorie progress bar to handle overflow gracefully
   const barMax = totalCalories > adjustedCalTarget * 1.1 
     ? Math.round(totalCalories * 1.05) 
@@ -256,12 +260,16 @@ export default function Dashboard({
 
             {/* Badges / Ranges feedback */}
             <div>
-              {inOptimalRange ? (
-                <span className="text-[9px] font-black text-emerald-500 dark:text-emerald-400 bg-emerald-550/10 dark:bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 shadow-sm animate-pulse">
+              {isUndereatingLate ? (
+                <span className="text-[9px] font-black text-rose-500 dark:text-rose-450 bg-rose-550/15 dark:bg-rose-500/10 px-2.5 py-1 rounded-full border border-rose-500/20 animate-pulse">
+                  ⚠️ DÉFICIT EXCESIVO
+                </span>
+              ) : inOptimalRange ? (
+                <span className="text-[9px] font-black text-emerald-500 dark:text-emerald-450 bg-emerald-550/10 dark:bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 shadow-sm animate-pulse">
                   🎯 RANGO ÓPTIMO
                 </span>
               ) : calExceeded ? (
-                <span className="text-[9px] font-black text-rose-500 dark:text-rose-400 bg-rose-550/10 dark:bg-rose-500/10 px-2.5 py-1 rounded-full border border-rose-500/20">
+                <span className="text-[9px] font-black text-rose-500 dark:text-rose-455 bg-rose-550/10 dark:bg-rose-500/10 px-2.5 py-1 rounded-full border border-rose-500/20">
                   ⚠️ EXCESO: +{Math.round(totalCalories - adjustedCalTarget)} KCAL
                 </span>
               ) : (
@@ -291,11 +299,13 @@ export default function Dashboard({
               {/* 3. Base Progress Bar (Up to Meta or current progress) */}
               <div 
                 className={`h-full transition-all duration-500 ${
-                  inOptimalRange 
-                    ? "bg-gradient-to-r from-emerald-500 to-emerald-400" 
-                    : calExceeded
-                      ? "bg-gradient-to-r from-emerald-500 to-emerald-450" 
-                      : "bg-gradient-to-r from-blue-500 to-blue-400"
+                  isUndereatingLate
+                    ? "bg-gradient-to-r from-rose-500 to-rose-400"
+                    : inOptimalRange 
+                      ? "bg-gradient-to-r from-emerald-500 to-emerald-400" 
+                      : calExceeded
+                        ? "bg-gradient-to-r from-emerald-500 to-emerald-450" 
+                        : "bg-gradient-to-r from-blue-500 to-blue-400"
                 }`}
                 style={{ width: `${Math.min(targetPercent, progressPercent)}%` }}
               />
@@ -320,21 +330,29 @@ export default function Dashboard({
           {/* Desglose de Calorías */}
           <div className="grid grid-cols-3 gap-2.5 pt-3 border-t border-gray-150 dark:border-gray-800/60 text-[10px] font-bold">
             <div className="bg-gray-50/60 dark:bg-[#0f101a]/30 p-2 rounded-xl border border-gray-150/40 dark:border-gray-800/20 text-center">
-              <span className="text-[8px] text-gray-400 dark:text-gray-500 block uppercase tracking-wider mb-0.5">Objetivo Base</span>
+              <span className="text-[8px] text-gray-400 dark:text-gray-555 block uppercase tracking-wider mb-0.5">Objetivo Base</span>
               <span className="text-gray-700 dark:text-gray-300 font-mono text-[11px]">{calTarget}</span>
             </div>
             <div className="bg-gray-50/60 dark:bg-[#0f101a]/30 p-2 rounded-xl border border-gray-150/40 dark:border-gray-800/20 text-center">
-              <span className="text-[8px] text-gray-400 dark:text-gray-500 block uppercase tracking-wider mb-0.5">Extra Quemado</span>
+              <span className="text-[8px] text-gray-400 dark:text-gray-555 block uppercase tracking-wider mb-0.5">Extra Quemado</span>
               <span className="text-orange-500 font-mono text-[11px]">+{totalBurnedCalories}</span>
             </div>
             <div className="bg-gray-50/60 dark:bg-[#0f101a]/30 p-2 rounded-xl border border-gray-150/40 dark:border-gray-800/20 text-center">
-              <span className="text-[8px] text-gray-400 dark:text-gray-500 block uppercase tracking-wider mb-0.5">Meta Ajustada</span>
+              <span className="text-[8px] text-gray-400 dark:text-gray-555 block uppercase tracking-wider mb-0.5">Meta Ajustada</span>
               <span className="text-emerald-400 font-mono text-[11px]">{Math.round(adjustedCalTarget)}</span>
             </div>
           </div>
 
           {/* Context Feedback */}
-          {calExceeded ? (
+          {isUndereatingLate ? (
+            <div className="flex items-start gap-2 text-[10.5px] text-rose-450 dark:text-rose-400 bg-rose-500/10 p-3 rounded-2xl border border-rose-500/15 leading-relaxed text-left">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0 text-rose-400 mt-0.5 animate-bounce" />
+              <div>
+                <span className="font-extrabold block">Alerta de Ingesta Insuficiente</span>
+                <p className="text-[10px] text-rose-400/80">Es tarde y tu ingesta calórica está muy por debajo de tu rango mínimo recomendado. Comer muy por debajo de tu rango óptimo ralentiza el metabolismo y destruye masa muscular. Intenta hacer una colación o cena nutritiva antes de dormir.</p>
+              </div>
+            </div>
+          ) : calExceeded ? (
             <div className="flex items-start gap-2 text-[10.5px] text-rose-400 bg-rose-500/10 p-3 rounded-2xl border border-rose-500/15 leading-relaxed text-left">
               <AlertTriangle className="h-4 w-4 flex-shrink-0 text-rose-400 mt-0.5" />
               <div>
@@ -351,7 +369,7 @@ export default function Dashboard({
               </div>
             </div>
           ) : (
-            <div className="text-[10.5px] text-gray-500 dark:text-gray-400 leading-relaxed text-center italic">
+            <div className="text-[10.5px] text-gray-550 dark:text-gray-400 leading-relaxed text-center italic">
               "La consistencia a largo plazo supera a la perfección a corto plazo. Mantente en rango."
             </div>
           )}
