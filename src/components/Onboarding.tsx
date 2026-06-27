@@ -529,7 +529,11 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
       "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
       "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
     ];
-    return `${day} de ${spanishMonths[targetDate.getMonth()]}, ${targetDate.getFullYear()}`;
+    let period = "mediados de";
+    if (day <= 10) period = "inicios de";
+    else if (day >= 21) period = "finales de";
+    
+    return `${period} ${spanishMonths[targetDate.getMonth()]} de ${targetDate.getFullYear()}`;
   };
 
   const getProjections = () => {
