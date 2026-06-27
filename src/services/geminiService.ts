@@ -29,7 +29,7 @@ async function callGeminiAPI(
   prompt: string,
   images?: GeminiImage[]
 ): Promise<any> {
-  const model = "gemini-1.5-flash";
+  const model = "gemini-2.5-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const parts: any[] = [{ text: prompt }];
