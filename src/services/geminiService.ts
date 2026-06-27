@@ -154,7 +154,9 @@ ${metricsInfo}
 
 Por favor, cruza las imágenes visuales con estas mediciones físicas para dar una estimación de grasa corporal extremadamente precisa y coherente. El usuario te ha dado permiso y confía en tu criterio clínico-deportivo. Si alguna medida parece incoherente o difícil de calibrar, haz una síntesis lógica ponderando las imágenes visuales y los cálculos de fórmulas.
 
-Además, basándote en su fisionomía y datos, recomiéndale el mejor objetivo de fitness para su estado actual (escoge estrictamente uno de estos 4 valores exactos: "lose_weight", "gain_muscle", "aesthetics", "maintenance") y justifica tu recomendación de manera sumamente motivadora e inteligente.
+Además, basándote en su fisionomía y datos, recomiéndale el mejor objetivo de fitness para su estado actual (escoge estrictamente uno de estos 4 valores exactos para la clave JSON: "lose_weight", "gain_muscle", "aesthetics", "maintenance") y justifica tu recomendación de manera sumamente motivadora e inteligente.
+
+CRÍTICO: En el texto de justificación o análisis ("analysis" o "recommendedGoalReason"), NUNCA menciones los códigos internos en inglés (como "lose_weight", "gain_muscle", "aesthetics", "maintenance"). En su lugar, utiliza siempre sus nombres legibles en español: "Bajar de Peso / Definición", "Ganar Masa Muscular / Volumen", "Recomposición Estética" o "Mantenimiento / Salud".
 
 Adopta un tono profesional, empático, científico y motivador. Si las imágenes no parecen ser de un cuerpo humano o no permiten realizar la estimación con suficiente certeza, indica un estimado promedio razonable según tu criterio clínico visual y la información biométrica y describe en el texto de 'analysis' cómo lograr una mejor estimación.
 
@@ -163,7 +165,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   "bodyFat": número (porcentaje de grasa estimado, ej: 18.5, o null si es completamente imposible de estimar),
   "analysis": "Explicación detallada de la composición observada (somatotipo, masa muscular, distribución de grasa en torso y extremidades inferiores si se aprecian, y su relación con los rasgos visibles y mediciones proporcionadas) junto a recomendaciones de entrenamiento/alimentación coherentes. Utiliza formato de Markdown básico (como **negrita** para resaltar hallazgos clave o métricas importantes) dentro del texto.",
   "recommendedGoal": "lose_weight" | "gain_muscle" | "aesthetics" | "maintenance",
-  "recommendedGoalReason": "Explicación muy motivadora, breve (máximo 2-3 oraciones en español) de por qué este objetivo es ideal para su fisionomía, basándote en su grasa y composición corporal."
+  "recommendedGoalReason": "Explicación muy motivadora, breve (máximo 2-3 oraciones en español) de por qué este objetivo es ideal para su fisionomía, basándote en su grasa y composición corporal. Usa los nombres descriptivos en español."
 }`;
 
   try {
@@ -210,7 +212,7 @@ Basado en estos datos clínicos, recomiéndale uno de los siguientes 4 objetivos
 Debes responder estrictamente en formato JSON con la siguiente estructura:
 {
   "recommendedGoal": "lose_weight" | "gain_muscle" | "aesthetics" | "maintenance",
-  "reason": "Explicación muy motivadora, breve (máximo 2-3 oraciones en español) de por qué este objetivo es ideal para su fisionomía. Resalta los datos clave e importantes (porcentajes de grasa, objetivos recomendados, etc.) encerrándolos entre doble asteriscos como **dato importante** para poder aplicar formato visual."
+  "reason": "Explicación muy motivadora, breve (máximo 2-3 oraciones en español) de por qué este objetivo es ideal para su fisionomía. Resalta los datos clave e importantes (porcentajes de grasa, etc.) encerrándolos entre doble asteriscos como **dato importante** para poder aplicar formato visual. CRÍTICO: NUNCA menciones códigos internos en inglés como 'lose_weight', 'gain_muscle', etc. en esta explicación. Utiliza siempre sus nombres amigables en español: 'Bajar de Peso / Definición', 'Ganar Masa Muscular / Volumen', 'Recomposición Estética' o 'Mantenimiento / Salud'."
 }`;
 
   try {

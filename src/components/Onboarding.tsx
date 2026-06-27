@@ -1858,50 +1858,49 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                 </div>
               </div>
 
-              {/* Gemini clinical insight if photos were uploaded */}
-              {hasUploadedPhotos && analysisResult && (
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-left space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              {/* Unified AI Analysis & Goal Recommendation Card */}
+              {(aiGoalRecommendation || (hasUploadedPhotos && analysisResult)) && (
+                <div className="bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 rounded-3xl p-5 text-left space-y-3 shadow-xl">
+                  {/* Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-2">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-white">
-                      <Sparkles className="h-4 w-4 text-emerald-400" />
-                      <span>Diagnóstico Clínico de Imagen (Gemini):</span>
+                      <Sparkles className="h-4 w-4 text-emerald-400 animate-pulse" />
+                      <span>
+                        {hasUploadedPhotos ? "Diagnóstico y Recomendación de IA:" : "Recomendación de Meta por IA:"}
+                      </span>
                     </div>
-                    {hasBiometricHeader(analysisResult) && (
+                    {hasUploadedPhotos && analysisResult && hasBiometricHeader(analysisResult) && (
                       <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider whitespace-nowrap text-center self-start sm:self-auto shrink-0">
                         Biometría Inteligente
                       </span>
                     )}
                   </div>
+
+                  {/* Goal Recommendation Badge */}
+                  {aiGoalRecommendation && (
+                    <div className="bg-[#0b0c13]/60 border border-white/5 px-3.5 py-2.5 rounded-2xl text-center">
+                      <span className="text-[9px] text-white/40 block font-bold uppercase tracking-widest mb-0.5">Objetivo Sugerido</span>
+                      <span className="text-xs text-emerald-400 font-extrabold uppercase tracking-wide">
+                        {aiGoalRecommendation.recommendedGoal === "lose_weight" && "Bajar de Peso / Definición"}
+                        {aiGoalRecommendation.recommendedGoal === "gain_muscle" && "Ganar Masa Muscular / Volumen"}
+                        {aiGoalRecommendation.recommendedGoal === "aesthetics" && "Recomposición Estética"}
+                        {aiGoalRecommendation.recommendedGoal === "maintenance" && "Mantenimiento / Salud"}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Text block */}
                   <div className="text-[11px] text-white/70 leading-relaxed bg-black/20 p-3.5 rounded-xl border border-white/5 space-y-2">
-                    {getCleanedAnalysis(analysisResult).split("\n\n").map((paragraph, index) => (
-                      <p key={index}>{formatAnalysisText(paragraph)}</p>
-                    ))}
+                    {hasUploadedPhotos && analysisResult ? (
+                      getCleanedAnalysis(analysisResult).split("\n\n").map((paragraph, index) => (
+                        <p key={index}>{formatAnalysisText(paragraph)}</p>
+                      ))
+                    ) : (
+                      aiGoalRecommendation && (
+                        <p>{formatAnalysisText(aiGoalRecommendation.reason)}</p>
+                      )
+                    )}
                   </div>
-                </div>
-              )}
-
-
-
-              {/* AI Goal Recommendation Card */}
-              {aiGoalRecommendation && (
-                <div className="bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 rounded-3xl p-5 text-left space-y-3 shadow-xl">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-white">
-                    <Sparkles className="h-4 w-4 text-emerald-400 animate-pulse" />
-                    <span>Recomendación de Meta por IA (Gemini):</span>
-                  </div>
-                  
-                  <div className="bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl text-center">
-                    <span className="text-xs text-emerald-400 font-extrabold uppercase tracking-wide">
-                      {aiGoalRecommendation.recommendedGoal === "lose_weight" && "Bajar de Peso / Definición"}
-                      {aiGoalRecommendation.recommendedGoal === "gain_muscle" && "Ganar Masa Muscular / Volumen"}
-                      {aiGoalRecommendation.recommendedGoal === "aesthetics" && "Recomposición Estética"}
-                      {aiGoalRecommendation.recommendedGoal === "maintenance" && "Mantenimiento / Salud"}
-                    </span>
-                  </div>
-                  
-                  <p className="text-[11px] text-white/70 leading-relaxed bg-black/20 p-3.5 rounded-xl border border-white/5">
-                    {formatAnalysisText(aiGoalRecommendation.reason)}
-                  </p>
                 </div>
               )}
 
