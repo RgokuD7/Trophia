@@ -34,12 +34,7 @@ function cleanErrorMessage(rawMessage: string, status?: number): string {
     msg.includes("limit exceeded") ||
     msg.includes("resource exhausted")
   ) {
-    const secondsMatch = rawMessage.match(/retry in ([\d\.]+)\s*s/i);
-    if (secondsMatch && secondsMatch[1]) {
-      const sec = Math.ceil(parseFloat(secondsMatch[1]));
-      return `Límite de consultas alcanzado. Por favor, espera ${sec} segundos aproximados antes de reintentarlo (Trophia utiliza canales libres de cobro para tu cuenta).`;
-    }
-    return "Límite de consultas alcanzado. Por favor, espera unos segundos y vuelve a intentarlo (Trophia utiliza canales libres de cobro para tu cuenta).";
+    return "Límite de consultas de Inteligencia Artificial alcanzado. Por favor, inténtalo de nuevo más tarde (Trophia utiliza canales gratuitos para tu cuenta).";
   }
   
   if (msg.includes("api key") || msg.includes("invalid key") || msg.includes("key not found")) {
