@@ -1251,6 +1251,16 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                   ))}
                 </div>
               </div>
+
+              {/* Educational info for background vs sports activity */}
+              <div className="bg-emerald-500/10 border border-emerald-500/20 p-3.5 rounded-2xl space-y-1 text-left">
+                <span className="block text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <span>💡 Consejo de Nutrición Deportiva</span>
+                </span>
+                <p className="text-[10px] text-white/70 leading-relaxed">
+                  Si tu trabajo es sedentario (oficina/escritorio) pero entrenas deportes de forma regular (como fútbol, boxeo, natación, etc.), te recomendamos mantener tu actividad diaria como <strong>"Sedentaria"</strong>. De esta manera, mantendrás tus requerimientos base controlados y podrás registrar tus sesiones de deporte específicas cada día en tu panel. Así, la app aumentará tus calorías de forma dinámica solo en los días que entrenas, optimizando tu recuperación.
+                </p>
+              </div>
             </motion.div>
           )}
 

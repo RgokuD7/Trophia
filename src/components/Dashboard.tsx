@@ -1,12 +1,28 @@
 import React from "react";
 import { motion } from "motion/react";
 import { 
-  Flame, Utensils, Droplets, Trophy, ChevronRight, Plus, Calendar, AlertTriangle, Play, Trash, Check, HelpCircle, Sparkles, RefreshCw, MapPin, BookOpen
+  Flame, Utensils, Droplets, Trophy, ChevronRight, Plus, Calendar, AlertTriangle, Play, Trash, Check, HelpCircle, Sparkles, RefreshCw, MapPin, BookOpen, Activity, X
 } from "lucide-react";
 import { UserProfile, LoggedMeal, WaterLog, MealType, WorkoutSession } from "../types";
 import { generateRecommendationsByIA } from "../services/geminiService";
 import { getSuggestedMealTypeByTime, getPrePostWorkoutAdvice } from "../utils/fitnessUtils";
 import scientificTips from "../data/scientificTips.json";
+
+export const SPORTS_METS: Record<string, { label: string; met: number; emoji: string }> = {
+  soccer: { label: "Fútbol", met: 8.0, emoji: "⚽" },
+  boxing: { label: "Boxeo / Kickboxing", met: 7.8, emoji: "🥊" },
+  gym: { label: "Gimnasio / Musculación", met: 6.0, emoji: "🏋️" },
+  swimming: { label: "Natación", met: 7.0, emoji: "🏊" },
+  running: { label: "Running / Carrera", met: 9.0, emoji: "🏃" },
+  cycling: { label: "Ciclismo / Spinning", met: 7.5, emoji: "🚴" },
+  tennis: { label: "Tenis / Pádel", met: 7.3, emoji: "🎾" },
+  basketball: { label: "Baloncesto", met: 8.0, emoji: "🏀" },
+  martial_arts: { label: "Artes Marciales", met: 10.0, emoji: "🥋" },
+  crossfit: { label: "Crossfit / HIIT", met: 9.0, emoji: "🥵" },
+  yoga: { label: "Yoga / Pilates", met: 3.0, emoji: "🧘" },
+  walking: { label: "Caminata Rápida", met: 4.0, emoji: "🚶" },
+  other: { label: "Otro deporte / actividad", met: 6.0, emoji: "⚡" }
+};
 
 interface DashboardProps {
   profile: UserProfile;
@@ -49,6 +65,53 @@ export default function Dashboard({
   const prePostAdvice = getPrePostWorkoutAdvice(diet, goal, isWorkoutCompletedToday);
 
   const [error, setError] = React.useState<string | null>(null);
+
+  // Sports activity logging states
+  const [isSportModalOpen, setIsSportModalOpen] = React.useState(false);
+  const [selectedSportKey, setSelectedSportKey] = React.useState("soccer");
+  const [sportDuration, setSportDuration] = React.useState<number | "">(45);
+  const [customSportNameInput, setCustomSportNameInput] = React.useState("");
+
+  const handleLogSport = () => {
+    const duration = Number(sportDuration);
+    if (!duration || duration <= 0) return;
+
+    const sportInfo = SPORTS_METS[selectedSportKey];
+    const name = selectedSportKey === "other" && customSportNameInput.trim() !== ""
+      ? customSportNameInput.trim()
+      : sportInfo.label;
+
+    // METs * 0.0175 * weight * duration
+    const caloriesBurned = Math.round(sportInfo.met * 0.0175 * profile.weight * duration);
+
+    const newSportLog = {
+      id: Math.random().toString(36).substring(2, 9),
+      name,
+      durationMinutes: duration,
+      caloriesBurned,
+      date: todayStr
+    };
+
+    const currentSports = profile.loggedSportsToday || [];
+    onUpdateProfile({
+      ...profile,
+      loggedSportsToday: [...currentSports, newSportLog]
+    });
+
+    // Reset states and close
+    setIsSportModalOpen(false);
+    setSportDuration(45);
+    setCustomSportNameInput("");
+    setSelectedSportKey("soccer");
+  };
+
+  const handleDeleteSport = (id: string) => {
+    const currentSports = profile.loggedSportsToday || [];
+    onUpdateProfile({
+      ...profile,
+      loggedSportsToday: currentSports.filter(s => s.id !== id)
+    });
+  };
 
   const handleToggleRoute = (routeId: string) => {
     const activeRoutes = profile.activeRoutesToday || [];
@@ -116,7 +179,12 @@ export default function Dashboard({
       }, 0)
     : 0;
 
-  const totalBurnedCalories = routeCaloriesBurned + workoutCaloriesBurned;
+  // Calculate calories burned from logged sports today
+  const loggedSportsToday = profile.loggedSportsToday || [];
+  const todaySports = loggedSportsToday.filter(s => s.date === todayStr);
+  const sportsCaloriesBurned = todaySports.reduce((sum, sport) => sum + sport.caloriesBurned, 0);
+
+  const totalBurnedCalories = routeCaloriesBurned + workoutCaloriesBurned + sportsCaloriesBurned;
 
   // Targets
   const calTarget = profile.dailyCalorieTarget;
@@ -485,13 +553,22 @@ export default function Dashboard({
               </div>
             </div>
 
-            <button
-              onClick={() => onNavigateToTab("workouts")}
-              className="w-full py-1 bg-emerald-500/15 hover:bg-emerald-500 text-emerald-400 hover:text-white rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1"
-            >
-              <span>Ver Rutinas</span>
-              <ChevronRight className="h-3 w-3" />
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => onNavigateToTab("workouts")}
+                className="flex-1 py-1.5 bg-emerald-500/15 hover:bg-emerald-500 text-emerald-400 hover:text-white rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <span>Ver Rutinas</span>
+                <ChevronRight className="h-3 w-3" />
+              </button>
+              <button
+                onClick={() => setIsSportModalOpen(true)}
+                className="flex-1 py-1.5 bg-orange-500/15 hover:bg-orange-500 text-orange-400 hover:text-white rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <Activity className="h-3 w-3" />
+                <span>Reg. Deporte</span>
+              </button>
+            </div>
           </div>
 
         </div>
@@ -575,6 +652,70 @@ export default function Dashboard({
                   );
                 })}
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* Deportes Registrados Hoy */}
+        <div className="bg-white dark:bg-[#161824] p-5 rounded-3xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-md">
+          <div className="flex justify-between items-center">
+            <span className="block text-xs font-semibold text-gray-555 dark:text-gray-400 uppercase tracking-wide flex items-center gap-1.5">
+              <Activity className="h-4 w-4 text-orange-500 animate-pulse" />
+              <span>Deportes y Actividades de Hoy</span>
+            </span>
+            <button
+              onClick={() => setIsSportModalOpen(true)}
+              className="text-[10px] text-orange-400 hover:text-orange-350 font-bold transition bg-transparent border-none cursor-pointer flex items-center gap-0.5"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Registrar Deporte</span>
+            </button>
+          </div>
+
+          {todaySports.length === 0 ? (
+            <div className="text-center py-5 px-3 border border-dashed border-gray-200 dark:border-gray-800 rounded-2xl bg-gray-50/50 dark:bg-transparent">
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-normal">
+                ¿Entrenaste fútbol, boxeo u otro deporte hoy?
+              </p>
+              <button
+                onClick={() => setIsSportModalOpen(true)}
+                className="mt-2 inline-flex items-center gap-1 text-[10px] text-orange-450 hover:text-orange-400 font-bold"
+              >
+                <span>Registrar actividad deportiva</span>
+                <ChevronRight className="h-3 w-3" />
+              </button>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-150 dark:divide-gray-800/40 border border-gray-200 dark:border-gray-800/60 rounded-2xl overflow-hidden bg-gray-50/20 dark:bg-transparent">
+              {todaySports.map((sport) => (
+                <div 
+                  key={sport.id}
+                  className="p-3.5 flex justify-between items-center bg-white dark:bg-[#12131d]/20 hover:bg-gray-50 dark:hover:bg-[#161824]/40 transition group"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-lg">
+                      {Object.values(SPORTS_METS).find(s => s.label === sport.name || sport.name.includes(s.label))?.emoji || "⚡"}
+                    </span>
+                    <div>
+                      <span className="block text-xs font-extrabold text-gray-900 dark:text-white">{sport.name}</span>
+                      <span className="block text-[9px] text-gray-400 dark:text-gray-500 font-medium">
+                        Duración: {sport.durationMinutes} minutos
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xs font-black text-orange-500">-{sport.caloriesBurned} kcal</span>
+                    <button
+                      onClick={() => handleDeleteSport(sport.id)}
+                      className="p-1 bg-gray-50 dark:bg-[#161824] hover:bg-rose-950/20 text-gray-400 hover:text-rose-400 rounded-lg transition cursor-pointer border-none"
+                      title="Eliminar registro"
+                    >
+                      <Trash className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -832,6 +973,102 @@ export default function Dashboard({
         </motion.button>
       </div>
 
+      {/* Log Sport Modal */}
+      {isSportModalOpen && (
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-sm bg-white dark:bg-[#0c0d14] border border-gray-200 dark:border-gray-800 rounded-3xl shadow-2xl overflow-hidden text-gray-900 dark:text-white"
+          >
+            <div className="p-5 border-b border-gray-100 dark:border-gray-800/60 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-orange-500" />
+                <h3 className="text-sm font-black tracking-tight uppercase">Registrar Actividad</h3>
+              </div>
+              <button 
+                onClick={() => setIsSportModalOpen(false)}
+                className="p-1.5 bg-gray-50 hover:bg-gray-100 dark:bg-white/5 dark:hover:bg-white/10 rounded-xl text-gray-400 hover:text-gray-655 dark:hover:text-white transition cursor-pointer border-none"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Select Sport */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Deporte / Actividad</label>
+                <select
+                  value={selectedSportKey}
+                  onChange={(e) => setSelectedSportKey(e.target.value)}
+                  className="w-full p-2.5 bg-gray-50 dark:bg-black/40 border border-gray-200 dark:border-gray-800 rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none focus:border-orange-500/50 transition cursor-pointer"
+                >
+                  {Object.entries(SPORTS_METS).map(([key, info]) => (
+                    <option key={key} value={key} className="bg-white dark:bg-[#0c0d14]">
+                      {info.emoji} {info.label} (MET: {info.met})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Custom Name (Only if "other" is selected) */}
+              {selectedSportKey === "other" && (
+                <div className="space-y-1.5 animate-fadeIn">
+                  <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nombre del Deporte</label>
+                  <input
+                    type="text"
+                    value={customSportNameInput}
+                    onChange={(e) => setCustomSportNameInput(e.target.value)}
+                    placeholder="Ej: Fútbol de salón, Pilates aéreo..."
+                    className="w-full p-2.5 bg-gray-50 dark:bg-black/40 border border-gray-200 dark:border-gray-800 rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none focus:border-orange-500/50 transition placeholder-gray-400"
+                  />
+                </div>
+              )}
+
+              {/* Duration Input */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Duración (minutos)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={sportDuration}
+                    onChange={(e) => setSportDuration(e.target.value === "" ? "" : Math.max(1, Number(e.target.value)))}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-black/40 border border-gray-200 dark:border-gray-800 rounded-xl text-xs text-gray-900 dark:text-white font-mono focus:outline-none focus:border-orange-500/50 transition"
+                  />
+                </div>
+              </div>
+
+              {/* Estimation Preview */}
+              {Number(sportDuration) > 0 && (
+                <div className="bg-orange-500/5 border border-orange-500/10 p-3 rounded-xl flex items-center justify-between">
+                  <span className="text-[10px] text-gray-555 dark:text-gray-400 font-bold uppercase">Calorías estimadas quemadas:</span>
+                  <span className="text-xs font-black text-orange-500 font-mono">
+                    -{Math.round(SPORTS_METS[selectedSportKey].met * 0.0175 * profile.weight * Number(sportDuration))} kcal
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="p-5 border-t border-gray-100 dark:border-gray-800/60 bg-gray-50 dark:bg-black/20 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setIsSportModalOpen(false)}
+                className="flex-1 py-2 border border-gray-200 dark:border-gray-800 text-gray-550 dark:text-gray-400 text-xs font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleLogSport}
+                disabled={!sportDuration}
+                className="flex-1 py-2 bg-orange-500 hover:bg-orange-600 text-white disabled:bg-gray-200 dark:disabled:bg-white/5 disabled:text-gray-400 dark:disabled:text-white/30 text-xs font-bold rounded-xl transition cursor-pointer shadow-lg shadow-orange-500/10"
+              >
+                Guardar registro
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

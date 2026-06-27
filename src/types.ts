@@ -37,6 +37,7 @@ export interface UserProfile {
   moodLogs?: { date: string; mood: number; energy: number; notes?: string }[];
   frequentRoutes?: FrequentRoute[];
   activeRoutesToday?: { routeId: string; date: string }[];
+  loggedSportsToday?: LoggedSport[];
   weeklyTrainingDays?: number;
   environments?: TrainingEnvironment[];
   activityLevel?: "sedentary" | "lightly_active" | "moderately_active" | "highly_active" | "heavy_labor";
@@ -138,4 +139,12 @@ export interface FrequentRoute {
   distanceKm: number;
   activityType: "walking" | "running" | "cycling";
   caloriesBurned: number;
+}
+
+export interface LoggedSport {
+  id: string;
+  name: string;
+  durationMinutes: number;
+  caloriesBurned: number;
+  date: string; // YYYY-MM-DD
 }
