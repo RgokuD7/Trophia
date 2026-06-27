@@ -1759,13 +1759,13 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
               {/* Gemini clinical insight if photos were uploaded */}
               {hasUploadedPhotos && analysisResult && (
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-left space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-white">
                       <Sparkles className="h-4 w-4 text-emerald-400" />
                       <span>Diagnóstico Clínico de Imagen (Gemini):</span>
                     </div>
                     {hasBiometricHeader(analysisResult) && (
-                      <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
+                      <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider whitespace-nowrap text-center self-start sm:self-auto shrink-0">
                         Biometría Inteligente
                       </span>
                     )}
