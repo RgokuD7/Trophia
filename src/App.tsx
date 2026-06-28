@@ -281,7 +281,7 @@ export default function App() {
                   loggedMeals={loggedMeals}
                   waterLogs={waterLogs}
                   workoutHistory={workoutHistory}
-                  onOpenFoodLogger={() => setActiveTab("nutrition")}
+                  onOpenFoodLogger={handleOpenFoodLogger}
                   onOpenRecipeAssistant={() => setIsRecipeAssistantOpen(true)}
                   onAddWaterQuick={handleAddWater}
                   onDeleteMeal={handleDeleteMeal}
@@ -289,6 +289,7 @@ export default function App() {
                     if (tab === "workouts") setActiveTab("workouts");
                     if (tab === "hydration") setActiveTab("hydration");
                     if (tab === "settings") setActiveTab("settings");
+                    if (tab === "nutrition") setActiveTab("nutrition");
                   }}
                   onUpdateProfile={handleUpdateProfile}
                 />
@@ -303,6 +304,7 @@ export default function App() {
                   onDeleteMeal={handleDeleteMeal}
                   onOpenFoodLogger={handleOpenFoodLogger}
                   onOpenRecipeAssistant={() => setIsRecipeAssistantOpen(true)}
+                  onUpdateProfile={handleUpdateProfile}
                 />
               )}
 

@@ -65,6 +65,15 @@ export interface UserProfile {
     healthCheck: string;
     lastUpdated: string;
   };
+
+  calorieBankPlan?: {
+    eventDate: string;
+    eventDescription?: string;
+    extraCaloriesTarget: number;
+    dailyAdjustment: number;
+    startDate: string;
+    isActive: boolean;
+  };
 }
 
 export interface LoggedMeal {

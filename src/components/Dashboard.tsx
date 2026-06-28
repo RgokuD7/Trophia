@@ -33,7 +33,7 @@ interface DashboardProps {
   onOpenRecipeAssistant: () => void;
   onAddWaterQuick: (amount: number) => void;
   onDeleteMeal: (id: string) => void;
-  onNavigateToTab: (tab: "workouts" | "hydration" | "settings") => void;
+  onNavigateToTab: (tab: "workouts" | "hydration" | "settings" | "nutrition") => void;
   onUpdateProfile: (profile: UserProfile) => void;
 }
 
@@ -564,6 +564,56 @@ export default function Dashboard({
 
         </div>
 
+        {/* Última Comida Widget */}
+        {loggedMeals.length > 0 && (() => {
+          const lastMeal = loggedMeals[0]; // Already sorted desc
+          const mealTime = new Date(lastMeal.timestamp);
+          const now = new Date();
+          const diffMs = now.getTime() - mealTime.getTime();
+          const diffHrs = Math.floor(diffMs / 3600000);
+          const diffMins = Math.floor((diffMs % 3600000) / 60000);
+          const timeAgo = diffHrs > 0 ? `hace ${diffHrs}h ${diffMins}m` : `hace ${diffMins}m`;
+          return (
+            <div className="bg-white dark:bg-[#161824] p-4 rounded-3xl border border-gray-200 dark:border-gray-800 shadow-md">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Utensils className="h-3.5 w-3.5 text-emerald-400" />
+                  Última Comida
+                </span>
+                <button
+                  onClick={() => onNavigateToTab("nutrition" as any)}
+                  className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-0.5 cursor-pointer bg-transparent border-none transition"
+                >
+                  Ver todo
+                  <ChevronRight className="h-3 w-3" />
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-lg">{getMealEmoji(lastMeal.type)}</span>
+                  <div>
+                    <span className="block text-xs font-extrabold text-gray-900 dark:text-white">{lastMeal.name}</span>
+                    <span className="block text-[9px] text-gray-400 dark:text-gray-500 font-medium">
+                      P:{lastMeal.protein}g · C:{lastMeal.carbs}g · G:{lastMeal.fat}g
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="block text-xs font-black text-emerald-400">{lastMeal.calories} kcal</span>
+                  <span className="block text-[9px] text-gray-400 dark:text-gray-500">{timeAgo}</span>
+                </div>
+              </div>
+              {loggedMeals.length > 1 && (
+                <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-800/50">
+                  <span className="text-[9px] text-gray-400 dark:text-gray-500">
+                    Hoy: {loggedMeals.length} comidas · {loggedMeals.reduce((s, m) => s + m.calories, 0)} kcal totales
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Rutas Activas Hoy */}
         <div className="bg-white dark:bg-[#161824] p-5 rounded-3xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-md">
           <div className="flex justify-between items-center">
@@ -889,65 +939,6 @@ export default function Dashboard({
           )}
         </div>
 
-        {/* 4. Logged meals list / history of today */}
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-              Comidas de Hoy ({loggedMeals.length})
-            </span>
-            <div className="flex gap-3">
-              <button
-                onClick={onOpenRecipeAssistant}
-                className="text-emerald-400 hover:text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-transparent border-none"
-              >
-                <Sparkles className="h-3.5 w-3.5 text-emerald-400 animate-pulse" />
-                <span>Despensa IA</span>
-              </button>
-              <button
-                onClick={() => onOpenFoodLogger(suggestedMeal.type)}
-                className="text-emerald-400 hover:text-emerald-300 text-xs font-bold flex items-center gap-1 transition cursor-pointer bg-transparent border-none"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Añadir {suggestedMeal.label}</span>
-              </button>
-            </div>
-          </div>
-
-          {loggedMeals.length > 0 ? (
-            <div className="divide-y divide-gray-200 dark:divide-gray-800/40 border border-gray-200 dark:border-gray-800/60 rounded-2xl overflow-hidden bg-white dark:bg-[#12131d]">
-              {loggedMeals.map((meal) => (
-                <div 
-                  key={meal.id}
-                  className="p-3.5 flex justify-between items-center bg-white dark:bg-[#12131d] hover:bg-gray-50 dark:hover:bg-[#161824] transition group"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-lg">{getMealEmoji(meal.type)}</span>
-                    <div>
-                      <span className="block text-xs font-extrabold text-gray-900 dark:text-white">{meal.name}</span>
-                      <span className="block text-[9px] text-gray-400 dark:text-gray-500 font-medium">
-                        P:{meal.protein}g · C:{meal.carbs}g · G:{meal.fat}g
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-xs font-black text-emerald-400">{meal.calories} kcal</span>
-                    <button
-                      onClick={() => onDeleteMeal(meal.id)}
-                      className="p-1 bg-gray-50 dark:bg-[#161824] group-hover:bg-rose-950/20 text-gray-500 group-hover:text-rose-450 dark:group-hover:text-rose-400 rounded-lg transition cursor-pointer"
-                    >
-                      <Trash className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-xs text-gray-400 dark:text-gray-500 border border-dashed border-gray-200 dark:border-gray-800 rounded-2xl bg-white dark:bg-transparent">
-              No has registrado comidas todavía. Toca el botón flotante para registrar una comida o tomarle foto por IA.
-            </div>
-          )}
-        </div>
 
       </div>
 
