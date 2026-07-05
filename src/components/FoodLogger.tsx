@@ -761,8 +761,8 @@ export default function FoodLogger({
         </div>
 
         {/* Meal Type selection */}
-        {!isCustomFoodOnlyMode && (
-          <div className="px-5 pt-4 flex gap-1.5 flex-shrink-0 z-10">
+        {mode !== "pantry" && !isCustomFoodOnlyMode && (
+          <div className="px-5 pt-4 flex gap-1.5 flex-shrink-0 z-10 font-sans">
             {[
               { id: "breakfast", label: "Desayuno", emoji: "🍳" },
               { id: "lunch", label: "Almuerzo", emoji: "🥩" },
@@ -1725,10 +1725,10 @@ export default function FoodLogger({
                 onClick={handleSaveMeal}
                 disabled={!customName}
                 leftIcon={Check}
-                className="flex-1 rounded-xl font-extrabold"
+                className="flex-1 rounded-xl font-extrabold font-sans"
                 size="md"
               >
-                Añadir al Diario
+                {mode === "pantry" ? "Añadir a Despensa" : "Añadir al Diario"}
               </Button>
             </>
           )}
