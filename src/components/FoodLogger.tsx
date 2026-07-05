@@ -779,39 +779,39 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                       Buscando en bases de datos...
                     </div>
                   ) : filteredFoods.length > 0 ? (
-                    <div className="border border-gray-200 dark:border-white/5 rounded-2xl overflow-hidden bg-gray-50 dark:bg-black/30 max-h-60 overflow-y-auto no-scrollbar divide-y divide-gray-150 dark:divide-white/5">
+                    <div className="border border-gray-200 dark:border-white/5 rounded-2xl overflow-hidden bg-gray-50 dark:bg-black/30 max-h-[380px] overflow-y-auto no-scrollbar divide-y divide-gray-150 dark:divide-white/5 shadow-inner">
                       {filteredFoods.map((food, idx) => (
                         <button
                           key={idx}
                           type="button"
                           onClick={() => handleSelectFood(food)}
-                          className="w-full p-3 text-left hover:bg-gray-100 dark:hover:bg-white/5 transition flex justify-between items-center gap-3 cursor-pointer"
+                          className="w-full p-3.5 text-left hover:bg-gray-100 dark:hover:bg-white/5 transition flex justify-between items-center gap-3 cursor-pointer"
                         >
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="flex items-center gap-3.5 flex-1 min-w-0">
                             {food.image ? (
                               <img
                                 src={food.image}
                                 alt={food.name}
-                                className="w-11 h-11 rounded-xl object-cover border border-gray-205 dark:border-white/10 bg-gray-100 dark:bg-black/20 shrink-0 shadow-md"
+                                className="w-14 h-14 rounded-2xl object-cover border border-gray-205 dark:border-white/10 bg-gray-100 dark:bg-black/20 shrink-0 shadow-md"
                               />
                             ) : (
-                              <div className="w-11 h-11 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-205 dark:border-white/10 flex items-center justify-center shrink-0">
-                                <span className="text-base">🍎</span>
+                              <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-white/5 border border-gray-205 dark:border-white/10 flex items-center justify-center shrink-0 text-xl shadow-sm">
+                                🍎
                               </div>
                             )}
                             <div className="min-w-0 flex-1">
-                              <span className="block text-xs font-bold text-gray-900 dark:text-white truncate">{food.name}</span>
+                              <span className="block text-xs font-black text-gray-900 dark:text-white truncate uppercase tracking-tight">{food.name}</span>
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 {getSourceBadge(food.source, food.brand)}
-                                <span className="text-[10px] text-gray-400 dark:text-white/40">{food.servingSize} base</span>
+                                <span className="text-[9.5px] text-gray-400 dark:text-white/40 font-medium">{food.servingSize} base</span>
                               </div>
                             </div>
                           </div>
                           <div className="text-right shrink-0">
-                            <span className="block text-xs font-extrabold text-emerald-500">
+                            <span className="block text-xs font-black text-emerald-500">
                               {food.calories} kcal
                             </span>
-                            <span className="text-[9px] text-gray-400 dark:text-white/40 block">
+                            <span className="text-[9px] text-gray-400 dark:text-white/40 block font-mono">
                               P: {formatMacro(food.protein)}g · C: {formatMacro(food.carbs)}g
                             </span>
                           </div>
