@@ -352,6 +352,7 @@ export default function App() {
                   onOpenRecipeAssistant={() => setIsRecipeAssistantOpen(true)}
                   onUpdateProfile={handleUpdateProfile}
                   onOpenCoach={() => setIsCoachOpen(true)}
+                  userCreationDateStr={user?.metadata.creationTime ? new Date(user.metadata.creationTime).toISOString().split("T")[0] : undefined}
                 />
               )}
 

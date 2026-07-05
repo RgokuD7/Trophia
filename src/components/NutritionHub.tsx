@@ -20,6 +20,7 @@ interface NutritionHubProps {
   onOpenRecipeAssistant: () => void;
   onUpdateProfile: (profile: UserProfile) => void;
   onOpenCoach: () => void;
+  userCreationDateStr?: string;
 }
 
 const DAYS_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -71,6 +72,7 @@ export default function NutritionHub({
   onOpenRecipeAssistant,
   onUpdateProfile,
   onOpenCoach,
+  userCreationDateStr,
 }: NutritionHubProps) {
   const today = new Date();
   const todayStr = toDateStr(today);
@@ -518,6 +520,7 @@ export default function NutritionHub({
 
   const getDayComplianceStatus = (ds: string, consumed: number, target: number) => {
     if (ds > todayStr) return "future";
+    if (userCreationDateStr && ds < userCreationDateStr) return "not_registered";
     if (consumed === 0) {
       return ds === todayStr ? "pending" : "danger";
     }

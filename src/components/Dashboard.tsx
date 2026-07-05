@@ -1,7 +1,7 @@
 import React from "react";
 import { motion } from "motion/react";
 import { 
-  Flame, Utensils, Droplets, Trophy, ChevronRight, Plus, Calendar, AlertTriangle, Play, Trash, Check, HelpCircle, Sparkles, RefreshCw, MapPin, BookOpen, Activity, X
+  Flame, Utensils, Droplets, Trophy, ChevronRight, Plus, Calendar, AlertTriangle, Play, Trash, Check, HelpCircle, Sparkles, RefreshCw, MapPin, BookOpen, Activity, X, Lock
 } from "lucide-react";
 import { UserProfile, LoggedMeal, WaterLog, MealType, WorkoutSession } from "../types";
 import { generateRecommendationsByIA } from "../services/geminiService";
@@ -508,62 +508,6 @@ export default function Dashboard({
           </div>
         </div>
 
-        {/* 3. Water and Workouts Quick Nav shortcuts */}
-        <div className="grid grid-cols-2 gap-4">
-          
-          {/* Water widget */}
-          <div className="bg-white dark:bg-[#161824] p-4 rounded-2xl border border-gray-200 dark:border-gray-800 flex flex-col justify-between gap-3 shadow-md">
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase">Agua</span>
-                <span className="text-base font-extrabold text-blue-500 mt-0.5 block">{totalWater} ml</span>
-              </div>
-              <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-400">
-                <Droplets className="h-4 w-4" />
-              </div>
-            </div>
-
-            <div className="flex gap-1">
-              <button
-                onClick={() => onAddWaterQuick(250)}
-                className="flex-1 py-1 bg-blue-500/15 hover:bg-blue-500 text-blue-500 hover:text-white rounded-lg text-[10px] font-bold transition"
-              >
-                +250ml
-              </button>
-              <button
-                onClick={() => onNavigateToTab("hydration")}
-                className="p-1 bg-gray-50 dark:bg-[#0f101a] text-gray-500 hover:text-gray-700 dark:hover:text-white rounded-lg transition"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Workout summary */}
-          <div className="bg-white dark:bg-[#161824] p-4 rounded-2xl border border-gray-200 dark:border-gray-800 flex flex-col justify-between gap-3 shadow-md">
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase">Entrenamiento</span>
-                <span className="text-xs font-bold text-gray-900 dark:text-white mt-1 block truncate">
-                  {profile.level === "beginner" ? "Principiante" : profile.level === "intermediate" ? "Intermedio" : "Avanzado"}
-                </span>
-              </div>
-              <div className="p-1.5 bg-emerald-500/10 rounded-lg text-emerald-400">
-                <Play className="h-4 w-4" />
-              </div>
-            </div>
-
-            <button
-              onClick={() => onNavigateToTab("workouts")}
-              className="w-full py-1.5 bg-emerald-500/15 hover:bg-emerald-500 text-emerald-400 hover:text-white rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
-            >
-              <span>Ver Rutinas</span>
-              <ChevronRight className="h-3 w-3" />
-            </button>
-          </div>
-
-        </div>
-
         {/* Última Comida Widget */}
         {loggedMeals.length > 0 && (() => {
           const lastMeal = loggedMeals[0]; // Already sorted desc
@@ -613,6 +557,60 @@ export default function Dashboard({
             </div>
           );
         })()}
+
+        {/* 3. Water and Workouts Quick Nav shortcuts */}
+        <div className="grid grid-cols-2 gap-4">
+          
+          {/* Water widget */}
+          <div className="bg-white dark:bg-[#161824] p-4 rounded-2xl border border-gray-200 dark:border-gray-800 flex flex-col justify-between gap-3 shadow-md">
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase">Agua</span>
+                <span className="text-base font-extrabold text-blue-500 mt-0.5 block">{totalWater} ml</span>
+              </div>
+              <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-400">
+                <Droplets className="h-4 w-4" />
+              </div>
+            </div>
+
+            <div className="flex gap-1">
+              <button
+                onClick={() => onAddWaterQuick(250)}
+                className="flex-1 py-1 bg-blue-500/15 hover:bg-blue-500 text-blue-500 hover:text-white rounded-lg text-[10px] font-bold transition"
+              >
+                +250ml
+              </button>
+              <button
+                onClick={() => onNavigateToTab("hydration")}
+                className="p-1 bg-gray-50 dark:bg-[#0f101a] text-gray-500 hover:text-gray-700 dark:hover:text-white rounded-lg transition"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Workout summary - Locked */}
+          <div className="bg-white dark:bg-[#161824] p-4 rounded-2xl border border-gray-200 dark:border-gray-800 flex flex-col justify-between gap-3 shadow-md opacity-60 relative">
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase">Entrenamiento</span>
+                <span className="text-xs font-bold text-gray-900 dark:text-white mt-1 block truncate">
+                  {profile.level === "beginner" ? "Principiante" : profile.level === "intermediate" ? "Intermedio" : "Avanzado"}
+                </span>
+              </div>
+              <span className="text-[7.5px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-white/5 px-1.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shrink-0">
+                <Lock className="h-2 w-2" /> Próximamente
+              </span>
+            </div>
+
+            <div
+              className="w-full py-1.5 bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-gray-500 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1"
+            >
+              <span>Ver Rutinas</span>
+            </div>
+          </div>
+
+        </div>
 
         {/* Rutas Activas Hoy */}
         <div className="bg-white dark:bg-[#161824] p-5 rounded-3xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-md">
