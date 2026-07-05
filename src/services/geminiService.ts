@@ -677,4 +677,29 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   }
 }
 
+// 9. Estimate macros from a text description of a meal or ingredient
+export async function estimateMacrosFromDescription(
+  apiKey: string,
+  description: string
+): Promise<any> {
+  const prompt = `Analiza la siguiente descripción de un alimento o plato para estimar sus calorías, macronutrientes (proteínas, carbohidratos, grasas), ingredientes estimados y cómo se suele medir/porción estándar (ej: "1 unidad", "1 porción", "100g", "1 rebanada").
+  
+Descripción del usuario: "${description}"
+
+Estima de forma muy conservadora para evitar subestimar la ingesta calórica.
+
+Debes responder estrictamente en formato JSON con la siguiente estructura:
+{
+  "name": "Nombre limpio del plato o alimento (ej: Huevo frito con tostada)",
+  "calories": número (calorías totales estimadas, entero),
+  "protein": número (proteínas estimadas en gramos, entero o decimal),
+  "carbs": número (carbohidratos estimados en gramos, entero o decimal),
+  "fat": número (grasas estimadas en gramos, entero o decimal),
+  "servingSize": "Descripción corta de la porción sugerida (ej: 1 plato, 1 rebanada, 1 taza, 1 unidad, 100g)",
+  "ingredients": ["ingrediente 1", "ingrediente 2"]
+}`;
+
+  return await callGeminiAPI(apiKey, prompt);
+}
+
 

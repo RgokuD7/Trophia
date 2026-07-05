@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Search, Camera, Plus, History, Trash, AlertCircle, Check, X, RefreshCw, Star, Barcode } from "lucide-react";
+import { Search, Camera, Plus, History, Trash, AlertCircle, Check, X, RefreshCw, Star, Barcode, Sparkles } from "lucide-react";
 import { LoggedMeal, FoodItem, MealType } from "../types";
 import { GLOBAL_FOODS_DB } from "../utils/fitnessUtils";
-import { analyzeFoodByIA } from "../services/geminiService";
+import { analyzeFoodByIA, estimateMacrosFromDescription } from "../services/geminiService";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { searchAllFoods, getProductByBarcode } from "../services/foodDatabaseService";
@@ -16,6 +16,98 @@ interface FoodLoggerProps {
   onClose: () => void;
   defaultMealType?: MealType;
 }
+
+export function getDefaultServingInfo(name: string, servingSizeStr: string): {
+  defaultUnit: "g" | "ml" | "unit";
+  unitWeight: number;
+  unitLabel: string;
+} {
+  const lowercaseName = name.toLowerCase();
+  const lowercaseServing = (servingSizeStr || "").toLowerCase();
+
+  let unitLabel = "unidad";
+  let unitWeight = 100;
+  let defaultUnit: "g" | "ml" | "unit" = "g";
+
+  if (lowercaseName.includes("leche") || lowercaseName.includes("bebida") || lowercaseName.includes("jugo") || lowercaseName.includes("aceite") || lowercaseName.includes("agua") || lowercaseServing.includes("ml")) {
+    defaultUnit = "ml";
+    unitLabel = "ml";
+  }
+
+  if (lowercaseName.includes("huevo")) {
+    defaultUnit = "unit";
+    unitLabel = "unidad";
+    unitWeight = 50;
+  } else if (lowercaseName.includes("pan ") || lowercaseName.includes("pan integral") || lowercaseName.includes("tostada") || lowercaseName.includes("rebanada") || lowercaseName.includes("marraqueta") || lowercaseName.includes("hallulla")) {
+    defaultUnit = "unit";
+    unitLabel = "rebanada";
+    unitWeight = 25;
+  } else if (lowercaseName.includes("plátano") || lowercaseName.includes("banana")) {
+    defaultUnit = "unit";
+    unitLabel = "unidad";
+    unitWeight = 120;
+  } else if (lowercaseName.includes("manzana")) {
+    defaultUnit = "unit";
+    unitLabel = "unidad";
+    unitWeight = 150;
+  } else if (lowercaseName.includes("naranja")) {
+    defaultUnit = "unit";
+    unitLabel = "unidad";
+    unitWeight = 130;
+  } else if (lowercaseName.includes("yogur") || lowercaseName.includes("pot")) {
+    defaultUnit = "unit";
+    unitLabel = "pote";
+    unitWeight = 125;
+  } else if (lowercaseName.includes("galleta")) {
+    defaultUnit = "unit";
+    unitLabel = "unidad";
+    unitWeight = 10;
+  } else if (lowercaseName.includes("tortilla")) {
+    defaultUnit = "unit";
+    unitLabel = "unidad";
+    unitWeight = 30;
+  }
+
+  if (servingSizeStr) {
+    const parenMatch = servingSizeStr.match(/\((\d+(?:\.\d+)?)\s*(?:g|ml)\)/i);
+    const directMatch = servingSizeStr.match(/^(\d+(?:\.\d+)?)\s*(?:g|ml)/i);
+    
+    let totalWeight = 0;
+    if (parenMatch) {
+      totalWeight = parseFloat(parenMatch[1]);
+    } else if (directMatch) {
+      totalWeight = parseFloat(directMatch[1]);
+    }
+
+    if (totalWeight > 0) {
+      const countMatch = servingSizeStr.match(/(\d+)\s*(?:slice|rebanada|cookie|galleta|unit|pieza|huevo|pan|slice)/i);
+      const count = countMatch ? parseInt(countMatch[1]) : 1;
+      unitWeight = totalWeight / count;
+      defaultUnit = "unit";
+      
+      if (servingSizeStr.includes("slice") || servingSizeStr.includes("rebanada")) {
+        unitLabel = "rebanada";
+      } else if (servingSizeStr.includes("cookie") || servingSizeStr.includes("galleta")) {
+        unitLabel = "galleta";
+      } else if (servingSizeStr.includes("cup") || servingSizeStr.includes("taza")) {
+        unitLabel = "taza";
+      } else if (servingSizeStr.includes("bar") || servingSizeStr.includes("barra")) {
+        unitLabel = "barra";
+      } else {
+        unitLabel = "porción";
+      }
+    }
+  }
+
+  return { defaultUnit, unitWeight, unitLabel };
+}
+
+export const formatMacro = (val: number | string | undefined): string => {
+  if (val === undefined || val === "") return "0";
+  const num = Number(val);
+  if (isNaN(num)) return "0";
+  return num % 1 === 0 ? num.toString() : num.toFixed(1);
+};
 
 export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals, onClose, defaultMealType }: FoodLoggerProps) {
   const [activeTab, setActiveTab] = useState<"search" | "camera" | "personal">("search");
@@ -33,6 +125,18 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
   const [customCarbs, setCustomCarbs] = useState<number | "">("");
   const [customFat, setCustomFat] = useState<number | "">("");
   const [portionGrams, setPortionGrams] = useState(100);
+
+  // New portion unit states
+  const [portionUnit, setPortionUnit] = useState<"g" | "ml" | "unit">("g");
+  const [unitWeight, setUnitWeight] = useState(100);
+  const [unitLabel, setUnitLabel] = useState("unidad");
+  const [portionValue, setPortionValue] = useState(100);
+
+  // IA estimation for manual custom foods
+  const [showIaEstimation, setShowIaEstimation] = useState(false);
+  const [iaDescription, setIaDescription] = useState("");
+  const [isEstimating, setIsEstimating] = useState(false);
+  const [iaEstimationError, setIaEstimationError] = useState<string | null>(null);
 
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
 
@@ -115,24 +219,50 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
 
   const handleSelectFood = (food: FoodItem) => {
     setSelectedFood(food);
-    setPortionGrams(100);
+    const info = getDefaultServingInfo(food.name, food.servingSize);
+    setPortionUnit(info.defaultUnit);
+    setUnitWeight(info.unitWeight);
+    setUnitLabel(info.unitLabel);
+    
+    const initialVal = info.defaultUnit === "unit" ? 1 : 100;
+    setPortionValue(initialVal);
+    setPortionGrams(info.defaultUnit === "unit" ? info.unitWeight : 100);
+
     const displayName = food.brand ? `${food.name} (${food.brand.split(',')[0].trim()})` : food.name;
     setCustomName(displayName);
-    setCustomCalories(food.calories);
-    setCustomProtein(food.protein);
-    setCustomCarbs(food.carbs);
-    setCustomFat(food.fat);
+
+    const scale = info.defaultUnit === "unit" ? info.unitWeight / 100 : 1;
+    setCustomCalories(Math.round(food.calories * scale));
+    setCustomProtein(Number((food.protein * scale).toFixed(1)));
+    setCustomCarbs(Number((food.carbs * scale).toFixed(1)));
+    setCustomFat(Number((food.fat * scale).toFixed(1)));
   };
 
-  const updatePortion = (grams: number) => {
-    const validGrams = Math.max(1, grams);
-    setPortionGrams(validGrams);
+  const updatePortion = (val: number, unit = portionUnit) => {
+    const validVal = Math.max(0.1, val);
+    setPortionValue(validVal);
+    
+    let equivalentGrams = validVal;
+    if (unit === "unit") {
+      equivalentGrams = validVal * unitWeight;
+    }
+    setPortionGrams(Math.round(equivalentGrams));
+
     if (selectedFood && selectedFood.name !== "") {
-      const scale = validGrams / 100;
+      const scale = equivalentGrams / 100;
       setCustomCalories(Math.round(selectedFood.calories * scale));
-      setCustomProtein(Math.round(selectedFood.protein * scale));
-      setCustomCarbs(Math.round(selectedFood.carbs * scale));
-      setCustomFat(Math.round(selectedFood.fat * scale));
+      setCustomProtein(Number((selectedFood.protein * scale).toFixed(1)));
+      setCustomCarbs(Number((selectedFood.carbs * scale).toFixed(1)));
+      setCustomFat(Number((selectedFood.fat * scale).toFixed(1)));
+    }
+  };
+
+  const handleUnitChange = (newUnit: "g" | "ml" | "unit") => {
+    setPortionUnit(newUnit);
+    if (newUnit === "unit") {
+      updatePortion(1, "unit");
+    } else {
+      updatePortion(100, newUnit);
     }
   };
 
@@ -153,6 +283,44 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
     setCustomProtein("");
     setCustomCarbs("");
     setCustomFat("");
+  };
+
+  const handleEstimateMacrosByText = async () => {
+    if (!iaDescription.trim()) return;
+    setIsEstimating(true);
+    setIaEstimationError(null);
+
+    try {
+      const data = await estimateMacrosFromDescription(apiKey || "", iaDescription.trim());
+      if (data) {
+        setCustomName(data.name || "Alimento IA");
+        setCustomCalories(data.calories || 0);
+        setCustomProtein(Number(data.protein) || 0);
+        setCustomCarbs(Number(data.carbs) || 0);
+        setCustomFat(Number(data.fat) || 0);
+        
+        const foodItem: FoodItem = {
+          name: "",
+          calories: data.calories || 0,
+          protein: Number(data.protein) || 0,
+          carbs: Number(data.carbs) || 0,
+          fat: Number(data.fat) || 0,
+          servingSize: data.servingSize || "1 porción",
+          source: "local",
+          ingredients: data.ingredients || []
+        };
+        setSelectedFood(foodItem);
+        setShowIaEstimation(false);
+        setIaDescription("");
+      } else {
+        setIaEstimationError("No se pudo estimar los macros del alimento. Intenta describirlo de otra forma.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setIaEstimationError(`Error al estimar macros con IA: ${err.message || "Fallo de conexión"}`);
+    } finally {
+      setIsEstimating(false);
+    }
   };
 
   const handleBarcodeScanSuccess = async (barcode: string) => {
@@ -321,8 +489,8 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
   const fPct = totalKcal > 0 ? Math.round((fKcal / totalKcal) * 100) : 0;
 
   return (
-    <div className="fixed inset-0 bg-black/60 dark:bg-black/90 backdrop-blur-md z-50 flex flex-col justify-end md:justify-center p-0 md:p-4">
-      <div className="w-full max-w-md mx-auto bg-white dark:bg-[#050505] border border-gray-200 dark:border-white/10 rounded-t-3xl md:rounded-3xl shadow-2xl h-[90vh] md:h-[650px] flex flex-col overflow-hidden relative text-gray-900 dark:text-white">
+    <div className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm z-50 flex flex-col justify-end md:justify-center p-0 md:p-4">
+      <div className="w-full max-w-md mx-auto bg-white dark:bg-[#12131d]/95 border border-gray-200 dark:border-white/10 rounded-t-3xl md:rounded-3xl shadow-2xl h-[90vh] md:h-[650px] flex flex-col overflow-hidden relative text-gray-900 dark:text-white backdrop-blur-md">
         
         {/* Background Neon Glow */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -330,7 +498,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
         </div>
 
         {/* Header */}
-        <div className="p-5 border-b border-gray-100 dark:border-white/5 flex items-center justify-between flex-shrink-0 z-10 bg-white/80 dark:bg-[#050505]/80 backdrop-blur-md">
+        <div className="p-5 border-b border-gray-100 dark:border-white/5 flex items-center justify-between flex-shrink-0 z-10 bg-white/80 dark:bg-[#12131d]/80 backdrop-blur-md">
           <div>
             <h3 className="text-base font-black text-gray-900 dark:text-white italic tracking-tight">Registrar Alimento</h3>
             <span className="text-[10px] text-gray-400 dark:text-white/40 uppercase tracking-widest font-mono">Control Diario de Ingesta</span>
@@ -428,9 +596,9 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                   <button
                     type="button"
                     onClick={handleCreateCustom}
-                    className="w-full py-2 bg-gray-50 hover:bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-white/60 hover:text-gray-900 dark:hover:text-white hover:border-emerald-500/30 dark:hover:border-emerald-500/30 transition flex items-center justify-center gap-1.5 font-bold text-[10.5px] cursor-pointer"
+                    className="w-full py-2.5 bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-emerald-500/30 text-white/70 hover:text-white rounded-xl transition flex items-center justify-center gap-1.5 font-bold text-xs cursor-pointer shadow-sm"
                   >
-                    <Plus className="h-3.5 w-3.5 text-emerald-400" />
+                    <Plus className="h-4 w-4 text-emerald-400" />
                     Crear Alimento Personalizado
                   </button>
 
@@ -482,7 +650,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                               {food.calories} kcal
                             </span>
                             <span className="text-[9px] text-gray-400 dark:text-white/40 block">
-                              P: {food.protein}g · C: {food.carbs}g
+                              P: {formatMacro(food.protein)}g · C: {formatMacro(food.carbs)}g
                             </span>
                           </div>
                         </button>
@@ -631,7 +799,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                           </div>
                           <div className="text-right">
                             <span className="block text-xs font-bold text-emerald-500 dark:text-emerald-400">{food.calories} kcal</span>
-                            <span className="text-[9px] text-gray-400 dark:text-white/40 font-mono">P:{food.protein}g C:{food.carbs}g F:{food.fat}g</span>
+                            <span className="text-[9px] text-gray-400 dark:text-white/40 font-mono">P:{formatMacro(food.protein)}g C:{formatMacro(food.carbs)}g F:{formatMacro(food.fat)}g</span>
                           </div>
                         </button>
                       ))}
@@ -693,7 +861,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                 {/* Protein */}
                 <div className="bg-[#f97316]/5 border border-[#f97316]/10 p-3 rounded-2xl text-center space-y-1.5 flex flex-col justify-between">
                   <span className="block text-[8px] font-bold text-[#f97316]/80 uppercase tracking-wider">Proteína</span>
-                  <span className="block text-sm font-extrabold text-gray-900 dark:text-white font-mono">{customProtein || 0}g</span>
+                  <span className="block text-sm font-extrabold text-gray-900 dark:text-white font-mono">{formatMacro(customProtein)}g</span>
                   <div className="w-full h-1 bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-[#f97316] rounded-full transition-all duration-300"
@@ -706,7 +874,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                 {/* Carbs */}
                 <div className="bg-[#3b82f6]/5 border border-[#3b82f6]/10 p-3 rounded-2xl text-center space-y-1.5 flex flex-col justify-between">
                   <span className="block text-[8px] font-bold text-[#3b82f6]/80 uppercase tracking-wider">Carbos</span>
-                  <span className="block text-sm font-extrabold text-gray-900 dark:text-white font-mono">{customCarbs || 0}g</span>
+                  <span className="block text-sm font-extrabold text-gray-900 dark:text-white font-mono">{formatMacro(customCarbs)}g</span>
                   <div className="w-full h-1 bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-[#3b82f6] rounded-full transition-all duration-300"
@@ -719,7 +887,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                 {/* Fat */}
                 <div className="bg-[#eab308]/5 border border-[#eab308]/10 p-3 rounded-2xl text-center space-y-1.5 flex flex-col justify-between">
                   <span className="block text-[8px] font-bold text-[#eab308]/80 uppercase tracking-wider">Grasa</span>
-                  <span className="block text-sm font-extrabold text-gray-900 dark:text-white font-mono">{customFat || 0}g</span>
+                  <span className="block text-sm font-extrabold text-gray-900 dark:text-white font-mono">{formatMacro(customFat)}g</span>
                   <div className="w-full h-1 bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-[#eab308] rounded-full transition-all duration-300"
@@ -782,45 +950,84 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
               {/* Portion Control panel (Only shown for database items) */}
               {selectedFood.name !== "" && (
                 <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-2xl border border-gray-205 dark:border-white/5 space-y-3.5">
+                  {/* Selector de Unidades */}
+                  <div className="flex gap-1.5 p-1 bg-white/5 border border-white/5 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => handleUnitChange("g")}
+                      className={`flex-1 py-1 text-[10px] font-bold rounded-lg border transition ${
+                        portionUnit === "g"
+                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 font-extrabold"
+                          : "border-transparent text-white/40 hover:text-white"
+                      }`}
+                    >
+                      Gramos (g)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUnitChange("ml")}
+                      className={`flex-1 py-1 text-[10px] font-bold rounded-lg border transition ${
+                        portionUnit === "ml"
+                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 font-extrabold"
+                          : "border-transparent text-white/40 hover:text-white"
+                      }`}
+                    >
+                      Ml (ml)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUnitChange("unit")}
+                      className={`flex-1 py-1 text-[10px] font-bold rounded-lg border transition ${
+                        portionUnit === "unit"
+                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 font-extrabold"
+                          : "border-transparent text-white/40 hover:text-white"
+                      }`}
+                    >
+                      Porción ({unitLabel})
+                    </button>
+                  </div>
+
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-gray-500 dark:text-white/40 uppercase tracking-wider">Porción Registrada</span>
+                    <span className="text-[10px] font-bold text-gray-500 dark:text-white/40 uppercase tracking-wider">Cantidad</span>
                     <div className="flex items-center gap-1.5">
                       <Input
                         type="number"
-                        value={portionGrams}
+                        value={portionValue}
                         onChange={(e) => updatePortion(Number(e.target.value) || 0)}
                         className="w-16 bg-white dark:bg-black/40 border-gray-200 dark:border-white/10 text-center text-gray-900 dark:text-white font-mono rounded-lg h-7 px-1 focus:border-emerald-500/40"
                         size="sm"
                       />
-                      <span className="text-[10px] text-gray-500 dark:text-white/40 font-bold uppercase">gramos</span>
+                      <span className="text-[10px] text-gray-500 dark:text-white/40 font-bold uppercase">
+                        {portionUnit === "unit" ? unitLabel : portionUnit === "ml" ? "ml" : "g"}
+                      </span>
                     </div>
                   </div>
 
                   {/* Range Slider */}
                   <input
                     type="range"
-                    min="10"
-                    max="600"
-                    step="5"
-                    value={portionGrams}
+                    min={portionUnit === "unit" ? "0.5" : "10"}
+                    max={portionUnit === "unit" ? "10" : "600"}
+                    step={portionUnit === "unit" ? "0.5" : "5"}
+                    value={portionValue}
                     onChange={(e) => updatePortion(Number(e.target.value))}
                     className="w-full h-1 bg-gray-200 dark:bg-white/10 rounded-lg appearance-none cursor-pointer accent-emerald-500 focus:outline-none"
                   />
 
                   {/* Presets Grid */}
                   <div className="grid grid-cols-6 gap-1 pt-1">
-                    {[50, 100, 150, 200, 300, 500].map((grams) => (
+                    {(portionUnit === "unit" ? [0.5, 1, 1.5, 2, 3, 5] : [50, 100, 150, 200, 300, 500]).map((preset) => (
                       <button
-                        key={grams}
+                        key={preset}
                         type="button"
-                        onClick={() => updatePortion(grams)}
+                        onClick={() => updatePortion(preset)}
                         className={`py-1 text-[10px] font-mono font-bold rounded-lg border transition cursor-pointer ${
-                          portionGrams === grams
+                          portionValue === preset
                             ? "bg-emerald-500 border-emerald-500 text-white"
                             : "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/5 text-gray-700 dark:text-white/60 hover:bg-gray-200 dark:hover:bg-white/10 hover:border-emerald-550 dark:hover:border-emerald-500/20"
                         }`}
                       >
-                        {grams}g
+                        {preset}{portionUnit === "unit" ? "" : portionUnit === "ml" ? "ml" : "g"}
                       </button>
                     ))}
                   </div>
@@ -894,6 +1101,82 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                       />
                     </div>
                   </div>
+
+                  {selectedFood.name === "" && (
+                    <div className="mt-3 pt-3 border-t border-gray-150 dark:border-white/5">
+                      {!showIaEstimation ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowIaEstimation(true)}
+                          className="w-full py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 rounded-xl text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Sparkles className="h-3.5 w-3.5" />
+                          ¿No te sabes los macros? Calcular con IA
+                        </button>
+                      ) : (
+                        <div className="space-y-2.5 p-3 bg-white/[0.02] border border-gray-250 dark:border-white/5 rounded-xl animate-fadeIn">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-gray-500 dark:text-white/40 uppercase tracking-wider">Calcular con IA</span>
+                            <button
+                              type="button"
+                              onClick={() => setShowIaEstimation(false)}
+                              className="text-gray-400 hover:text-white transition cursor-pointer"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          
+                          <p className="text-[9px] text-gray-500 dark:text-white/40 leading-normal">
+                            Describe el plato e ingredientes y la IA estimará los macros de forma conservadora.
+                          </p>
+
+                          <textarea
+                            value={iaDescription}
+                            onChange={(e) => setIaDescription(e.target.value)}
+                            placeholder="Ej: 2 rebanadas de pan de molde con palta y 1 huevo revuelto..."
+                            className="w-full p-2 bg-white dark:bg-[#0c0d15] border border-gray-200 dark:border-white/10 rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500/40 transition placeholder-gray-450 min-h-[60px] resize-none font-sans"
+                          />
+
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowIaEstimation(false);
+                                setSelectedFood(null);
+                                setActiveTab("camera");
+                              }}
+                              className="flex-1 py-1.5 bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 text-white/70 hover:text-white rounded-lg text-[9px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              <Camera className="h-3.5 w-3.5" />
+                              Tomar Foto
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleEstimateMacrosByText}
+                              disabled={isEstimating || !iaDescription.trim()}
+                              className="flex-1 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:bg-white/5 text-white disabled:text-white/30 rounded-lg text-[9px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              {isEstimating ? (
+                                <RefreshCw className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <>
+                                  <Sparkles className="h-3 w-3" />
+                                  Calcular
+                                  </>
+                              )}
+                            </button>
+                          </div>
+
+                          {iaEstimationError && (
+                            <span className="block text-[9px] text-rose-400 font-bold">
+                              ⚠️ {iaEstimationError}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                 </div>
               </div>
             </div>
@@ -901,7 +1184,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
         </div>
 
         {/* Footer actions */}
-        <div className="p-5 border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-[#050505] flex-shrink-0 flex gap-3">
+        <div className="p-5 border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-[#12131d]/90 flex-shrink-0 flex gap-3">
           {selectedFood === null ? (
             <Button
               variant="secondary"

@@ -279,7 +279,7 @@ export default function NutritionHub({
                   </div>
                   <div className="flex items-center gap-3 mt-1">
                     <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5"><Flame className="h-3 w-3" /> {food.calories} kcal</span>
-                    <span className="text-[9px] text-white/30">P:{food.protein}g · C:{food.carbs}g · G:{food.fat}g</span>
+                    <span className="text-[9px] text-white/30">P:{Number(food.protein).toFixed(1).replace(/\.0$/, "")}g · C:{Number(food.carbs).toFixed(1).replace(/\.0$/, "")}g · G:{Number(food.fat).toFixed(1).replace(/\.0$/, "")}g</span>
                   </div>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
@@ -586,7 +586,7 @@ export default function NutritionHub({
                     <div key={meal.id} className="px-3.5 py-2.5 flex items-center justify-between group hover:bg-white/[0.02] transition">
                       <div className="min-w-0">
                         <span className="text-xs font-bold text-white block truncate">{meal.name}</span>
-                        <span className="text-[9px] text-white/30">P:{meal.protein}g · C:{meal.carbs}g · G:{meal.fat}g</span>
+                        <span className="text-[9px] text-white/30">P:{Number(meal.protein).toFixed(1).replace(/\.0$/, "")}g · C:{Number(meal.carbs).toFixed(1).replace(/\.0$/, "")}g · G:{Number(meal.fat).toFixed(1).replace(/\.0$/, "")}g</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-xs font-black text-emerald-400">{meal.calories}</span>

@@ -594,7 +594,7 @@ export default function Dashboard({
                   <div>
                     <span className="block text-xs font-extrabold text-gray-900 dark:text-white">{lastMeal.name}</span>
                     <span className="block text-[9px] text-gray-400 dark:text-gray-500 font-medium">
-                      P:{lastMeal.protein}g · C:{lastMeal.carbs}g · G:{lastMeal.fat}g
+                      P:{Number(lastMeal.protein).toFixed(1).replace(/\.0$/, "")}g · C:{Number(lastMeal.carbs).toFixed(1).replace(/\.0$/, "")}g · G:{Number(lastMeal.fat).toFixed(1).replace(/\.0$/, "")}g
                     </span>
                   </div>
                 </div>
