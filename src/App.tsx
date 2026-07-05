@@ -338,6 +338,8 @@ export default function App() {
                     if (tab === "nutrition") setActiveTab("nutrition");
                   }}
                   onUpdateProfile={handleUpdateProfile}
+                  onAddMeal={handleAddMeal}
+                  onOpenCoach={() => setIsCoachOpen(true)}
                 />
               )}
 

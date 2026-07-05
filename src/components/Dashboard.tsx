@@ -1,10 +1,10 @@
 import React from "react";
 import { motion } from "motion/react";
 import { 
-  Flame, Utensils, Droplets, Trophy, ChevronRight, Plus, Calendar, AlertTriangle, Play, Trash, Check, HelpCircle, Sparkles, RefreshCw, MapPin, BookOpen, Activity, X, Lock
+  Flame, Utensils, Droplets, Trophy, ChevronRight, Plus, Calendar, AlertTriangle, Play, Trash, Check, HelpCircle, Sparkles, RefreshCw, MapPin, BookOpen, Activity, X, Lock, Zap
 } from "lucide-react";
 import { UserProfile, LoggedMeal, WaterLog, MealType, WorkoutSession } from "../types";
-import { generateRecommendationsByIA } from "../services/geminiService";
+import { generateRecommendationsByIA, generatePreWorkoutSuggestionByIA, adjustSportCaloriesByIA } from "../services/geminiService";
 import { getSuggestedMealTypeByTime, getPrePostWorkoutAdvice } from "../utils/fitnessUtils";
 import scientificTips from "../data/scientificTips.json";
 
@@ -35,6 +35,8 @@ interface DashboardProps {
   onDeleteMeal: (id: string) => void;
   onNavigateToTab: (tab: "workouts" | "hydration" | "settings" | "nutrition") => void;
   onUpdateProfile: (profile: UserProfile) => void;
+  onAddMeal?: (meal: Omit<LoggedMeal, "id" | "timestamp">) => void;
+  onOpenCoach?: () => void;
 }
 
 export default function Dashboard({
@@ -47,7 +49,9 @@ export default function Dashboard({
   onAddWaterQuick,
   onDeleteMeal,
   onNavigateToTab,
-  onUpdateProfile
+  onUpdateProfile,
+  onAddMeal,
+  onOpenCoach
 }: DashboardProps) {
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [tipIndex, setTipIndex] = React.useState(() => Math.floor(Math.random() * scientificTips.length));
@@ -71,6 +75,85 @@ export default function Dashboard({
   const [selectedSportKey, setSelectedSportKey] = React.useState("soccer");
   const [sportDuration, setSportDuration] = React.useState<number | "">(45);
   const [customSportNameInput, setCustomSportNameInput] = React.useState("");
+  const [sportDescription, setSportDescription] = React.useState("");
+  const [isAdjustingSport, setIsAdjustingSport] = React.useState(false);
+  const [iaAdjustedCalories, setIaAdjustedCalories] = React.useState<number | null>(null);
+  const [iaAdjustedMet, setIaAdjustedMet] = React.useState<number | null>(null);
+  const [iaAdjustedReason, setIaAdjustedReason] = React.useState<string | null>(null);
+
+  // Pre-Workout state
+  const [isPreWorkoutOpen, setIsPreWorkoutOpen] = React.useState(false);
+  const [preWorkoutTime, setPreWorkoutTime] = React.useState<number>(60); // minutes
+  const [preWorkoutIntensity, setPreWorkoutIntensity] = React.useState<"hypertrophy" | "cardio" | "recovery">("hypertrophy");
+  const [preWorkoutFormat, setPreWorkoutFormat] = React.useState<"liquid" | "solid">("solid");
+  const [preWorkoutGoal, setPreWorkoutGoal] = React.useState<"low_cal" | "high_protein" | "high_carb">("high_protein");
+  const [preWorkoutAllergies, setPreWorkoutAllergies] = React.useState<string[]>(profile.allergies || []);
+  const [preWorkoutIngredients, setPreWorkoutIngredients] = React.useState<string[]>([]);
+  const [isGeneratingPreWorkout, setIsGeneratingPreWorkout] = React.useState(false);
+  const [preWorkoutRecommendation, setPreWorkoutRecommendation] = React.useState<any | null>(null);
+  const [preWorkoutError, setPreWorkoutError] = React.useState<string | null>(null);
+
+  // Sync allergies if profile updates
+  React.useEffect(() => {
+    if (profile.allergies) {
+      setPreWorkoutAllergies(profile.allergies);
+    }
+  }, [profile.allergies]);
+
+  const handleGeneratePreWorkout = async () => {
+    setIsGeneratingPreWorkout(true);
+    setPreWorkoutError(null);
+    setPreWorkoutRecommendation(null);
+    try {
+      const apiKey = profile.apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || "";
+      const result = await generatePreWorkoutSuggestionByIA(
+        apiKey,
+        {
+          timeRemainingMinutes: preWorkoutTime,
+          trainingType: preWorkoutIntensity,
+          formatPreference: preWorkoutFormat,
+          nutritionalGoal: preWorkoutGoal,
+          allergies: preWorkoutAllergies,
+          availableIngredients: preWorkoutIngredients,
+          dietType: profile.dietType || "standard",
+          remainingCalories: profile.dailyCalorieTarget - totalCalories
+        }
+      );
+      setPreWorkoutRecommendation(result);
+    } catch (err: any) {
+      console.error(err);
+      setPreWorkoutError(err.message || "Error al generar la recomendación pre-entrenamiento.");
+    } finally {
+      setIsGeneratingPreWorkout(false);
+    }
+  };
+
+  const handleAdjustSportWithIA = async () => {
+    if (!sportDescription.trim()) return;
+    setIsAdjustingSport(true);
+    try {
+      const apiKey = profile.apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || "";
+      const sportInfo = SPORTS_METS[selectedSportKey];
+      const label = selectedSportKey === "other" && customSportNameInput.trim() !== ""
+        ? customSportNameInput.trim()
+        : sportInfo.label;
+      const result = await adjustSportCaloriesByIA(
+        apiKey,
+        label,
+        sportInfo.met,
+        Number(sportDuration) || 45,
+        profile.weight,
+        sportDescription
+      );
+      setIaAdjustedCalories(result.caloriesBurned);
+      setIaAdjustedMet(result.adjustedMet);
+      setIaAdjustedReason(result.reason);
+    } catch (err) {
+      console.error("Failed to adjust sport with IA", err);
+    } finally {
+      setIsAdjustingSport(false);
+    }
+  };
 
   const handleLogSport = () => {
     const duration = Number(sportDuration);
@@ -81,12 +164,13 @@ export default function Dashboard({
       ? customSportNameInput.trim()
       : sportInfo.label;
 
-    // METs * 0.0175 * weight * duration
-    const caloriesBurned = Math.round(sportInfo.met * 0.0175 * profile.weight * duration);
+    const caloriesBurned = iaAdjustedCalories !== null 
+      ? iaAdjustedCalories 
+      : Math.round(sportInfo.met * 0.0175 * profile.weight * duration);
 
     const newSportLog = {
       id: Math.random().toString(36).substring(2, 9),
-      name,
+      name: iaAdjustedMet !== null ? `${name} (Ajustado IA)` : name,
       durationMinutes: duration,
       caloriesBurned,
       date: todayStr
@@ -102,6 +186,10 @@ export default function Dashboard({
     setIsSportModalOpen(false);
     setSportDuration(45);
     setCustomSportNameInput("");
+    setSportDescription("");
+    setIaAdjustedCalories(null);
+    setIaAdjustedMet(null);
+    setIaAdjustedReason(null);
     setSelectedSportKey("soccer");
   };
 
@@ -612,90 +700,29 @@ export default function Dashboard({
 
         </div>
 
-        {/* Rutas Activas Hoy */}
-        <div className="bg-white dark:bg-[#161824] p-5 rounded-3xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-md">
-          <div className="flex justify-between items-center">
-            <span className="block text-xs font-semibold text-gray-555 dark:text-gray-400 uppercase tracking-wide flex items-center gap-1.5">
-              <MapPin className="h-4 w-4 text-emerald-400" />
-              <span>Rutas Activas Hoy</span>
-            </span>
-            <button
-              onClick={() => onNavigateToTab("settings")}
-              className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold transition bg-transparent border-none cursor-pointer"
-            >
-              Gestionar Rutas
-            </button>
+        {/* Combustible Pre-Entrenamiento Widget */}
+        <div className="bg-gradient-to-br from-amber-500/10 to-transparent border border-amber-500/20 rounded-3xl p-5 space-y-3.5 shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/15 flex items-center justify-center text-amber-500">
+              <Zap className="h-5 w-5 fill-amber-500/10" />
+            </div>
+            <div>
+              <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider">Combustible Inteligente</span>
+              <h3 className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-tight">Comida Pre-Entreno IA</h3>
+            </div>
           </div>
-
-          {!profile.frequentRoutes || profile.frequentRoutes.length === 0 ? (
-            <div className="text-center py-4 px-3 border border-dashed border-gray-200 dark:border-gray-800 rounded-2xl bg-gray-50/50 dark:bg-transparent">
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-normal">
-                ¿Tienes trayectos diarios o entrenamientos de cardio al aire libre?
-              </p>
-              <button
-                onClick={() => onNavigateToTab("settings")}
-                className="mt-2.5 inline-flex items-center gap-1 text-[10px] text-emerald-400 hover:text-emerald-300 font-bold"
-              >
-                <span>Configurar rutas habituales</span>
-                <ChevronRight className="h-3 w-3" />
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-normal">
-                Selecciona las rutas que has recorrido hoy para sumar automáticamente su gasto base:
-              </p>
-              <div className="grid grid-cols-1 gap-2">
-                {profile.frequentRoutes.map((route) => {
-                  const isActive = (profile.activeRoutesToday || []).some(
-                    (r) => r.routeId === route.id && r.date === todayStr
-                  );
-                  return (
-                    <button
-                      key={route.id}
-                      onClick={() => handleToggleRoute(route.id)}
-                      className={`flex items-center justify-between p-3 rounded-xl border text-left transition cursor-pointer ${
-                        isActive
-                          ? "bg-emerald-500/10 border-emerald-500/30 text-gray-900 dark:text-white"
-                          : "bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-450 hover:border-gray-300 dark:hover:border-gray-700/60"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                            isActive
-                              ? "bg-emerald-500 border-emerald-500 text-white"
-                              : "border-gray-300 dark:border-gray-755"
-                          }`}
-                        >
-                          {isActive && <Check className="h-3.5 w-3.5" />}
-                        </div>
-                        <div>
-                          <span className={`text-xs font-black block ${isActive ? "text-emerald-400" : "text-gray-900 dark:text-white"}`}>
-                            {route.name}
-                          </span>
-                          <span className="text-[9px] text-gray-500 dark:text-gray-400 mt-0.5">
-                            {route.activityType === "walking"
-                              ? "🚶 Caminar"
-                              : route.activityType === "running"
-                              ? "🏃 Correr"
-                              : "🚴 Ciclismo"}{" "}
-                            · {route.distanceKm} km
-                          </span>
-                        </div>
-                      </div>
-                      <span className={`text-xs font-black ${isActive ? "text-emerald-400" : "text-gray-500 dark:text-gray-400"}`}>
-                        +{route.caloriesBurned} kcal
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-normal">
+            La IA analiza la hora, tu meta de macros y tus ingredientes disponibles para recomendarte el combustible perfecto según el tiempo restante para entrenar.
+          </p>
+          <button
+            onClick={() => setIsPreWorkoutOpen(true)}
+            className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black flex items-center justify-center gap-1.5 transition cursor-pointer border-none shadow-md"
+          >
+            <Sparkles className="h-3.5 w-3.5 fill-white" />
+            Planificar Comida Pre-Entreno
+          </button>
         </div>
 
-        {/* Deportes Registrados Hoy */}
         <div className="bg-white dark:bg-[#161824] p-5 rounded-3xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-md">
           <div className="flex justify-between items-center">
             <span className="block text-xs font-semibold text-gray-555 dark:text-gray-400 uppercase tracking-wide flex items-center gap-1.5">
@@ -833,107 +860,25 @@ export default function Dashboard({
           </div>
         </div>
 
-        {/* Asesoría de IA (Gemini Coaching Hub) */}
-        <div className="bg-white dark:bg-[#161824] p-5 rounded-3xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-md dark:shadow-xl">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-emerald-400 animate-pulse" />
-              <span className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                Coach de IA (Gemini)
-              </span>
+        {/* Banner Nutri-Coach Chat IA */}
+        <div className="bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 rounded-3xl p-5 space-y-3.5 shadow-md flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 text-emerald-400 font-extrabold text-[10px] uppercase tracking-wider">
+              <Sparkles className="h-3.5 w-3.5 fill-emerald-500/10" />
+              Asesor Experto
             </div>
-            {profile.aiRecommendations && (
-              <button
-                onClick={handleGenerateRecommendations}
-                disabled={isGenerating}
-                className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 transition disabled:opacity-50"
-              >
-                <RefreshCw className={`h-3 w-3 ${isGenerating ? "animate-spin" : ""}`} />
-                <span>Actualizar</span>
-              </button>
-            )}
+            <h3 className="text-xs font-black text-gray-900 dark:text-white">Conversa con tu Nutri-Coach IA</h3>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">
+              Resuelve dudas sobre suplementación, porciones o recetas en tiempo real.
+            </p>
           </div>
-
-          {error && (
-            <div className="text-[11px] text-rose-400 bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20 flex items-center gap-1.5">
-              <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {profile.aiRecommendations ? (
-            <div className="space-y-4">
-              <div className="text-xs text-gray-750 dark:text-gray-300 leading-relaxed italic bg-gray-50/80 dark:bg-[#0f101a]/60 border border-gray-200 dark:border-gray-800/40 p-3.5 rounded-2xl relative">
-                <span className="text-emerald-400 font-black text-lg absolute -top-1.5 left-2">“</span>
-                <p className="pl-3.5 pr-2">{profile.aiRecommendations.summary}</p>
-                <span className="text-emerald-400 font-black text-lg absolute -bottom-3 right-3">”</span>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 text-xs">
-                {/* Nutrición */}
-                <div className="bg-gray-50 dark:bg-[#0f101a] p-3 rounded-2xl border border-gray-200 dark:border-gray-800/60 space-y-1">
-                  <span className="font-bold text-blue-500 dark:text-blue-400 flex items-center gap-1 text-[11px] uppercase tracking-wide">
-                    🥑 Estrategia de Nutrición
-                  </span>
-                  <p className="text-gray-650 dark:text-gray-400 text-[11px] leading-relaxed">
-                    {profile.aiRecommendations.nutritionAdvice}
-                  </p>
-                </div>
-
-                {/* Entrenamiento */}
-                <div className="bg-gray-50 dark:bg-[#0f101a] p-3 rounded-2xl border border-gray-200 dark:border-gray-800/60 space-y-1">
-                  <span className="font-bold text-orange-500 dark:text-orange-400 flex items-center gap-1 text-[11px] uppercase tracking-wide">
-                    🏋️ Enfoque de Entrenamiento
-                  </span>
-                  <p className="text-gray-650 dark:text-gray-400 text-[11px] leading-relaxed">
-                    {profile.aiRecommendations.trainingAdvice}
-                  </p>
-                </div>
-
-                {/* Salud general */}
-                <div className="bg-gray-50 dark:bg-[#0f101a] p-3 rounded-2xl border border-gray-200 dark:border-gray-800/60 space-y-1">
-                  <span className="font-bold text-purple-500 dark:text-purple-400 flex items-center gap-1 text-[11px] uppercase tracking-wide">
-                    ❤️ Salud y Hábitos
-                  </span>
-                  <p className="text-gray-650 dark:text-gray-400 text-[11px] leading-relaxed">
-                    {profile.aiRecommendations.healthCheck}
-                  </p>
-                </div>
-              </div>
-
-              <div className="text-[9px] text-gray-400 dark:text-gray-500 font-medium text-right uppercase tracking-wider">
-                Analizado el: {profile.aiRecommendations.lastUpdated}
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-5 space-y-4">
-              <div className="inline-flex p-3.5 bg-emerald-500/10 rounded-full text-emerald-400 animate-pulse">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div className="space-y-1 max-w-xs mx-auto">
-                <h4 className="text-xs font-bold text-gray-900 dark:text-white">¿Quieres tus recomendaciones de IA?</h4>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
-                  Gemini analizará tu % de grasa ({profile.bodyFat !== undefined ? `${profile.bodyFat}%` : "por calcular"}), IMC ({profile.bmi}), metas de macros y nivel para darte un plan estratégico optimizado.
-                </p>
-              </div>
-              <button
-                onClick={handleGenerateRecommendations}
-                disabled={isGenerating}
-                className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-800 text-white text-xs font-bold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                {isGenerating ? (
-                  <>
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    <span>Analizando perfil con Gemini...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-3.5 w-3.5" />
-                    <span>Obtener Recomendaciones de IA</span>
-                  </>
-                )}
-              </button>
-            </div>
+          {onOpenCoach && (
+            <button
+              onClick={onOpenCoach}
+              className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black shrink-0 transition cursor-pointer border-none shadow-md"
+            >
+              Chatear
+            </button>
           )}
         </div>
 
@@ -1018,13 +963,55 @@ export default function Dashboard({
                 </div>
               </div>
 
+              {/* Detailed Description for IA */}
+              <div className="space-y-1.5 animate-fadeIn">
+                <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Detalles de la sesión (Opcional - Para IA)
+                </label>
+                <textarea
+                  value={sportDescription}
+                  onChange={(e) => setSportDescription(e.target.value)}
+                  placeholder="Ej: Sparring continuo de 6 rounds, o solo golpear saco suave sin cardio intenso..."
+                  rows={2}
+                  className="w-full p-2.5 bg-gray-50 dark:bg-black/40 border border-gray-200 dark:border-gray-800 rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none focus:border-orange-500/50 transition placeholder-gray-400 resize-none font-sans"
+                />
+                
+                {sportDescription.trim().length > 4 && (
+                  <button
+                    type="button"
+                    onClick={handleAdjustSportWithIA}
+                    disabled={isAdjustingSport}
+                    className="w-full py-1.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 text-[10px] font-extrabold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer border-none"
+                  >
+                    {isAdjustingSport ? (
+                      <>
+                        <div className="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                        Ajustando con IA...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-3 w-3 fill-orange-500/10" />
+                        Ajustar Calorías con IA
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+
               {/* Estimation Preview */}
               {Number(sportDuration) > 0 && (
-                <div className="bg-orange-500/5 border border-orange-500/10 p-3 rounded-xl flex items-center justify-between">
-                  <span className="text-[10px] text-gray-555 dark:text-gray-400 font-bold uppercase">Calorías estimadas quemadas:</span>
-                  <span className="text-xs font-black text-orange-500 font-mono">
-                    -{Math.round(SPORTS_METS[selectedSportKey].met * 0.0175 * profile.weight * Number(sportDuration))} kcal
-                  </span>
+                <div className="bg-orange-500/5 border border-orange-500/10 p-3 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-gray-555 dark:text-gray-400 font-bold uppercase">Calorías estimadas:</span>
+                    <span className="text-xs font-black text-orange-500 font-mono">
+                      -{iaAdjustedCalories !== null ? iaAdjustedCalories : Math.round(SPORTS_METS[selectedSportKey].met * 0.0175 * profile.weight * Number(sportDuration))} kcal
+                    </span>
+                  </div>
+                  {iaAdjustedReason && (
+                    <div className="text-[9px] text-orange-400 bg-orange-500/10 p-1.5 rounded-lg border border-orange-500/10">
+                      ⚡ <b>Ajuste IA:</b> {iaAdjustedReason} (MET: {iaAdjustedMet})
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1045,6 +1032,379 @@ export default function Dashboard({
               >
                 Guardar registro
               </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+      {/* Modal Pre-Entrenamiento */}
+      {isPreWorkoutOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4 animate-fadeIn">
+          <div className="fixed inset-0" onClick={() => {
+            setIsPreWorkoutOpen(false);
+            setPreWorkoutRecommendation(null);
+            setPreWorkoutIngredients([]);
+          }} />
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="relative w-full max-w-md bg-[#0c0d14] border border-gray-800 rounded-t-[32px] md:rounded-[32px] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
+          >
+            {/* Header */}
+            <div className="p-5 border-b border-gray-800 flex items-center justify-between bg-black/25">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4.5 w-4.5 text-amber-500 fill-amber-500/10" />
+                <h2 className="text-sm font-black text-white uppercase tracking-tight">Combustible Pre-Entreno</h2>
+              </div>
+              <button
+                onClick={() => {
+                  setIsPreWorkoutOpen(false);
+                  setPreWorkoutRecommendation(null);
+                  setPreWorkoutIngredients([]);
+                }}
+                className="p-1.5 bg-white/5 hover:bg-white/10 rounded-xl text-gray-400 hover:text-white transition cursor-pointer border-none"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Scrollable content */}
+            <div className="p-5 space-y-5 overflow-y-auto no-scrollbar flex-1 pb-8">
+              {!preWorkoutRecommendation ? (
+                <>
+                  {/* 1. Tiempo hasta el entrenamiento */}
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      ¿En cuánto tiempo vas a entrenar?
+                    </label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[
+                        { val: 30, label: "30 min" },
+                        { val: 60, label: "1 hora" },
+                        { val: 120, label: "2 horas" },
+                        { val: 180, label: "3+ horas" }
+                      ].map((item) => (
+                        <button
+                          key={item.val}
+                          type="button"
+                          onClick={() => setPreWorkoutTime(item.val)}
+                          className={`py-2 px-1 rounded-xl border text-[11px] font-bold text-center transition cursor-pointer ${
+                            preWorkoutTime === item.val
+                              ? "bg-amber-500/20 border-amber-500/50 text-amber-400"
+                              : "bg-white/5 border-white/5 text-gray-400 hover:border-white/10"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 2. Formato preferido */}
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      Preferencia de Formato
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { id: "solid", label: "🥞 Sólido", desc: "Pan, bowls, snacks" },
+                        { id: "liquid", label: "🥤 Líquido", desc: "Batido de rápida absorción" }
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setPreWorkoutFormat(item.id as any)}
+                          className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center cursor-pointer ${
+                            preWorkoutFormat === item.id
+                              ? "bg-amber-500/20 border-amber-500/50 text-amber-400 font-bold"
+                              : "bg-white/5 border-white/10 text-gray-405"
+                          }`}
+                        >
+                          <span className="text-xs font-bold leading-tight">{item.label}</span>
+                          <span className="text-[8px] opacity-60 leading-tight mt-0.5">{item.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 3. Tipo de entrenamiento */}
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      Tipo de entrenamiento
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: "hypertrophy", label: "🏋️ Pesas / Fuerza" },
+                        { id: "cardio", label: "🏃 Cardio / HIIT" },
+                        { id: "recovery", label: "🧘 Movilidad / Suave" }
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setPreWorkoutIntensity(item.id as any)}
+                          className={`p-2 rounded-xl border text-center transition flex flex-col justify-center items-center h-[52px] cursor-pointer ${
+                            preWorkoutIntensity === item.id
+                              ? "bg-amber-500/20 border-amber-500/50 text-amber-400 font-bold"
+                              : "bg-white/5 border-white/10 text-gray-400 text-xs"
+                          }`}
+                        >
+                          <span className="text-[10px] font-bold leading-tight text-center">{item.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 4. Meta de macronutrientes */}
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      Enfoque Nutricional
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: "low_cal", label: "🥗 Bajo Calo" },
+                        { id: "high_protein", label: "💪 Proteico" },
+                        { id: "high_carb", label: "⚡ Enérgico" }
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setPreWorkoutGoal(item.id as any)}
+                          className={`p-2 rounded-xl border text-center transition flex flex-col justify-center items-center h-[46px] cursor-pointer ${
+                            preWorkoutGoal === item.id
+                              ? "bg-amber-500/20 border-amber-500/50 text-amber-400 font-bold"
+                              : "bg-white/5 border-white/10 text-gray-405 text-xs"
+                          }`}
+                        >
+                          <span className="text-[10px] font-bold leading-tight">{item.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 5. Ingredientes en Despensa */}
+                  <div className="space-y-2 border-t border-gray-800 pt-3">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      Ingredientes disponibles (Opcional)
+                    </label>
+                    
+                    <div className="space-y-2.5">
+                      <div>
+                        <span className="block text-[8px] text-gray-505 font-bold uppercase tracking-wider mb-1">Proteínas</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {["Yogurt Griego", "Proteína en Polvo", "Claras de Huevo", "Leche de Proteína"].map((ing) => {
+                            const isSel = preWorkoutIngredients.includes(ing);
+                            return (
+                              <button
+                                key={ing}
+                                type="button"
+                                onClick={() => {
+                                  if (isSel) {
+                                    setPreWorkoutIngredients(preWorkoutIngredients.filter(x => x !== ing));
+                                  } else {
+                                    setPreWorkoutIngredients([...preWorkoutIngredients, ing]);
+                                  }
+                                }}
+                                className={`py-1 px-2.5 rounded-full border text-[9.5px] font-bold transition cursor-pointer ${
+                                  isSel ? "bg-amber-500/20 border-amber-500/40 text-amber-400" : "bg-white/5 border-white/5 text-gray-400"
+                                }`}
+                              >
+                                {ing}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="block text-[8px] text-gray-505 font-bold uppercase tracking-wider mb-1">Carbohidratos</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {["Plátano / Banano", "Avena", "Pan de Molde", "Arroz Cocido", "Miel"].map((ing) => {
+                            const isSel = preWorkoutIngredients.includes(ing);
+                            return (
+                              <button
+                                key={ing}
+                                type="button"
+                                onClick={() => {
+                                  if (isSel) {
+                                    setPreWorkoutIngredients(preWorkoutIngredients.filter(x => x !== ing));
+                                  } else {
+                                    setPreWorkoutIngredients([...preWorkoutIngredients, ing]);
+                                  }
+                                }}
+                                className={`py-1 px-2.5 rounded-full border text-[9.5px] font-bold transition cursor-pointer ${
+                                  isSel ? "bg-amber-500/20 border-amber-500/40 text-amber-400" : "bg-white/5 border-white/5 text-gray-400"
+                                }`}
+                              >
+                                {ing}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="block text-[8px] text-gray-505 font-bold uppercase tracking-wider mb-1">Suplementos</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {["Creatina", "Pre-entreno comercial", "Café negro"].map((ing) => {
+                            const isSel = preWorkoutIngredients.includes(ing);
+                            return (
+                              <button
+                                key={ing}
+                                type="button"
+                                onClick={() => {
+                                  if (isSel) {
+                                    setPreWorkoutIngredients(preWorkoutIngredients.filter(x => x !== ing));
+                                  } else {
+                                    setPreWorkoutIngredients([...preWorkoutIngredients, ing]);
+                                  }
+                                }}
+                                className={`py-1 px-2.5 rounded-full border text-[9.5px] font-bold transition cursor-pointer ${
+                                  isSel ? "bg-amber-500/20 border-amber-500/40 text-amber-400" : "bg-white/5 border-white/5 text-gray-400"
+                                }`}
+                              >
+                                {ing}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Restricciones activas de tu perfil */}
+                  {profile.allergies && profile.allergies.length > 0 && (
+                    <div className="p-2.5 rounded-xl bg-red-500/5 border border-red-500/10 flex items-center justify-between">
+                      <span className="text-[9px] text-red-400 font-bold uppercase">Filtros activos de perfil:</span>
+                      <div className="flex gap-1">
+                        {profile.allergies.map(a => (
+                          <span key={a} className="text-[8px] font-black uppercase bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded">
+                            {a === "lactose" ? "🥛 Sin lactosa" : a === "gluten" ? "🌾 Sin gluten" : a === "nuts" ? "🥜 Sin nueces" : a === "seafood" ? "🍤 Sin mariscos" : "🫘 Sin soya"}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {preWorkoutError && (
+                    <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-[10px] text-red-400 font-medium font-sans">
+                      ⚠️ {preWorkoutError}
+                    </div>
+                  )}
+
+                  {/* Submit Button */}
+                  <button
+                    onClick={handleGeneratePreWorkout}
+                    disabled={isGeneratingPreWorkout}
+                    className="w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-800 disabled:text-gray-500 text-white text-xs font-black rounded-xl transition cursor-pointer shadow-lg shadow-amber-500/15 uppercase tracking-wide flex items-center justify-center gap-1.5 border-none font-sans"
+                  >
+                    {isGeneratingPreWorkout ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Analizando macros e ingredientes...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-3.5 w-3.5 fill-white/10" />
+                        Generar Recomendación IA
+                      </>
+                    )}
+                  </button>
+                </>
+              ) : (
+                /* IA suggestion response screen */
+                <div className="space-y-4 animate-fadeIn">
+                  <div className="bg-gradient-to-br from-amber-500/10 to-transparent p-4 rounded-2xl border border-amber-500/25 space-y-3.5">
+                    <div>
+                      <span className="text-[8px] bg-amber-500/20 text-amber-400 font-bold uppercase tracking-wider px-1.5 py-0.5 rounded">
+                        Combustible {preWorkoutRecommendation.format} sugerido
+                      </span>
+                      <h4 className="text-sm font-black text-white mt-1.5 leading-snug">
+                        {preWorkoutRecommendation.mealName}
+                      </h4>
+                      <p className="text-[9.5px] text-gray-400 mt-0.5 font-medium">
+                        Porción: {preWorkoutRecommendation.servingSize}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-1.5 pt-2.5 border-t border-white/5">
+                      <div className="bg-white/5 py-1.5 rounded-lg border border-white/5 text-center">
+                        <span className="block text-[8px] text-gray-500 uppercase font-bold">Kcal</span>
+                        <span className="text-xs font-extrabold text-white font-mono">{preWorkoutRecommendation.calories}</span>
+                      </div>
+                      <div className="bg-white/5 py-1.5 rounded-lg border border-white/5 text-center">
+                        <span className="block text-[8px] text-gray-500 uppercase font-bold">Prot</span>
+                        <span className="text-xs font-extrabold text-white font-mono">{preWorkoutRecommendation.protein}g</span>
+                      </div>
+                      <div className="bg-white/5 py-1.5 rounded-lg border border-white/5 text-center">
+                        <span className="block text-[8px] text-gray-500 uppercase font-bold">Carbs</span>
+                        <span className="text-xs font-extrabold text-white font-mono">{preWorkoutRecommendation.carbs}g</span>
+                      </div>
+                      <div className="bg-white/5 py-1.5 rounded-lg border border-white/5 text-center">
+                        <span className="block text-[8px] text-gray-500 uppercase font-bold">Grasa</span>
+                        <span className="text-xs font-extrabold text-white font-mono">{preWorkoutRecommendation.fat}g</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <span className="block text-[10px] text-gray-400 uppercase font-bold tracking-wider">Ingredientes necesarios</span>
+                    <ul className="text-[11px] text-gray-300 space-y-1 pl-4 list-disc font-medium leading-normal">
+                      {preWorkoutRecommendation.ingredientsUsed.map((ing: string, idx: number) => (
+                        <li key={idx}>{ing}</li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <span className="block text-[10px] text-gray-400 uppercase font-bold tracking-wider">Preparación rápida</span>
+                    <p className="text-[11px] text-gray-300 leading-relaxed font-medium">
+                      {preWorkoutRecommendation.instructions}
+                    </p>
+                  </div>
+
+                  <div className="bg-amber-500/5 p-3 rounded-xl border border-amber-500/10 space-y-1">
+                    <span className="block text-[8.5px] text-amber-500 font-bold uppercase tracking-wider">Justificación Científica</span>
+                    <p className="text-[10px] text-gray-400 leading-normal font-medium">
+                      {preWorkoutRecommendation.scientificReason}
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2.5 pt-2">
+                    <button
+                      onClick={() => {
+                        setPreWorkoutRecommendation(null);
+                        setPreWorkoutIngredients([]);
+                      }}
+                      className="flex-1 py-2 border border-gray-800 text-gray-400 hover:text-white text-xs font-bold rounded-xl hover:bg-white/5 transition cursor-pointer bg-transparent"
+                    >
+                      Atrás
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (onAddMeal && preWorkoutRecommendation) {
+                          onAddMeal({
+                            name: `Pre-Entreno: ${preWorkoutRecommendation.mealName}`,
+                            calories: Number(preWorkoutRecommendation.calories),
+                            protein: Number(preWorkoutRecommendation.protein),
+                            carbs: Number(preWorkoutRecommendation.carbs),
+                            fat: Number(preWorkoutRecommendation.fat),
+                            type: "snack",
+                            servingSize: preWorkoutRecommendation.servingSize
+                          });
+                          setIsPreWorkoutOpen(false);
+                          setPreWorkoutRecommendation(null);
+                          setPreWorkoutIngredients([]);
+                        }
+                      }}
+                      disabled={!onAddMeal}
+                      className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black rounded-xl transition cursor-pointer border-none"
+                    >
+                      Registrar en Diario
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </motion.div>
         </div>

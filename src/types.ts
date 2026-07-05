@@ -30,6 +30,7 @@ export interface UserProfile {
   apiKey?: string;
   usdaApiKey?: string;
   isOnboardingCompleted: boolean;
+  allergies?: string[];
   theme: "light" | "dark";
   takesCreatine?: boolean;
   lastCreatineIntake?: string; // Format YYYY-MM-DD
@@ -85,6 +86,7 @@ export interface LoggedMeal {
   fat: number; // in grams
   timestamp: string; // ISO string
   type: MealType;
+  servingSize?: string;
 }
 
 export interface WaterLog {

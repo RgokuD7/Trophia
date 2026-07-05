@@ -248,6 +248,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   const [weight, setWeight] = useState<number>(75);
   const [height, setHeight] = useState<number>(175);
   const [dietType, setDietType] = useState<DietType>("standard");
+  const [allergies, setAllergies] = useState<string[]>([]);
   const [activityLevel, setActivityLevel] = useState<"sedentary" | "lightly_active" | "moderately_active" | "highly_active" | "heavy_labor">("sedentary");
   const [stepsRange, setStepsRange] = useState<"under_4k" | "5k_7k" | "8k_10k" | "12k_15k" | "over_18k">("under_4k");
   const [deficitPace, setDeficitPace] = useState<"conservative" | "moderate" | "aggressive">("moderate");
@@ -912,7 +913,8 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
       parqAnswers,
       requiresMedicalClearance,
       jointPainAreas,
-      trainingAge: level
+      trainingAge: level,
+      allergies: allergies.length > 0 ? allergies : undefined
     };
 
     onComplete(finalProfile);
@@ -2354,6 +2356,54 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                           <span className="block text-xs font-bold leading-tight">{num === 6 ? "6 o más" : `${num} comidas`}</span>
                         </button>
                       ))}
+                    </div>
+                  </div>
+
+                  {/* Alergias o Restricciones alimenticias */}
+                  <div className="border-t border-white/5 pt-4 space-y-2">
+                    <label className="block text-[10px] font-bold text-white/40 mb-2 uppercase tracking-widest">
+                      ¿Tienes alguna alergia o intolerancia?
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { id: "lactose", label: "🥛 Sin Lactosa" },
+                        { id: "gluten", label: "🌾 Sin Gluten (Celíaco)" },
+                        { id: "nuts", label: "🥜 Sin Frutos Secos" },
+                        { id: "seafood", label: "🍤 Sin Mariscos / Pescado" },
+                        { id: "soy", label: "🫘 Sin Soya" },
+                        { id: "none", label: "✅ Ninguna" }
+                      ].map((item) => {
+                        const isSelected = item.id === "none" 
+                          ? allergies.length === 0 
+                          : allergies.includes(item.id);
+                        
+                        const handleToggle = () => {
+                          if (item.id === "none") {
+                            setAllergies([]);
+                          } else {
+                            if (allergies.includes(item.id)) {
+                              setAllergies(allergies.filter(a => a !== item.id));
+                            } else {
+                              setAllergies([...allergies, item.id]);
+                            }
+                          }
+                        };
+
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={handleToggle}
+                            className={`p-3 rounded-xl border text-center transition flex justify-center items-center h-[46px] cursor-pointer ${
+                              isSelected
+                                ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
+                                : "bg-white/5 border-white/10 text-white/40 text-xs"
+                            }`}
+                          >
+                            <span className="block text-xs font-bold leading-tight">{item.label}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 

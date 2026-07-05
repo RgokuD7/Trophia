@@ -800,3 +800,92 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 
   return await callGeminiAPI(apiKey, prompt);
 }
+
+// 14. Generate intelligent pre-workout meal or shake recommendation
+export interface PreWorkoutRequest {
+  timeRemainingMinutes: number;
+  trainingType: "hypertrophy" | "cardio" | "recovery";
+  formatPreference: "liquid" | "solid";
+  nutritionalGoal: "low_cal" | "high_protein" | "high_carb";
+  allergies?: string[];
+  availableIngredients?: string[];
+  dietType?: string;
+  remainingCalories?: number;
+}
+
+export async function generatePreWorkoutSuggestionByIA(
+  apiKey: string,
+  req: PreWorkoutRequest
+): Promise<{
+  mealName: string;
+  servingSize: string;
+  format: "líquido" | "sólido";
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  ingredientsUsed: string[];
+  instructions: string;
+  scientificReason: string;
+}> {
+  const prompt = `Actúas como un Nutricionista deportivo experto. Recomienda una comida o batido de pre-entrenamiento óptima en base a los siguientes parámetros:
+- Tiempo restante hasta el entrenamiento: ${req.timeRemainingMinutes} minutos.
+- Tipo/Exigencia del entrenamiento: ${req.trainingType === "hypertrophy" ? "Fuerza / Hipertrofia (pesas)" : req.trainingType === "cardio" ? "Cardio intenso / Resistencia" : "Recuperación activa / Movilidad"}.
+- Formato preferido: ${req.formatPreference === "liquid" ? "Líquido o batido (fácil absorción)" : "Comida sólida"}.
+- Enfoque nutricional buscado: ${req.nutritionalGoal === "low_cal" ? "Bajo en calorías / Definición" : req.nutritionalGoal === "high_protein" ? "Alto en proteínas" : "Alto en carbohidratos / Carga de energía"}.
+- Alergias o restricciones intolerantes a evitar: ${req.allergies && req.allergies.length > 0 ? req.allergies.join(", ") : "Ninguna"}.
+- Tipo de dieta: ${req.dietType || "estándar"}.
+- Ingredientes disponibles en la despensa rápida (prioriza usarlos si es posible): ${req.availableIngredients && req.availableIngredients.length > 0 ? req.availableIngredients.join(", ") : "Ninguno en específico (sugiere ingredientes comunes)"}.
+- Calorías restantes del día sugeridas: ${req.remainingCalories ? Math.round(req.remainingCalories) : "Sin límite estricto"}.
+
+Reglas científicas que DEBES seguir estrictamente para la recomendación:
+1. Si falta menos de 30-45 minutos para entrenar: Recomienda algo muy ligero, preferiblemente líquido o carbohidratos simples rápidos (plátano, fruta, miel). Evita grasas y fibra que causen pesadez.
+2. Si faltan 1-2 horas: Recomienda carbohidratos de absorción media-lenta con proteína limpia (ej. avena con proteína en polvo, pan tostado con claras).
+3. Si faltan 2-3 horas o más: Recomienda una comida completa y sólida (arroz con pollo, etc.).
+4. Si el tipo es Fuerza/Hipertrofia, asegura al menos 15-30g de proteína. Si es Cardio Intenso, prioriza carbohidratos de fácil digestión.
+5. Evita cualquier ingrediente que contenga sus alergias (ej: sin lactosa, sin gluten).
+
+Responde estrictamente en formato JSON con la siguiente estructura de datos (en español):
+{
+  "mealName": "Nombre corto y atractivo de la receta o batido",
+  "servingSize": "Porción recomendada (ej: 1 bowl, 1 batido de 350ml, etc.)",
+  "format": "líquido o sólido",
+  "calories": calorías totales (número entero),
+  "protein": gramos de proteína (número entero o decimal),
+  "carbs": gramos de carbohidratos (número entero o decimal),
+  "fat": gramos de grasa (número entero o decimal),
+  "ingredientsUsed": ["ingrediente 1 con cantidad", "ingrediente 2..."],
+  "instructions": "Instrucciones de preparación rápida en 2 o 3 frases directas",
+  "scientificReason": "Explicación breve de por qué esta combinación es perfecta para el tipo de entrenamiento y el tiempo restante"
+}`;
+
+  return await callGeminiAPI(apiKey, prompt);
+}
+
+// 15. Adjust calories burned based on exercise description
+export async function adjustSportCaloriesByIA(
+  apiKey: string,
+  sportLabel: string,
+  baselineMet: number,
+  durationMinutes: number,
+  userWeightKg: number,
+  description: string
+): Promise<{ adjustedMet: number; caloriesBurned: number; reason: string }> {
+  const prompt = `Actúas como un fisiólogo del ejercicio experto de Trophia. El usuario registró una sesión deportiva con los siguientes datos base:
+- Deporte/Actividad: ${sportLabel} (MET base de referencia: ${baselineMet}).
+- Duración: ${durationMinutes} minutos.
+- Peso del usuario: ${userWeightKg} kg.
+- Descripción de la intensidad y detalles dada por el usuario: "${description}".
+
+Calcula si el MET real debería ser diferente en base a los detalles de la descripción (por ejemplo, si hizo boxeo pero fue "combate/sparring intenso" el MET podría subir a 9.0 o 10.0; si fue "saco de boxeo relajado" o "técnica", el MET podría bajar a 5.0 o 6.0; si corrió pero fue "trote muy ligero", el MET baja, si fue "carrera de velocidad/sprint", el MET sube).
+Calcula las calorías quemadas usando la fórmula científica: Calorías = MET * 0.0175 * Peso (kg) * Duración (minutos).
+
+Responde estrictamente en formato JSON con la siguiente estructura:
+{
+  "adjustedMet": MET ajustado final (número decimal),
+  "caloriesBurned": calorías finales estimadas (número entero),
+  "reason": "Explicación concisa en 1 o 2 frases del ajuste de intensidad realizado según su descripción (ej. 'Se reduce el MET de 7.8 a 5.5 porque el golpeo de saco es menos demandante que el combate competitivo')."
+}`;
+
+  return await callGeminiAPI(apiKey, prompt);
+}

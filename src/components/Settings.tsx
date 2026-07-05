@@ -35,6 +35,7 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
   const [deficitPace, setDeficitPace] = useState<"conservative" | "moderate" | "aggressive">(profile.deficitPace || "moderate");
   const [solidMealsCount, setSolidMealsCount] = useState<number>(profile.solidMealsCount || 4);
   const [jointPainAreas, setJointPainAreas] = useState<("knee" | "back" | "shoulder")[]>(profile.jointPainAreas || []);
+  const [allergies, setAllergies] = useState<string[]>(profile.allergies || []);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   const handlePasteApiKey = async () => {
@@ -239,7 +240,8 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
       solidMealsCount,
       requiresMedicalClearance,
       jointPainAreas,
-      frequentRoutes: recalculatedRoutes
+      frequentRoutes: recalculatedRoutes,
+      allergies: allergies.length > 0 ? allergies : undefined
     };
 
     onUpdateProfile(updatedProfile);
@@ -514,6 +516,42 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
                 <option value="paleo">Paleolítica (Paleo)</option>
                 <option value="mediterranean">Mediterránea</option>
               </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-1.5 uppercase font-bold tracking-wider">Alergias o Restricciones</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { id: "lactose", label: "🥛 Sin Lactosa" },
+                  { id: "gluten", label: "🌾 Sin Gluten" },
+                  { id: "nuts", label: "🥜 Sin Frutos Secos" },
+                  { id: "seafood", label: "🍤 Sin Mariscos" },
+                  { id: "soy", label: "🫘 Sin Soya" }
+                ].map((item) => {
+                  const isSelected = allergies.includes(item.id);
+                  const handleToggle = () => {
+                    if (isSelected) {
+                      setAllergies(allergies.filter(a => a !== item.id));
+                    } else {
+                      setAllergies([...allergies, item.id]);
+                    }
+                  };
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={handleToggle}
+                      className={`py-1.5 px-2.5 rounded-lg border text-center transition text-[10px] font-bold cursor-pointer ${
+                        isSelected
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                          : "bg-white/5 border-white/5 text-white/40"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
