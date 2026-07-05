@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Plus, BookOpen, Star, Calendar, ShoppingCart, Lock, ArrowLeft, Trash2, Check, X, 
-  ChefHat, Flame, Zap, ChevronLeft, ChevronRight, MessageSquare, Lightbulb, Sparkles, AlertCircle, Send
+  ChefHat, Flame, Zap, ChevronLeft, ChevronRight, MessageSquare, Lightbulb, Sparkles, AlertCircle, Send, Utensils
 } from "lucide-react";
 import { UserProfile, LoggedMeal, MealType, CustomFood } from "../types";
 import { getCustomFoods, addCustomFood, deleteCustomFood } from "../services/dbService";
@@ -530,15 +530,19 @@ export default function NutritionHub({
   // ─── Main Hub View ─────────────────────────────────
   return (
     <div className="flex flex-col h-full overflow-y-auto no-scrollbar pb-24 relative">
-      {/* Floating Action Button (FAB) for Food logging */}
+      {/* Floating Action Button for rapid comida add */}
       {isToday && (
-        <button
-          onClick={() => onOpenFoodLogger()}
-          className="fixed bottom-24 right-5 z-40 bg-gradient-to-br from-emerald-500 to-emerald-400 text-black p-4 rounded-full shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer border-none"
-          title="Registrar Alimento"
-        >
-          <Plus className="h-6 w-6 font-bold" />
-        </button>
+        <div className="fixed bottom-20 right-6 z-40">
+          <motion.button
+            onClick={() => onOpenFoodLogger()}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="bg-emerald-500 hover:bg-emerald-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20 border border-emerald-400/20 cursor-pointer"
+            title="Registrar Alimento"
+          >
+            <Utensils className="h-5 w-5" />
+          </motion.button>
+        </div>
       )}
 
       {/* Header + Week Calendar */}
