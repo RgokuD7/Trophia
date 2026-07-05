@@ -994,7 +994,7 @@ export default function NutritionHub({
         </div>
 
         {/* Bottom spacer */}
-        <div className="h-4" />
+        <div className="h-24" />
       </div>
     </div>
   );
