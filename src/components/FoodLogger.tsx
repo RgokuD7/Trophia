@@ -111,6 +111,7 @@ export const formatMacro = (val: number | string | undefined): string => {
 };
 
 export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals, onClose, defaultMealType }: FoodLoggerProps) {
+  const systemGeminiKey = import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || apiKey || "";
   const [activeTab, setActiveTab] = useState<"search" | "camera" | "personal">("search");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMealType, setSelectedMealType] = useState<MealType>(defaultMealType || "lunch");
@@ -441,7 +442,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
     reader.onloadend = async () => {
       try {
         const base64Image = reader.result as string;
-        const data = await analyzeNutritionLabelByIA(apiKey || "", base64Image);
+        const data = await analyzeNutritionLabelByIA(systemGeminiKey, base64Image);
         
         if (data && data.calories !== undefined) {
           const scale = portionUnit === "unit" ? unitWeight / 100 : portionValue / 100;
@@ -469,7 +470,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
     setIsLoadingPortions(true);
     setPortionsError(null);
     try {
-      const data = await getVisualServingSizesByIA(apiKey || "", selectedFood.name);
+      const data = await getVisualServingSizesByIA(systemGeminiKey, selectedFood.name);
       if (data && Array.isArray(data.suggestions)) {
         setVisualPortions(data.suggestions);
         setShowPortionsInfo(true);
@@ -1340,7 +1341,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                           placeholder="kcal"
                           className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-emerald-600 dark:text-emerald-400 font-mono font-bold px-1 focus:border-emerald-500/40 disabled:opacity-50"
                           size="sm"
-                          disabled={selectedFood.name !== "" && !isCorrectingBarcode}
+                          disabled={selectedFood.name !== ""}
                         />
                       </div>
                       <div>
@@ -1355,7 +1356,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                           placeholder="g"
                           className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-50"
                           size="sm"
-                          disabled={selectedFood.name !== "" && !isCorrectingBarcode}
+                          disabled={selectedFood.name !== ""}
                         />
                       </div>
                       <div>
@@ -1370,7 +1371,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                           placeholder="g"
                           className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-50"
                           size="sm"
-                          disabled={selectedFood.name !== "" && !isCorrectingBarcode}
+                          disabled={selectedFood.name !== ""}
                         />
                       </div>
                       <div>
@@ -1385,7 +1386,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                           placeholder="g"
                           className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-50"
                           size="sm"
-                          disabled={selectedFood.name !== "" && !isCorrectingBarcode}
+                          disabled={selectedFood.name !== ""}
                         />
                       </div>
                     </div>
