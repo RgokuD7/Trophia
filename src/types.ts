@@ -31,6 +31,7 @@ export interface UserProfile {
   usdaApiKey?: string;
   isOnboardingCompleted: boolean;
   allergies?: string[];
+  pantry?: PantryItem[];
   theme: "light" | "dark";
   takesCreatine?: boolean;
   lastCreatineIntake?: string; // Format YYYY-MM-DD
@@ -183,4 +184,11 @@ export interface BarcodeCorrection {
   yesVotes: number;
   noVotes: number;
   updatedAt?: any;
+}
+
+export interface PantryItem {
+  id: string;
+  name: string;
+  quantity: string;
+  category?: "protein" | "carb" | "fat" | "supplement" | "other";
 }

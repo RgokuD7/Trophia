@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Plus, BookOpen, Star, Calendar, ShoppingCart, Lock, ArrowLeft, Trash2, Check, X, 
-  ChefHat, Flame, Zap, ChevronLeft, ChevronRight, MessageSquare, Lightbulb, Sparkles, AlertCircle, Send, Utensils
+  ChefHat, Flame, Zap, ChevronLeft, ChevronRight, MessageSquare, Lightbulb, Sparkles, AlertCircle, Send, Utensils, Package
 } from "lucide-react";
 import { UserProfile, LoggedMeal, MealType, CustomFood } from "../types";
 import { getCustomFoods, addCustomFood, deleteCustomFood } from "../services/dbService";
@@ -79,11 +79,41 @@ export default function NutritionHub({
   
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [weekDates, setWeekDates] = useState(() => getWeekDates(today));
-  const [activeSection, setActiveSection] = useState<"custom_foods" | "calorie_bank" | null>(null);
+  const [activeSection, setActiveSection] = useState<"custom_foods" | "calorie_bank" | "pantry" | null>(null);
   
   // Custom foods state
   const [customFoods, setCustomFoods] = useState<CustomFood[]>([]);
   const [isLoadingFoods, setIsLoadingFoods] = useState(false);
+
+  // Pantry local state
+  const [pantryItemName, setPantryItemName] = useState("");
+  const [pantryItemQty, setPantryItemQty] = useState("");
+  const [pantryItemCat, setPantryItemCat] = useState<"protein" | "carb" | "fat" | "supplement" | "other">("protein");
+
+  const handleAddPantryItem = () => {
+    if (!pantryItemName.trim() || !pantryItemQty.trim()) return;
+    const newItem = {
+      id: Math.random().toString(36).substring(2, 9),
+      name: pantryItemName.trim(),
+      quantity: pantryItemQty.trim(),
+      category: pantryItemCat
+    };
+    const currentPantry = profile.pantry || [];
+    onUpdateProfile({
+      ...profile,
+      pantry: [...currentPantry, newItem]
+    });
+    setPantryItemName("");
+    setPantryItemQty("");
+  };
+
+  const handleDeletePantryItem = (itemId: string) => {
+    const currentPantry = profile.pantry || [];
+    onUpdateProfile({
+      ...profile,
+      pantry: currentPantry.filter(x => x.id !== itemId)
+    });
+  };
 
   // AI Suggestions state
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
@@ -311,6 +341,112 @@ export default function NutritionHub({
     
     return { compliance, cumulativeBalance };
   };
+
+  // ─── Pantry (Despensa) Sub-view ───────────────────────
+  if (activeSection === "pantry") {
+    const currentPantry = profile.pantry || [];
+    return (
+      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex-1 overflow-y-auto px-5 py-6 space-y-4 no-scrollbar">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setActiveSection(null)} className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition cursor-pointer">
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div>
+            <h2 className="text-base font-black text-white tracking-tight">Mi Despensa</h2>
+            <p className="text-[10px] text-white/40">Registra tus alimentos e ingredientes para planificar con la IA</p>
+          </div>
+        </div>
+
+        {/* Formulario para agregar ingrediente */}
+        <div className="bg-white/5 border border-white/5 rounded-3xl p-4 space-y-3">
+          <span className="block text-[9px] font-bold text-amber-400 uppercase tracking-wider">Agregar a la Despensa</span>
+          
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="block text-[8px] text-white/40 uppercase font-bold">Ingrediente</label>
+              <input
+                type="text"
+                placeholder="Ej: Plátano, Avena..."
+                value={pantryItemName}
+                onChange={(e) => setPantryItemName(e.target.value)}
+                className="w-full p-2 bg-black/40 border border-white/10 rounded-xl text-xs text-white placeholder-white/30 focus:outline-none focus:border-amber-500/50"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="block text-[8px] text-white/40 uppercase font-bold">Cantidad / Unidad</label>
+              <input
+                type="text"
+                placeholder="Ej: 500g, 4 unidades..."
+                value={pantryItemQty}
+                onChange={(e) => setPantryItemQty(e.target.value)}
+                className="w-full p-2 bg-black/40 border border-white/10 rounded-xl text-xs text-white placeholder-white/30 focus:outline-none focus:border-amber-500/50"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 items-end">
+            <div className="col-span-2 space-y-1">
+              <label className="block text-[8px] text-white/40 uppercase font-bold">Categoría</label>
+              <select
+                value={pantryItemCat}
+                onChange={(e) => setPantryItemCat(e.target.value as any)}
+                className="w-full p-2 bg-black/40 border border-white/10 rounded-xl text-xs text-white outline-none cursor-pointer focus:border-amber-500/50 animate-fadeIn"
+              >
+                <option value="protein" className="bg-[#0c0d14]">💪 Proteínas</option>
+                <option value="carb" className="bg-[#0c0d14]">⚡ Carbohidratos</option>
+                <option value="fat" className="bg-[#0c0d14]">🥑 Grasas</option>
+                <option value="supplement" className="bg-[#0c0d14]">🥤 Suplemento</option>
+                <option value="other" className="bg-[#0c0d14]">✨ Otro</option>
+              </select>
+            </div>
+
+            <button
+              onClick={handleAddPantryItem}
+              className="py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black rounded-xl transition cursor-pointer border-none shadow-md"
+            >
+              Agregar
+            </button>
+          </div>
+        </div>
+
+        {/* Lista de ingredientes */}
+        <div className="space-y-2">
+          <span className="block text-[10px] font-bold text-white/40 uppercase tracking-wider">Ingredientes Guardados ({currentPantry.length})</span>
+          
+          {currentPantry.length === 0 ? (
+            <div className="text-center py-8 border border-dashed border-white/10 rounded-2xl bg-white/[0.01]">
+              <Package className="h-8 w-8 text-white/10 mx-auto mb-2" />
+              <p className="text-[11px] text-white/40 max-w-xs mx-auto">
+                Tu despensa está vacía. Registra lo que tienes para que la IA de pre-entrenamiento te sugiera recetas exactas.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-2">
+              {currentPantry.map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-3.5 bg-white/5 border border-white/5 rounded-2xl">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-sm">
+                      {item.category === "protein" ? "💪" : item.category === "carb" ? "⚡" : item.category === "fat" ? "🥑" : item.category === "supplement" ? "🥤" : "✨"}
+                    </span>
+                    <div>
+                      <span className="block text-xs font-extrabold text-white">{item.name}</span>
+                      <span className="block text-[9px] text-white/40 font-medium">Cantidad: {item.quantity}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDeletePantryItem(item.id)}
+                    className="p-1.5 bg-transparent text-white/20 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition border-none cursor-pointer"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    );
+  }
 
   // ─── Custom Foods Sub-view ─────────────────────────
   if (activeSection === "custom_foods") {
@@ -829,19 +965,22 @@ export default function NutritionHub({
             <p className="text-[9px] text-white/45 leading-normal mt-0.5">Resuelve tus dudas nutricionales al instante</p>
           </button>
 
-          {/* Crear Dieta - locked */}
-          <div className="p-3.5 bg-white/[0.02] border border-white/5 rounded-3xl text-left relative opacity-60">
+          {/* Mi Despensa - active */}
+          <button
+            onClick={() => setActiveSection("pantry")}
+            className="p-3.5 bg-gradient-to-br from-amber-500/5 to-transparent border border-amber-500/10 hover:border-amber-500/30 rounded-3xl text-left hover:scale-[1.02] transition-all duration-300 cursor-pointer shadow-md group animate-fadeIn"
+          >
             <div className="flex items-start justify-between">
-              <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center text-white/40">
-                <Calendar className="h-4.5 w-4.5" />
+              <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover:scale-105 transition-all">
+                <Package className="h-4.5 w-4.5" />
               </div>
-              <span className="text-[8px] font-bold text-white/30 bg-white/5 px-1.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
-                <Lock className="h-2 w-2" /> Próximamente
+              <span className="text-[7.5px] font-extrabold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                Nuevo
               </span>
             </div>
-            <h4 className="text-[11px] font-black text-white/70 mt-2.5">Crear Dieta</h4>
-            <p className="text-[9px] text-white/30 leading-normal mt-0.5">Planificador semanal</p>
-          </div>
+            <h4 className="text-[11px] font-black text-white mt-2.5">Mi Despensa</h4>
+            <p className="text-[9px] text-white/45 leading-normal mt-0.5">Tus ingredientes y cantidades disponibles</p>
+          </button>
 
           {/* Banco de Calorías - locked */}
           <div className="col-span-2 p-3.5 bg-white/[0.02] border border-white/5 rounded-3xl text-left relative opacity-60">

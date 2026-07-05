@@ -809,6 +809,8 @@ export interface PreWorkoutRequest {
   nutritionalGoal: "low_cal" | "high_protein" | "high_carb";
   allergies?: string[];
   availableIngredients?: string[];
+  restrictToPantryOnly?: boolean;
+  extraNotes?: string;
   dietType?: string;
   remainingCalories?: number;
 }
@@ -835,7 +837,9 @@ export async function generatePreWorkoutSuggestionByIA(
 - Enfoque nutricional buscado: ${req.nutritionalGoal === "low_cal" ? "Bajo en calorías / Definición" : req.nutritionalGoal === "high_protein" ? "Alto en proteínas" : "Alto en carbohidratos / Carga de energía"}.
 - Alergias o restricciones intolerantes a evitar: ${req.allergies && req.allergies.length > 0 ? req.allergies.join(", ") : "Ninguna"}.
 - Tipo de dieta: ${req.dietType || "estándar"}.
-- Ingredientes disponibles en la despensa rápida (prioriza usarlos si es posible): ${req.availableIngredients && req.availableIngredients.length > 0 ? req.availableIngredients.join(", ") : "Ninguno en específico (sugiere ingredientes comunes)"}.
+- Ingredientes disponibles en la despensa del usuario: ${req.availableIngredients && req.availableIngredients.length > 0 ? req.availableIngredients.join(", ") : "Ninguno en específico"}.
+- Restricción estricta de despensa: ${req.restrictToPantryOnly ? "SÍ (Obligatorio: Crea la receta usando ÚNICAMENTE ingredientes de la despensa. No inventes ingredientes adicionales)." : "NO (Recomendado: Prioriza la despensa pero puedes añadir ingredientes comunes e indicar si falta algo por comprar)."}.
+- Preferencias o detalles extra del usuario: "${req.extraNotes || "Ninguno"}".
 - Calorías restantes del día sugeridas: ${req.remainingCalories ? Math.round(req.remainingCalories) : "Sin límite estricto"}.
 
 Reglas científicas que DEBES seguir estrictamente para la recomendación:
@@ -856,7 +860,7 @@ Responde estrictamente en formato JSON con la siguiente estructura de datos (en 
   "fat": gramos de grasa (número entero o decimal),
   "ingredientsUsed": ["ingrediente 1 con cantidad", "ingrediente 2..."],
   "instructions": "Instrucciones de preparación rápida en 2 o 3 frases directas",
-  "scientificReason": "Explicación breve de por qué esta combinación es perfecta para el tipo de entrenamiento y el tiempo restante"
+  "scientificReason": "Explicación breve de por qué esta combinación es perfecta para el tipo de entrenamiento, tiempo restante, y notas del usuario"
 }`;
 
   return await callGeminiAPI(apiKey, prompt);

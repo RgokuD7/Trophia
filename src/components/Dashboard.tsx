@@ -1,7 +1,7 @@
 import React from "react";
 import { motion } from "motion/react";
 import { 
-  Flame, Utensils, Droplets, Trophy, ChevronRight, Plus, Calendar, AlertTriangle, Play, Trash, Check, HelpCircle, Sparkles, RefreshCw, MapPin, BookOpen, Activity, X, Lock, Zap
+  Flame, Utensils, Droplets, Trophy, ChevronRight, Plus, Calendar, AlertTriangle, Play, Trash, Check, HelpCircle, Sparkles, RefreshCw, MapPin, BookOpen, Activity, X, Lock, Zap, Package
 } from "lucide-react";
 import { UserProfile, LoggedMeal, WaterLog, MealType, WorkoutSession } from "../types";
 import { generateRecommendationsByIA, generatePreWorkoutSuggestionByIA, adjustSportCaloriesByIA } from "../services/geminiService";
@@ -88,7 +88,8 @@ export default function Dashboard({
   const [preWorkoutFormat, setPreWorkoutFormat] = React.useState<"liquid" | "solid">("solid");
   const [preWorkoutGoal, setPreWorkoutGoal] = React.useState<"low_cal" | "high_protein" | "high_carb">("high_protein");
   const [preWorkoutAllergies, setPreWorkoutAllergies] = React.useState<string[]>(profile.allergies || []);
-  const [preWorkoutIngredients, setPreWorkoutIngredients] = React.useState<string[]>([]);
+  const [preWorkoutExtraNotes, setPreWorkoutExtraNotes] = React.useState("");
+  const [preWorkoutRestrictToPantry, setPreWorkoutRestrictToPantry] = React.useState(false);
   const [isGeneratingPreWorkout, setIsGeneratingPreWorkout] = React.useState(false);
   const [preWorkoutRecommendation, setPreWorkoutRecommendation] = React.useState<any | null>(null);
   const [preWorkoutError, setPreWorkoutError] = React.useState<string | null>(null);
@@ -106,6 +107,10 @@ export default function Dashboard({
     setPreWorkoutRecommendation(null);
     try {
       const apiKey = profile.apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || "";
+      const pantryIngredients = profile.pantry 
+        ? profile.pantry.map(item => `${item.name} (${item.quantity})`)
+        : [];
+
       const result = await generatePreWorkoutSuggestionByIA(
         apiKey,
         {
@@ -114,7 +119,9 @@ export default function Dashboard({
           formatPreference: preWorkoutFormat,
           nutritionalGoal: preWorkoutGoal,
           allergies: preWorkoutAllergies,
-          availableIngredients: preWorkoutIngredients,
+          availableIngredients: pantryIngredients,
+          restrictToPantryOnly: preWorkoutRestrictToPantry,
+          extraNotes: preWorkoutExtraNotes,
           dietType: profile.dietType || "standard",
           remainingCalories: profile.dailyCalorieTarget - totalCalories
         }
@@ -1042,7 +1049,8 @@ export default function Dashboard({
           <div className="fixed inset-0" onClick={() => {
             setIsPreWorkoutOpen(false);
             setPreWorkoutRecommendation(null);
-            setPreWorkoutIngredients([]);
+            setPreWorkoutExtraNotes("");
+            setPreWorkoutRestrictToPantry(false);
           }} />
           <motion.div
             initial={{ y: "100%" }}
@@ -1061,7 +1069,8 @@ export default function Dashboard({
                 onClick={() => {
                   setIsPreWorkoutOpen(false);
                   setPreWorkoutRecommendation(null);
-                  setPreWorkoutIngredients([]);
+                  setPreWorkoutExtraNotes("");
+                  setPreWorkoutRestrictToPantry(false);
                 }}
                 className="p-1.5 bg-white/5 hover:bg-white/10 rounded-xl text-gray-400 hover:text-white transition cursor-pointer border-none"
               >
@@ -1182,94 +1191,71 @@ export default function Dashboard({
                     </div>
                   </div>
 
-                  {/* 5. Ingredientes en Despensa */}
+                  {/* 5. Mi Despensa (Ingredientes disponibles) */}
+                  <div className="space-y-3 border-t border-gray-800 pt-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                        <Package className="h-3.5 w-3.5 text-amber-500" />
+                        Ingredientes en Despensa ({profile.pantry?.length || 0})
+                      </label>
+                      <button
+                        onClick={() => {
+                          setIsPreWorkoutOpen(false);
+                          onNavigateToTab("nutrition");
+                        }}
+                        className="text-[9px] text-amber-500 hover:underline font-bold bg-transparent border-none cursor-pointer"
+                      >
+                        Gestionar Despensa →
+                      </button>
+                    </div>
+
+                    {profile.pantry && profile.pantry.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto no-scrollbar p-1">
+                        {profile.pantry.map((item) => (
+                          <span
+                            key={item.id}
+                            className="py-1 px-2.5 rounded-full bg-white/5 border border-white/5 text-[9px] text-gray-300 font-bold"
+                          >
+                            {item.category === "protein" ? "💪" : item.category === "carb" ? "⚡" : item.category === "fat" ? "🥑" : item.category === "supplement" ? "🥤" : "✨"} {item.name} ({item.quantity})
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-3 border border-dashed border-gray-800 rounded-xl bg-white/[0.01] text-center">
+                        <p className="text-[10px] text-gray-500">
+                          No tienes ingredientes guardados. Puedes agregar huevos, avena, plátano, etc. en la sección Alimentación &gt; Mi Despensa.
+                        </p>
+                      </div>
+                    )}
+
+                    {profile.pantry && profile.pantry.length > 0 && (
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-amber-500/5 border border-amber-500/10">
+                        <div className="space-y-0.5">
+                          <span className="block text-[10px] font-bold text-white">Restringir a mi despensa</span>
+                          <span className="block text-[8.5px] text-gray-450 leading-none">Generar comida estrictamente con lo que tienes</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={preWorkoutRestrictToPantry}
+                          onChange={(e) => setPreWorkoutRestrictToPantry(e.target.checked)}
+                          className="w-4 h-4 text-amber-500 bg-black/40 border-gray-800 rounded focus:ring-0 cursor-pointer accent-amber-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 6. Preferencias / Notas adicionales */}
                   <div className="space-y-2 border-t border-gray-800 pt-3">
                     <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                      Ingredientes disponibles (Opcional)
+                      ¿Tienes alguna otra preferencia o detalle? (Opcional)
                     </label>
-                    
-                    <div className="space-y-2.5">
-                      <div>
-                        <span className="block text-[8px] text-gray-505 font-bold uppercase tracking-wider mb-1">Proteínas</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {["Yogurt Griego", "Proteína en Polvo", "Claras de Huevo", "Leche de Proteína"].map((ing) => {
-                            const isSel = preWorkoutIngredients.includes(ing);
-                            return (
-                              <button
-                                key={ing}
-                                type="button"
-                                onClick={() => {
-                                  if (isSel) {
-                                    setPreWorkoutIngredients(preWorkoutIngredients.filter(x => x !== ing));
-                                  } else {
-                                    setPreWorkoutIngredients([...preWorkoutIngredients, ing]);
-                                  }
-                                }}
-                                className={`py-1 px-2.5 rounded-full border text-[9.5px] font-bold transition cursor-pointer ${
-                                  isSel ? "bg-amber-500/20 border-amber-500/40 text-amber-400" : "bg-white/5 border-white/5 text-gray-400"
-                                }`}
-                              >
-                                {ing}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div>
-                        <span className="block text-[8px] text-gray-505 font-bold uppercase tracking-wider mb-1">Carbohidratos</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {["Plátano / Banano", "Avena", "Pan de Molde", "Arroz Cocido", "Miel"].map((ing) => {
-                            const isSel = preWorkoutIngredients.includes(ing);
-                            return (
-                              <button
-                                key={ing}
-                                type="button"
-                                onClick={() => {
-                                  if (isSel) {
-                                    setPreWorkoutIngredients(preWorkoutIngredients.filter(x => x !== ing));
-                                  } else {
-                                    setPreWorkoutIngredients([...preWorkoutIngredients, ing]);
-                                  }
-                                }}
-                                className={`py-1 px-2.5 rounded-full border text-[9.5px] font-bold transition cursor-pointer ${
-                                  isSel ? "bg-amber-500/20 border-amber-500/40 text-amber-400" : "bg-white/5 border-white/5 text-gray-400"
-                                }`}
-                              >
-                                {ing}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div>
-                        <span className="block text-[8px] text-gray-505 font-bold uppercase tracking-wider mb-1">Suplementos</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {["Creatina", "Pre-entreno comercial", "Café negro"].map((ing) => {
-                            const isSel = preWorkoutIngredients.includes(ing);
-                            return (
-                              <button
-                                key={ing}
-                                type="button"
-                                onClick={() => {
-                                  if (isSel) {
-                                    setPreWorkoutIngredients(preWorkoutIngredients.filter(x => x !== ing));
-                                  } else {
-                                    setPreWorkoutIngredients([...preWorkoutIngredients, ing]);
-                                  }
-                                }}
-                                className={`py-1 px-2.5 rounded-full border text-[9.5px] font-bold transition cursor-pointer ${
-                                  isSel ? "bg-amber-500/20 border-amber-500/40 text-amber-400" : "bg-white/5 border-white/5 text-gray-400"
-                                }`}
-                              >
-                                {ing}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
+                    <input
+                      type="text"
+                      value={preWorkoutExtraNotes}
+                      onChange={(e) => setPreWorkoutExtraNotes(e.target.value)}
+                      placeholder="Ej: Quiero algo con chocolate, sin cocinar, etc..."
+                      className="w-full p-2.5 bg-gray-50 dark:bg-black/40 border border-gray-200 dark:border-gray-800 rounded-xl text-xs text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-650 focus:outline-none focus:border-amber-500/50"
+                    />
                   </div>
 
                   {/* Restricciones activas de tu perfil */}
@@ -1374,7 +1360,8 @@ export default function Dashboard({
                     <button
                       onClick={() => {
                         setPreWorkoutRecommendation(null);
-                        setPreWorkoutIngredients([]);
+                        setPreWorkoutExtraNotes("");
+                        setPreWorkoutRestrictToPantry(false);
                       }}
                       className="flex-1 py-2 border border-gray-800 text-gray-400 hover:text-white text-xs font-bold rounded-xl hover:bg-white/5 transition cursor-pointer bg-transparent"
                     >
@@ -1394,7 +1381,8 @@ export default function Dashboard({
                           });
                           setIsPreWorkoutOpen(false);
                           setPreWorkoutRecommendation(null);
-                          setPreWorkoutIngredients([]);
+                          setPreWorkoutExtraNotes("");
+                          setPreWorkoutRestrictToPantry(false);
                         }
                       }}
                       disabled={!onAddMeal}
