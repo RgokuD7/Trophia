@@ -16,7 +16,7 @@ interface NutritionHubProps {
   loggedMeals: LoggedMeal[];
   onAddMeal: (meal: Omit<LoggedMeal, "id" | "timestamp">) => void;
   onDeleteMeal: (id: string) => void;
-  onOpenFoodLogger: (suggestedType?: MealType, isCustomOnly?: boolean) => void;
+  onOpenFoodLogger: (suggestedType?: MealType, isCustomOnly?: boolean, isPantry?: boolean) => void;
   onOpenRecipeAssistant: () => void;
   onUpdateProfile: (profile: UserProfile) => void;
   onOpenCoach: () => void;
@@ -84,28 +84,6 @@ export default function NutritionHub({
   // Custom foods state
   const [customFoods, setCustomFoods] = useState<CustomFood[]>([]);
   const [isLoadingFoods, setIsLoadingFoods] = useState(false);
-
-  // Pantry local state
-  const [pantryItemName, setPantryItemName] = useState("");
-  const [pantryItemQty, setPantryItemQty] = useState("");
-  const [pantryItemCat, setPantryItemCat] = useState<"protein" | "carb" | "fat" | "supplement" | "other">("protein");
-
-  const handleAddPantryItem = () => {
-    if (!pantryItemName.trim() || !pantryItemQty.trim()) return;
-    const newItem = {
-      id: Math.random().toString(36).substring(2, 9),
-      name: pantryItemName.trim(),
-      quantity: pantryItemQty.trim(),
-      category: pantryItemCat
-    };
-    const currentPantry = profile.pantry || [];
-    onUpdateProfile({
-      ...profile,
-      pantry: [...currentPantry, newItem]
-    });
-    setPantryItemName("");
-    setPantryItemQty("");
-  };
 
   const handleDeletePantryItem = (itemId: string) => {
     const currentPantry = profile.pantry || [];
@@ -357,57 +335,13 @@ export default function NutritionHub({
           </div>
         </div>
 
-        {/* Formulario para agregar ingrediente */}
-        <div className="bg-white/5 border border-white/5 rounded-3xl p-4 space-y-3">
-          <span className="block text-[9px] font-bold text-amber-400 uppercase tracking-wider">Agregar a la Despensa</span>
-          
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <label className="block text-[8px] text-white/40 uppercase font-bold">Ingrediente</label>
-              <input
-                type="text"
-                placeholder="Ej: Plátano, Avena..."
-                value={pantryItemName}
-                onChange={(e) => setPantryItemName(e.target.value)}
-                className="w-full p-2 bg-black/40 border border-white/10 rounded-xl text-xs text-white placeholder-white/30 focus:outline-none focus:border-amber-500/50"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="block text-[8px] text-white/40 uppercase font-bold">Cantidad / Unidad</label>
-              <input
-                type="text"
-                placeholder="Ej: 500g, 4 unidades..."
-                value={pantryItemQty}
-                onChange={(e) => setPantryItemQty(e.target.value)}
-                className="w-full p-2 bg-black/40 border border-white/10 rounded-xl text-xs text-white placeholder-white/30 focus:outline-none focus:border-amber-500/50"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 items-end">
-            <div className="col-span-2 space-y-1">
-              <label className="block text-[8px] text-white/40 uppercase font-bold">Categoría</label>
-              <select
-                value={pantryItemCat}
-                onChange={(e) => setPantryItemCat(e.target.value as any)}
-                className="w-full p-2 bg-black/40 border border-white/10 rounded-xl text-xs text-white outline-none cursor-pointer focus:border-amber-500/50 animate-fadeIn"
-              >
-                <option value="protein" className="bg-[#0c0d14]">💪 Proteínas</option>
-                <option value="carb" className="bg-[#0c0d14]">⚡ Carbohidratos</option>
-                <option value="fat" className="bg-[#0c0d14]">🥑 Grasas</option>
-                <option value="supplement" className="bg-[#0c0d14]">🥤 Suplemento</option>
-                <option value="other" className="bg-[#0c0d14]">✨ Otro</option>
-              </select>
-            </div>
-
-            <button
-              onClick={handleAddPantryItem}
-              className="py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black rounded-xl transition cursor-pointer border-none shadow-md"
-            >
-              Agregar
-            </button>
-          </div>
-        </div>
+        {/* Botón para agregar ingrediente desde API */}
+        <button
+          onClick={() => onOpenFoodLogger(undefined, false, true)}
+          className="w-full p-4 rounded-3xl border border-dashed border-amber-500/30 hover:border-amber-500 bg-amber-500/5 hover:bg-amber-500/10 transition-all flex items-center justify-center gap-2 text-amber-500 hover:text-amber-400 font-black text-xs cursor-pointer shadow-md font-sans"
+        >
+          <Plus className="h-4.5 w-4.5" /> Buscar en Base de Datos / Escanear Código
+        </button>
 
         {/* Lista de ingredientes */}
         <div className="space-y-2">
@@ -417,7 +351,7 @@ export default function NutritionHub({
             <div className="text-center py-8 border border-dashed border-white/10 rounded-2xl bg-white/[0.01]">
               <Package className="h-8 w-8 text-white/10 mx-auto mb-2" />
               <p className="text-[11px] text-white/40 max-w-xs mx-auto">
-                Tu despensa está vacía. Registra lo que tienes para que la IA de pre-entrenamiento te sugiera recetas exactas.
+                Tu despensa está vacía. Busca y agrega alimentos con su cantidad para que la IA de pre-entrenamiento te sugiera recetas exactas.
               </p>
             </div>
           ) : (
@@ -430,7 +364,9 @@ export default function NutritionHub({
                     </span>
                     <div>
                       <span className="block text-xs font-extrabold text-white">{item.name}</span>
-                      <span className="block text-[9px] text-white/40 font-medium">Cantidad: {item.quantity}</span>
+                      <span className="block text-[9px] text-white/40 font-medium">
+                        Cantidad: {item.quantity} · {Math.round(item.calories)} kcal (P: {item.protein}g · C: {item.carbs}g · G: {item.fat}g)
+                      </span>
                     </div>
                   </div>
                   <button
@@ -975,7 +911,7 @@ export default function NutritionHub({
                 <Package className="h-4.5 w-4.5" />
               </div>
               <span className="text-[7.5px] font-extrabold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
-                Nuevo
+                Activo
               </span>
             </div>
             <h4 className="text-[11px] font-black text-white mt-2.5">Mi Despensa</h4>

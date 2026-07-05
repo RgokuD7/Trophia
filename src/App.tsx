@@ -42,6 +42,7 @@ export default function App() {
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
   const [isFoodLoggerOpen, setIsFoodLoggerOpen] = useState(false);
   const [foodLoggerCustomOnly, setFoodLoggerCustomOnly] = useState(false);
+  const [foodLoggerMode, setFoodLoggerMode] = useState<"log" | "pantry">("log");
   const [isRecipeAssistantOpen, setIsRecipeAssistantOpen] = useState(false);
   const [defaultMealTypeForLogger, setDefaultMealTypeForLogger] = useState<MealType>("lunch");
   const [isCheckingStorage, setIsCheckingStorage] = useState(true);
@@ -88,9 +89,10 @@ export default function App() {
     }
   };
 
-  const handleOpenFoodLogger = (suggestedType?: MealType, isCustomOnly?: boolean) => {
+  const handleOpenFoodLogger = (suggestedType?: MealType, isCustomOnly?: boolean, isPantry?: boolean) => {
     setDefaultMealTypeForLogger(suggestedType || getSuggestedMealTypeByTime().type);
     setFoodLoggerCustomOnly(!!isCustomOnly);
+    setFoodLoggerMode(isPantry ? "pantry" : "log");
     setIsFoodLoggerOpen(true);
   };
 
@@ -403,7 +405,44 @@ export default function App() {
             apiKey={profile.apiKey}
             usdaApiKey={profile.usdaApiKey}
             loggedMeals={loggedMeals}
-            onAddMeal={handleAddMeal}
+            mode={foodLoggerMode}
+            onAddMeal={(meal) => {
+              if (foodLoggerMode === "pantry") {
+                const protein = meal.protein || 0;
+                const carbs = meal.carbs || 0;
+                const fat = meal.fat || 0;
+                const name = meal.name.toLowerCase();
+                
+                let category: "protein" | "carb" | "fat" | "supplement" | "other" = "other";
+                if (name.includes("proteina") || name.includes("creatina") || name.includes("whey")) {
+                  category = "supplement";
+                } else if (protein > carbs && protein > fat) {
+                  category = "protein";
+                } else if (carbs > protein && carbs > fat) {
+                  category = "carb";
+                } else if (fat > protein && fat > carbs) {
+                  category = "fat";
+                }
+
+                const newItem = {
+                  id: Math.random().toString(36).substring(2, 9),
+                  name: meal.name,
+                  quantity: meal.servingSize || "100g",
+                  category,
+                  calories: meal.calories,
+                  protein,
+                  carbs,
+                  fat
+                };
+                
+                handleUpdateProfile({
+                  ...profile,
+                  pantry: [...(profile.pantry || []), newItem]
+                });
+              } else {
+                handleAddMeal(meal);
+              }
+            }}
             onClose={() => setIsFoodLoggerOpen(false)}
             defaultMealType={defaultMealTypeForLogger}
             userId={user?.uid}

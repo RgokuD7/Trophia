@@ -19,6 +19,7 @@ interface FoodLoggerProps {
   userId?: string;
   isCustomFoodOnlyMode?: boolean;
   onCustomFoodAdded?: () => void;
+  mode?: "log" | "pantry";
 }
 
 export function getDefaultServingInfo(name: string, servingSizeStr: string): {
@@ -122,7 +123,8 @@ export default function FoodLogger({
   defaultMealType,
   userId,
   isCustomFoodOnlyMode = false,
-  onCustomFoodAdded
+  onCustomFoodAdded,
+  mode = "log"
 }: FoodLoggerProps) {
   const systemGeminiKey = import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || apiKey || "";
   const [activeTab, setActiveTab] = useState<"search" | "camera" | "personal">("search");
@@ -697,7 +699,8 @@ export default function FoodLogger({
           protein: protVal,
           carbs: carbVal,
           fat: fatVal,
-          type: selectedMealType
+          type: selectedMealType,
+          servingSize: servVal
         });
 
         // Also save to template collection
@@ -742,11 +745,11 @@ export default function FoodLogger({
         {/* Header */}
         <div className="p-5 border-b border-gray-100 dark:border-white/5 flex items-center justify-between flex-shrink-0 z-10 bg-white/80 dark:bg-[#12131d]/80 backdrop-blur-md">
           <div>
-            <h3 className="text-base font-black text-gray-900 dark:text-white italic tracking-tight">
-              {isCustomFoodOnlyMode ? "Guardar en Mis Comidas" : "Registrar Alimento"}
+            <h3 className="text-base font-black text-gray-900 dark:text-white italic tracking-tight font-sans">
+              {mode === "pantry" ? "Agregar a Mi Despensa" : isCustomFoodOnlyMode ? "Guardar en Mis Comidas" : "Registrar Alimento"}
             </h3>
             <span className="text-[10px] text-gray-400 dark:text-white/40 uppercase tracking-widest font-mono">
-              {isCustomFoodOnlyMode ? "Platos y Productos Frecuentes" : "Control Diario de Ingesta"}
+              {mode === "pantry" ? "Inventario de Ingredientes" : isCustomFoodOnlyMode ? "Platos y Productos Frecuentes" : "Control Diario de Ingesta"}
             </span>
           </div>
           <button 

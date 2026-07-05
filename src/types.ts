@@ -191,4 +191,8 @@ export interface PantryItem {
   name: string;
   quantity: string;
   category?: "protein" | "carb" | "fat" | "supplement" | "other";
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
 }
