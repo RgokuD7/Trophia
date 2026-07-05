@@ -39,12 +39,14 @@ export default function App() {
   const [waterLogs, setWaterLogs] = useState<WaterLog[]>([]);
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
   const [isFoodLoggerOpen, setIsFoodLoggerOpen] = useState(false);
+  const [foodLoggerCustomOnly, setFoodLoggerCustomOnly] = useState(false);
   const [isRecipeAssistantOpen, setIsRecipeAssistantOpen] = useState(false);
   const [defaultMealTypeForLogger, setDefaultMealTypeForLogger] = useState<MealType>("lunch");
   const [isCheckingStorage, setIsCheckingStorage] = useState(true);
 
-  const handleOpenFoodLogger = (suggestedType?: MealType) => {
+  const handleOpenFoodLogger = (suggestedType?: MealType, isCustomOnly?: boolean) => {
     setDefaultMealTypeForLogger(suggestedType || getSuggestedMealTypeByTime().type);
+    setFoodLoggerCustomOnly(!!isCustomOnly);
     setIsFoodLoggerOpen(true);
   };
 
@@ -356,6 +358,11 @@ export default function App() {
             onAddMeal={handleAddMeal}
             onClose={() => setIsFoodLoggerOpen(false)}
             defaultMealType={defaultMealTypeForLogger}
+            userId={user?.uid}
+            isCustomFoodOnlyMode={foodLoggerCustomOnly}
+            onCustomFoodAdded={() => {
+              window.dispatchEvent(new CustomEvent("trophia_refresh_custom_foods"));
+            }}
           />
         )}
 

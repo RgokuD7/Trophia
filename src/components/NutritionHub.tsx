@@ -15,7 +15,7 @@ interface NutritionHubProps {
   loggedMeals: LoggedMeal[];
   onAddMeal: (meal: Omit<LoggedMeal, "id" | "timestamp">) => void;
   onDeleteMeal: (id: string) => void;
-  onOpenFoodLogger: (suggestedType?: MealType) => void;
+  onOpenFoodLogger: (suggestedType?: MealType, isCustomOnly?: boolean) => void;
   onOpenRecipeAssistant: () => void;
   onUpdateProfile: (profile: UserProfile) => void;
 }
@@ -79,15 +79,7 @@ export default function NutritionHub({
   // Custom foods state
   const [customFoods, setCustomFoods] = useState<CustomFood[]>([]);
   const [isLoadingFoods, setIsLoadingFoods] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newCalories, setNewCalories] = useState<number | "">("");
-  const [newProtein, setNewProtein] = useState<number | "">("");
-  const [newCarbs, setNewCarbs] = useState<number | "">("");
-  const [newFat, setNewFat] = useState<number | "">("");
-  const [newServing, setNewServing] = useState("1 porción");
-  const [newCategory, setNewCategory] = useState<"dish" | "product" | "recipe">("dish");
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+
 
   // Calorie bank state
   const [bankEventDate, setBankEventDate] = useState("");
@@ -145,6 +137,16 @@ export default function NutritionHub({
     if (activeSection === "custom_foods") loadCustomFoods();
   }, [activeSection]);
 
+  useEffect(() => {
+    const handleRefresh = () => {
+      loadCustomFoods();
+    };
+    window.addEventListener("trophia_refresh_custom_foods", handleRefresh);
+    return () => {
+      window.removeEventListener("trophia_refresh_custom_foods", handleRefresh);
+    };
+  }, [userId]);
+
   const loadCustomFoods = async () => {
     setIsLoadingFoods(true);
     try {
@@ -155,27 +157,6 @@ export default function NutritionHub({
     } finally {
       setIsLoadingFoods(false);
     }
-  };
-
-  const handleAddFood = async () => {
-    if (!newName.trim() || !newCalories) return;
-    setIsSaving(true);
-    try {
-      const food = await addCustomFood(userId, {
-        name: newName.trim(),
-        calories: Number(newCalories) || 0,
-        protein: Number(newProtein) || 0,
-        carbs: Number(newCarbs) || 0,
-        fat: Number(newFat) || 0,
-        servingSize: newServing || "1 porción",
-        category: newCategory,
-        createdAt: new Date().toISOString(),
-      });
-      setCustomFoods(prev => [food, ...prev]);
-      setNewName(""); setNewCalories(""); setNewProtein(""); setNewCarbs(""); setNewFat("");
-      setNewServing("1 porción"); setShowAddForm(false);
-    } catch (err) { console.error(err); }
-    finally { setIsSaving(false); }
   };
 
   const handleDeleteFood = async (foodId: string) => {
@@ -229,37 +210,17 @@ export default function NutritionHub({
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div>
-            <h2 className="text-base font-black text-white tracking-tight">Mis Platos y Productos</h2>
-            <p className="text-[10px] text-white/40">Guarda alimentos que comes frecuentemente</p>
+            <h2 className="text-base font-black text-white tracking-tight">Mis Comidas</h2>
+            <p className="text-[10px] text-white/40">Tus platos frecuentes y productos personalizados en la nube</p>
           </div>
         </div>
 
-        {!showAddForm ? (
-          <button onClick={() => setShowAddForm(true)} className="w-full p-4 rounded-2xl border-2 border-dashed border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 transition flex items-center justify-center gap-2 text-emerald-400 font-bold text-xs cursor-pointer">
-            <Plus className="h-4 w-4" /> Agregar Nuevo Plato / Producto
-          </button>
-        ) : (
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-white">Nuevo Alimento</span>
-              <button onClick={() => setShowAddForm(false)} className="text-white/40 hover:text-white transition cursor-pointer"><X className="h-4 w-4" /></button>
-            </div>
-            <Input placeholder="Nombre del plato o producto *" value={newName} onChange={(e) => setNewName(e.target.value)} />
-            <div className="grid grid-cols-2 gap-2">
-              <Input type="number" placeholder="Calorías *" value={newCalories} onChange={(e) => setNewCalories(e.target.value ? Number(e.target.value) : "")} />
-              <Input type="number" placeholder="Proteínas (g)" value={newProtein} onChange={(e) => setNewProtein(e.target.value ? Number(e.target.value) : "")} />
-              <Input type="number" placeholder="Carbos (g)" value={newCarbs} onChange={(e) => setNewCarbs(e.target.value ? Number(e.target.value) : "")} />
-              <Input type="number" placeholder="Grasas (g)" value={newFat} onChange={(e) => setNewFat(e.target.value ? Number(e.target.value) : "")} />
-            </div>
-            <Input placeholder="Porción (ej: 1 plato, 100g)" value={newServing} onChange={(e) => setNewServing(e.target.value)} />
-            <div className="flex gap-2">
-              {([{ id: "dish" as const, label: "Plato" }, { id: "product" as const, label: "Producto" }, { id: "recipe" as const, label: "Receta" }]).map((cat) => (
-                <button key={cat.id} onClick={() => setNewCategory(cat.id)} className={`flex-1 py-2 rounded-xl border text-[10px] font-bold transition cursor-pointer ${newCategory === cat.id ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400" : "bg-white/5 border-white/10 text-white/40"}`}>{cat.label}</button>
-              ))}
-            </div>
-            <Button variant="primary" onClick={handleAddFood} isLoading={isSaving} leftIcon={Check} className="w-full font-bold">Guardar Alimento</Button>
-          </motion.div>
-        )}
+        <button 
+          onClick={() => onOpenFoodLogger(undefined, true)} 
+          className="w-full p-4 rounded-2xl border border-dashed border-emerald-500/30 hover:border-emerald-500 bg-emerald-500/5 hover:bg-emerald-500/10 transition flex items-center justify-center gap-2 text-emerald-400 hover:text-emerald-300 font-black text-xs cursor-pointer shadow-md"
+        >
+          <Plus className="h-4.5 w-4.5" /> Agregar Nueva Comida / Plato
+        </button>
 
         {isLoadingFoods ? (
           <div className="flex items-center justify-center py-12"><div className="w-6 h-6 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" /></div>
@@ -411,7 +372,6 @@ export default function NutritionHub({
                   </div>
                 );
               })()}
-
               <Button variant="primary" onClick={handleActivateBank} isLoading={isBankSaving} leftIcon={Zap} className="w-full font-bold" disabled={!bankEventDate}>
                 Activar Banco de Calorías
               </Button>
@@ -421,10 +381,28 @@ export default function NutritionHub({
       </motion.div>
     );
   }
+  // Circular stats calculation
+  const caloriesRemaining = adjustedCal - totalCal;
+  const radius = 38;
+  const stroke = 5;
+  const normalizedRadius = radius - stroke * 2;
+  const circumference = normalizedRadius * 2 * Math.PI;
+  const strokeDashoffset = circumference - (Math.min(100, calPercent) / 100) * circumference;
 
   // ─── Main Hub View ─────────────────────────────────
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden relative">
+      {/* Floating Action Button (FAB) for Food logging */}
+      {isToday && (
+        <button
+          onClick={() => onOpenFoodLogger()}
+          className="fixed bottom-24 right-5 z-40 bg-gradient-to-br from-emerald-500 to-emerald-400 text-black p-4 rounded-full shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer border-none"
+          title="Registrar Alimento"
+        >
+          <Plus className="h-6 w-6 font-bold" />
+        </button>
+      )}
+
       {/* Header + Week Calendar */}
       <div className="px-5 pt-5 pb-3 border-b border-white/5 flex-shrink-0 space-y-3">
         <div className="flex items-center justify-between">
@@ -477,84 +455,144 @@ export default function NutritionHub({
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-4 space-y-4">
         
-        {/* Action Chips */}
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-          {[
-            { label: "Registrar", icon: Plus, onClick: () => onOpenFoodLogger(), color: "emerald" },
-            { label: "Recetas", icon: ChefHat, onClick: onOpenRecipeAssistant, color: "emerald" },
-            { label: "Mis Platos", icon: Star, onClick: () => setActiveSection("custom_foods"), color: "emerald" },
-            { label: "⚡ Banco", icon: Zap, onClick: () => setActiveSection("calorie_bank"), color: "amber" },
-          ].map((chip) => {
-            const Icon = chip.icon;
-            return (
-              <button
-                key={chip.label}
-                onClick={chip.onClick}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full border text-[10px] font-bold transition cursor-pointer whitespace-nowrap shrink-0 ${
-                  chip.color === "amber"
-                    ? "bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20"
-                    : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20"
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {chip.label}
-              </button>
-            );
-          })}
+        {/* Daily progress with SVG Ring */}
+        <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-5 flex items-center gap-5">
+          {/* Left: SVG circular ring */}
+          <div className="relative shrink-0 flex items-center justify-center" style={{ width: radius * 2, height: radius * 2 }}>
+            <svg height={radius * 2} width={radius * 2} className="transform -rotate-90">
+              <circle
+                stroke="rgba(255,255,255,0.05)"
+                fill="transparent"
+                strokeWidth={stroke}
+                r={normalizedRadius}
+                cx={radius}
+                cy={radius}
+              />
+              <circle
+                stroke={caloriesRemaining >= 0 ? "#10b981" : "#ef4444"}
+                fill="transparent"
+                strokeWidth={stroke}
+                strokeDasharray={circumference + ' ' + circumference}
+                style={{ strokeDashoffset }}
+                strokeLinecap="round"
+                r={normalizedRadius}
+                cx={radius}
+                cy={radius}
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+              <span className="text-[12px] font-black text-white leading-none font-mono">
+                {caloriesRemaining >= 0 ? caloriesRemaining : Math.abs(caloriesRemaining)}
+              </span>
+              <span className="text-[6.5px] text-white/35 font-black uppercase tracking-wider mt-0.5">
+                {caloriesRemaining >= 0 ? "Kcal Rest" : "Exceso"}
+              </span>
+            </div>
+          </div>
+
+          {/* Right: Sleek linear progress bars for P, C, G */}
+          <div className="flex-1 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                {isToday ? "Progreso de Hoy" : `${new Date(selectedDate + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "short" })}`}
+              </span>
+              {isBankEventDay && (
+                <span className="text-[8px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full uppercase tracking-wider">🎉 Evento</span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 pt-0.5">
+              {[
+                { label: "Proteína", val: totalP, target: pTarget, color: "bg-emerald-400", labelColor: "text-emerald-400" },
+                { label: "Carbos", val: totalC, target: cTarget, color: "bg-blue-400", labelColor: "text-blue-400" },
+                { label: "Grasas", val: totalF, target: fTarget, color: "bg-amber-400", labelColor: "text-amber-400" },
+              ].map((m) => {
+                const percent = m.target > 0 ? (m.val / m.target) * 100 : 0;
+                return (
+                  <div key={m.label} className="space-y-1">
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-[8px] font-bold text-white/35 uppercase">{m.label.substring(0,4)}</span>
+                      <span className={`text-[9.5px] font-black ${m.labelColor} font-mono`}>{Math.round(m.val)}g</span>
+                    </div>
+                    <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${m.color}`}
+                        style={{ width: `${Math.min(100, percent)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            {bankAdjustment > 0 && (
+              <p className="text-[8px] text-amber-400/60 font-bold uppercase tracking-wider pt-0.5">⚡ Ajuste Banco: -{bankAdjustment} Kcal hoy</p>
+            )}
+          </div>
         </div>
 
-        {/* Day Progress */}
-        <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
-              {isToday ? "Progreso de Hoy" : isPast ? `${new Date(selectedDate + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "short" })}` : ""}
-            </span>
-            {isBankEventDay && (
-              <span className="text-[8px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">🎉 DÍA DEL EVENTO</span>
-            )}
-          </div>
-          
-          {/* Calorie bar */}
-          <div className="space-y-1">
-            <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-black text-white font-mono">{totalCal}</span>
-              <span className="text-xs text-white/30">/ {adjustedCal} kcal</span>
+        {/* Grid menu cards for features */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* Mis Comidas - first position, full width */}
+          <button
+            onClick={() => setActiveSection("custom_foods")}
+            className="col-span-2 p-4 bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 hover:border-emerald-500/40 rounded-3xl text-left hover:scale-[1.01] transition-all duration-300 cursor-pointer shadow-md group"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-all">
+                <Star className="h-6 w-6 fill-emerald-500/10" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-white tracking-tight uppercase tracking-wide">Mis Comidas</h3>
+                <p className="text-[10px] text-white/50 leading-snug mt-0.5">Tus platos habituales y productos en la nube</p>
+              </div>
             </div>
-            <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${calPercent}%` }}
-                transition={{ duration: 0.5, ease: "easeOut" }}
-                className={`h-full rounded-full ${
-                  totalCal > adjustedCal ? "bg-gradient-to-r from-rose-500 to-rose-400" : "bg-gradient-to-r from-emerald-500 to-emerald-400"
-                }`}
-              />
+          </button>
+
+          {/* Crear Dieta - locked */}
+          <div className="p-3.5 bg-white/[0.02] border border-white/5 rounded-3xl text-left relative opacity-60">
+            <div className="flex items-start justify-between">
+              <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center text-white/40">
+                <Calendar className="h-4.5 w-4.5" />
+              </div>
+              <span className="text-[8px] font-bold text-white/30 bg-white/5 px-1.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                <Lock className="h-2 w-2" /> Próximamente
+              </span>
             </div>
-            {bankAdjustment > 0 && (
-              <p className="text-[9px] text-amber-400/60">⚡ Banco activo: -{bankAdjustment} kcal ajustadas hoy</p>
-            )}
+            <h4 className="text-[11px] font-black text-white/70 mt-2.5">Crear Dieta</h4>
+            <p className="text-[9px] text-white/30 leading-normal mt-0.5">Planificador semanal</p>
           </div>
 
-          {/* Macros */}
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { label: "Proteína", val: totalP, target: pTarget, color: "emerald" },
-              { label: "Carbos", val: totalC, target: cTarget, color: "blue" },
-              { label: "Grasas", val: totalF, target: fTarget, color: "amber" },
-            ].map((m) => (
-              <div key={m.label} className="text-center space-y-0.5">
-                <span className="text-[8px] font-bold text-white/30 uppercase">{m.label}</span>
-                <div className="text-xs font-black text-white">{Math.round(m.val)}<span className="text-white/30 font-normal">/{m.target}g</span></div>
-                <div className="w-full h-1 rounded-full bg-white/5">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      m.color === "emerald" ? "bg-emerald-400" : m.color === "blue" ? "bg-blue-400" : "bg-amber-400"
-                    }`}
-                    style={{ width: `${Math.min(100, m.target > 0 ? (m.val / m.target) * 100 : 0)}%` }}
-                  />
+          {/* Recetas - locked */}
+          <div className="p-3.5 bg-white/[0.02] border border-white/5 rounded-3xl text-left relative opacity-60">
+            <div className="flex items-start justify-between">
+              <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center text-white/40">
+                <BookOpen className="h-4.5 w-4.5" />
+              </div>
+              <span className="text-[8px] font-bold text-white/30 bg-white/5 px-1.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                <Lock className="h-2 w-2" /> Próximamente
+              </span>
+            </div>
+            <h4 className="text-[11px] font-black text-white/70 mt-2.5">Recetas</h4>
+            <p className="text-[9px] text-white/30 leading-normal mt-0.5">Chef IA y recetario</p>
+          </div>
+
+          {/* Banco de Calorías - locked */}
+          <div className="col-span-2 p-3.5 bg-white/[0.02] border border-white/5 rounded-3xl text-left relative opacity-60">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center text-white/40">
+                  <Zap className="h-4.5 w-4.5" />
+                </div>
+                <div>
+                  <h4 className="text-[11px] font-black text-white/70">Banco de Calorías</h4>
+                  <p className="text-[9px] text-white/30 leading-normal mt-0.5">Planificación de déficit flexible</p>
                 </div>
               </div>
-            ))}
+              <span className="text-[8px] font-bold text-white/30 bg-white/5 px-1.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shrink-0">
+                <Lock className="h-2 w-2" /> Próximamente
+              </span>
+            </div>
           </div>
         </div>
 
@@ -573,7 +611,7 @@ export default function NutritionHub({
                 {isToday && (
                   <button
                     onClick={() => onOpenFoodLogger(type)}
-                    className="text-[9px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-0.5 cursor-pointer bg-transparent border-none transition"
+                    className="text-[9px] text-emerald-450 hover:text-emerald-300 font-bold flex items-center gap-0.5 cursor-pointer bg-transparent border-none transition"
                   >
                     <Plus className="h-3 w-3" /> Añadir
                   </button>

@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { Search, Camera, Plus, History, Trash, AlertCircle, Check, X, RefreshCw, Star, Barcode, Sparkles, HelpCircle } from "lucide-react";
-import { LoggedMeal, FoodItem, MealType, BarcodeCorrection } from "../types";
+import { LoggedMeal, FoodItem, MealType, BarcodeCorrection, CustomFood } from "../types";
 import { GLOBAL_FOODS_DB } from "../utils/fitnessUtils";
 import { analyzeFoodByIA, estimateMacrosFromDescription, getVisualServingSizesByIA, analyzeNutritionLabelByIA } from "../services/geminiService";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { searchAllFoods, getProductByBarcode } from "../services/foodDatabaseService";
 import BarcodeScannerModal from "./BarcodeScannerModal";
-import { getBarcodeCorrection, saveBarcodeCorrection, voteBarcodeCorrection } from "../services/dbService";
+import { getBarcodeCorrection, saveBarcodeCorrection, voteBarcodeCorrection, addCustomFood, getCustomFoods } from "../services/dbService";
 
 interface FoodLoggerProps {
   apiKey?: string;
@@ -16,6 +16,9 @@ interface FoodLoggerProps {
   loggedMeals: LoggedMeal[];
   onClose: () => void;
   defaultMealType?: MealType;
+  userId?: string;
+  isCustomFoodOnlyMode?: boolean;
+  onCustomFoodAdded?: () => void;
 }
 
 export function getDefaultServingInfo(name: string, servingSizeStr: string): {
@@ -110,7 +113,17 @@ export const formatMacro = (val: number | string | undefined): string => {
   return num % 1 === 0 ? num.toString() : num.toFixed(1);
 };
 
-export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals, onClose, defaultMealType }: FoodLoggerProps) {
+export default function FoodLogger({
+  apiKey,
+  usdaApiKey,
+  onAddMeal,
+  loggedMeals,
+  onClose,
+  defaultMealType,
+  userId,
+  isCustomFoodOnlyMode = false,
+  onCustomFoodAdded
+}: FoodLoggerProps) {
   const systemGeminiKey = import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || apiKey || "";
   const [activeTab, setActiveTab] = useState<"search" | "camera" | "personal">("search");
   const [searchQuery, setSearchQuery] = useState("");
@@ -121,12 +134,34 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
       setSelectedMealType(defaultMealType);
     }
   }, [defaultMealType]);
+
+  useEffect(() => {
+    if (isCustomFoodOnlyMode) {
+      handleCreateCustom();
+    }
+  }, [isCustomFoodOnlyMode]);
   const [customName, setCustomName] = useState("");
   const [customCalories, setCustomCalories] = useState<number | "">("");
   const [customProtein, setCustomProtein] = useState<number | "">("");
   const [customCarbs, setCustomCarbs] = useState<number | "">("");
   const [customFat, setCustomFat] = useState<number | "">("");
   const [portionGrams, setPortionGrams] = useState(100);
+  const [alsoSaveToCustom, setAlsoSaveToCustom] = useState(false);
+  const [isSavingCustom, setIsSavingCustom] = useState(false);
+  const [customFoodsList, setCustomFoodsList] = useState<CustomFood[]>([]);
+  const [isLoadingCustomList, setIsLoadingCustomList] = useState(false);
+
+  useEffect(() => {
+    if (userId) {
+      setIsLoadingCustomList(true);
+      getCustomFoods(userId)
+        .then((foods) => {
+          setCustomFoodsList(foods);
+        })
+        .catch((err) => console.error(err))
+        .finally(() => setIsLoadingCustomList(false));
+    }
+  }, [userId]);
 
   // New portion unit states
   const [portionUnit, setPortionUnit] = useState<"g" | "ml" | "unit">("g");
@@ -627,19 +662,64 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
     }
   };
 
-  const handleSaveMeal = () => {
+  const handleSaveMeal = async () => {
     if (!customName) return;
 
-    onAddMeal({
-      name: customName,
-      calories: Number(customCalories) || 0,
-      protein: Number(customProtein) || 0,
-      carbs: Number(customCarbs) || 0,
-      fat: Number(customFat) || 0,
-      type: selectedMealType
-    });
+    setIsSavingCustom(true);
+    try {
+      const calVal = Number(customCalories) || 0;
+      const protVal = Number(customProtein) || 0;
+      const carbVal = Number(customCarbs) || 0;
+      const fatVal = Number(customFat) || 0;
+      const servVal = `${portionValue}${portionUnit === "unit" ? " unidad" : portionUnit}`;
 
-    onClose();
+      if (isCustomFoodOnlyMode) {
+        if (userId) {
+          await addCustomFood(userId, {
+            name: customName,
+            calories: calVal,
+            protein: protVal,
+            carbs: carbVal,
+            fat: fatVal,
+            servingSize: servVal,
+            category: "dish",
+            createdAt: new Date().toISOString()
+          });
+          if (onCustomFoodAdded) {
+            onCustomFoodAdded();
+          }
+        }
+      } else {
+        // Normal log
+        onAddMeal({
+          name: customName,
+          calories: calVal,
+          protein: protVal,
+          carbs: carbVal,
+          fat: fatVal,
+          type: selectedMealType
+        });
+
+        // Also save to template collection
+        if (alsoSaveToCustom && userId) {
+          await addCustomFood(userId, {
+            name: customName,
+            calories: calVal,
+            protein: protVal,
+            carbs: carbVal,
+            fat: fatVal,
+            servingSize: servVal,
+            category: "dish",
+            createdAt: new Date().toISOString()
+          });
+        }
+      }
+      onClose();
+    } catch (err) {
+      console.error("Error in handleSaveMeal:", err);
+    } finally {
+      setIsSavingCustom(false);
+    }
   };
 
   const pKcal = (Number(customProtein) || 0) * 4;
@@ -662,8 +742,12 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
         {/* Header */}
         <div className="p-5 border-b border-gray-100 dark:border-white/5 flex items-center justify-between flex-shrink-0 z-10 bg-white/80 dark:bg-[#12131d]/80 backdrop-blur-md">
           <div>
-            <h3 className="text-base font-black text-gray-900 dark:text-white italic tracking-tight">Registrar Alimento</h3>
-            <span className="text-[10px] text-gray-400 dark:text-white/40 uppercase tracking-widest font-mono">Control Diario de Ingesta</span>
+            <h3 className="text-base font-black text-gray-900 dark:text-white italic tracking-tight">
+              {isCustomFoodOnlyMode ? "Guardar en Mis Comidas" : "Registrar Alimento"}
+            </h3>
+            <span className="text-[10px] text-gray-400 dark:text-white/40 uppercase tracking-widest font-mono">
+              {isCustomFoodOnlyMode ? "Platos y Productos Frecuentes" : "Control Diario de Ingesta"}
+            </span>
           </div>
           <button 
             onClick={onClose}
@@ -674,28 +758,30 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
         </div>
 
         {/* Meal Type selection */}
-        <div className="px-5 pt-4 flex gap-1.5 flex-shrink-0 z-10">
-          {[
-            { id: "breakfast", label: "Desayuno", emoji: "🍳" },
-            { id: "lunch", label: "Almuerzo", emoji: "🥩" },
-            { id: "snack", label: "Snack", emoji: "🍎" },
-            { id: "dinner", label: "Cena", emoji: "🥗" }
-          ].map((type) => (
-            <button
-              key={type.id}
-              type="button"
-              onClick={() => setSelectedMealType(type.id as MealType)}
-              className={`flex-1 py-1.5 rounded-xl border text-[11px] font-bold text-center transition cursor-pointer ${
-                selectedMealType === type.id
-                  ? "bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/10"
-                  : "bg-gray-50 hover:bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-550 dark:text-white/50"
-              }`}
-            >
-              <span className="mr-1">{type.emoji}</span>
-              {type.label}
-            </button>
-          ))}
-        </div>
+        {!isCustomFoodOnlyMode && (
+          <div className="px-5 pt-4 flex gap-1.5 flex-shrink-0 z-10">
+            {[
+              { id: "breakfast", label: "Desayuno", emoji: "🍳" },
+              { id: "lunch", label: "Almuerzo", emoji: "🥩" },
+              { id: "snack", label: "Snack", emoji: "🍎" },
+              { id: "dinner", label: "Cena", emoji: "🥗" }
+            ].map((type) => (
+              <button
+                key={type.id}
+                type="button"
+                onClick={() => setSelectedMealType(type.id as MealType)}
+                className={`flex-1 py-1.5 rounded-xl border text-[11px] font-bold text-center transition cursor-pointer ${
+                  selectedMealType === type.id
+                    ? "bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/10"
+                    : "bg-gray-50 hover:bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-550 dark:text-white/50"
+                }`}
+              >
+                <span className="mr-1">{type.emoji}</span>
+                {type.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Tab Selection */}
         {selectedFood === null && (
@@ -930,8 +1016,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                             onClick={handleAnalyzeFood}
                             className="flex-1 py-1.5 bg-emerald-500 hover:bg-emerald-500/80 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition cursor-pointer"
                           >
-                            <RefreshCw className="h-3 w-3" />
-                            Reintentar Escáner
+                                             Reintentar Escáner
                           </button>
                         </div>
                       </div>
@@ -941,36 +1026,87 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
               )}
 
               {activeTab === "personal" && (
-                <div className="space-y-2">
-                  <p className="text-[11px] text-gray-500 dark:text-white/50">
-                    Alimentos frecuentes registrados con anterioridad en tu diario Trophia:
-                  </p>
+                <div className="space-y-4 max-h-[380px] overflow-y-auto no-scrollbar">
+                  {/* Mis Comidas templates (Saved custom foods) */}
+                  <div className="space-y-2">
+                    <h4 className="text-[9.5px] font-black text-emerald-400 uppercase tracking-wider">
+                      Mis Comidas (Guardadas)
+                    </h4>
+                    {isLoadingCustomList ? (
+                      <div className="text-center py-4 text-[10px] text-white/40">
+                        Cargando comidas guardadas...
+                      </div>
+                    ) : customFoodsList.length > 0 ? (
+                      <div className="divide-y divide-gray-150 dark:divide-white/5 border border-gray-200 dark:border-white/5 rounded-2xl overflow-hidden bg-gray-50 dark:bg-black/30 shadow-inner">
+                        {customFoodsList.map((food, idx) => (
+                          <button
+                            key={food.id || idx}
+                            type="button"
+                            onClick={() => handleSelectFood({
+                              name: food.name,
+                              calories: food.calories,
+                              protein: food.protein,
+                              carbs: food.carbs,
+                              fat: food.fat,
+                              servingSize: food.servingSize || "100g",
+                              source: "local"
+                            })}
+                            className="w-full p-3.5 text-left hover:bg-gray-100 dark:hover:bg-white/5 transition flex justify-between items-center cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Star className="h-3.5 w-3.5 text-emerald-400 fill-emerald-500/10" />
+                              <div>
+                                <span className="block text-xs font-black text-gray-900 dark:text-white uppercase tracking-tight">{food.name}</span>
+                                {food.servingSize && (
+                                  <span className="text-[9px] text-gray-400 dark:text-white/20 font-medium">Porción: {food.servingSize}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="block text-xs font-black text-emerald-500">{food.calories} kcal</span>
+                              <span className="text-[9px] text-gray-450 dark:text-white/40 font-mono">P:{formatMacro(food.protein)}g C:{formatMacro(food.carbs)}g F:{formatMacro(food.fat)}g</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-5 text-[10px] text-gray-455 dark:text-white/30 bg-gray-50 dark:bg-transparent border border-dashed border-gray-200 dark:border-white/5 rounded-2xl">
+                        Aún no tienes comidas guardadas. Puedes crear una desde "Mis Comidas" en Alimentación.
+                      </div>
+                    )}
+                  </div>
 
-                  {personalHistory.length > 0 ? (
-                    <div className="divide-y divide-gray-150 dark:divide-white/5 border border-gray-200 dark:border-white/5 rounded-2xl overflow-hidden bg-gray-50 dark:bg-black/30">
-                      {personalHistory.map((food, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => handleSelectFood(food)}
-                          className="w-full p-3 text-left hover:bg-gray-100 dark:hover:bg-white/5 transition flex justify-between items-center cursor-pointer"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Star className="h-3 w-3 text-amber-500 dark:text-amber-400 fill-amber-500/10 dark:fill-amber-400/20" />
-                            <span className="text-xs font-bold text-gray-900 dark:text-white">{food.name}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="block text-xs font-bold text-emerald-500 dark:text-emerald-400">{food.calories} kcal</span>
-                            <span className="text-[9px] text-gray-400 dark:text-white/40 font-mono">P:{formatMacro(food.protein)}g C:{formatMacro(food.carbs)}g F:{formatMacro(food.fat)}g</span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-6 text-xs text-gray-400 dark:text-white/40 bg-gray-50 dark:bg-transparent border border-dashed border-gray-200 dark:border-white/5 rounded-2xl">
-                      Registra comidas en el buscador o por IA para agregarlas automáticamente a tus frecuentes.
-                    </div>
-                  )}
+                  {/* Últimos Agregados (logged meals history) */}
+                  <div className="space-y-2">
+                    <h4 className="text-[9.5px] font-black text-white/40 uppercase tracking-wider">
+                      Últimos Agregados (Historial)
+                    </h4>
+                    {personalHistory.length > 0 ? (
+                      <div className="divide-y divide-gray-150 dark:divide-white/5 border border-gray-200 dark:border-white/5 rounded-2xl overflow-hidden bg-gray-50 dark:bg-black/30 shadow-inner">
+                        {personalHistory.map((food, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleSelectFood(food)}
+                            className="w-full p-3 text-left hover:bg-gray-100 dark:hover:bg-white/5 transition flex justify-between items-center cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2">
+                              <History className="h-3.5 w-3.5 text-gray-400" />
+                              <span className="text-xs font-bold text-gray-900 dark:text-white">{food.name}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="block text-xs font-bold text-emerald-500 dark:text-emerald-400">{food.calories} kcal</span>
+                              <span className="text-[9px] text-gray-400 dark:text-white/40 font-mono">P:{formatMacro(food.protein)}g C:{formatMacro(food.carbs)}g F:{formatMacro(food.fat)}g</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-5 text-[10px] text-gray-400 dark:text-white/30 bg-gray-50 dark:bg-transparent border border-dashed border-gray-200 dark:border-white/5 rounded-2xl">
+                        Aquí verás los alimentos que registres en tu diario.
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </>
@@ -1390,6 +1526,21 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                         />
                       </div>
                     </div>
+
+                    {/* Option to also save to My Meals as a template */}
+                    {!isCustomFoodOnlyMode && userId && selectedFood.name === "" && (
+                      <label className="flex items-center gap-2.5 mt-2 px-1 cursor-pointer select-none bg-emerald-500/5 border border-emerald-500/10 p-2 rounded-xl transition">
+                        <input
+                          type="checkbox"
+                          checked={alsoSaveToCustom}
+                          onChange={(e) => setAlsoSaveToCustom(e.target.checked)}
+                          className="rounded border-gray-300 dark:border-white/15 text-emerald-500 focus:ring-emerald-500/25 bg-white/5 w-4 h-4 cursor-pointer"
+                        />
+                        <span className="text-[10.5px] text-emerald-600 dark:text-emerald-400 font-extrabold uppercase tracking-wide">
+                          Guardar también en Mis Comidas
+                        </span>
+                      </label>
+                    )}
 
                     {/* Community Correction workflow for barcode foods */}
                     {selectedFood.name !== "" && selectedFood.barcode && (
