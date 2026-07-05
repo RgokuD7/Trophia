@@ -747,4 +747,56 @@ Requisitos:
   return await callGeminiAPI(apiKey, prompt, [cleanImg]);
 }
 
+// 12. Generate smart food suggestions based on remaining macronutrients
+export async function getSmartFoodSuggestionsByIA(
+  apiKey: string,
+  pRemaining: number,
+  cRemaining: number,
+  fRemaining: number,
+  kcalRemaining: number,
+  goal: string
+): Promise<{ name: string; calories: number; protein: number; carbs: number; fat: number; servingSize: string; reason: string }[]> {
+  const prompt = `Actúas como un Nutriólogo Deportivo experto. El usuario tiene los siguientes macronutrientes y calorías restantes por consumir HOY:
+- Calorías restantes: ${Math.round(kcalRemaining)} kcal
+- Proteína restante: ${Math.round(pRemaining)}g
+- Carbohidratos restantes: ${Math.round(cRemaining)}g
+- Grasas restantes: ${Math.round(fRemaining)}g
+- Meta fitness: ${goal === "lose_weight" ? "Definición / Pérdida de peso" : "Volumen / Ganancia de masa muscular"}
 
+Sugiere exactamente 3 opciones de alimentos o snacks reales y saludables (ej: "Yogur griego con nueces", "Pechuga de pavo", etc.) que se ajusten a estas necesidades. Explica brevemente por qué es una buena opción en 1 frase.
+
+Responde estrictamente en formato JSON con la siguiente estructura de array:
+[
+  {
+    "name": "Nombre de la opción de comida o snack",
+    "calories": calorías en kcal (número entero),
+    "protein": gramos de proteína (número entero o decimal),
+    "carbs": gramos de carbohidratos (número entero o decimal),
+    "fat": gramos de grasa (número entero o decimal),
+    "servingSize": "Cantidad sugerida (ej: 150g o 2 rebanadas)",
+    "reason": "Explicación corta de por qué calza bien con sus macros"
+  }
+]`;
+
+  return await callGeminiAPI(apiKey, prompt);
+}
+
+// 13. Nutritional consultation with Trophia IA Nutri-Coach
+export async function askNutriCoachIA(
+  apiKey: string,
+  question: string,
+  context?: string
+): Promise<{ answer: string }> {
+  const prompt = `Actúas como Trophia IA, un Coach Nutricional experto, empático e inteligente. 
+Responde de forma directa, concisa y basada en ciencia. Evita introducciones largas o saludos repetitivos. Limita tu respuesta a un máximo de 3 párrafos o puntos clave legibles.
+${context ? `Contexto del perfil del usuario: ${context}` : ""}
+
+Pregunta del usuario: "${question}"
+
+Debes responder estrictamente en formato JSON con la siguiente estructura:
+{
+  "answer": "Tu respuesta detallada y profesional aquí en español"
+}`;
+
+  return await callGeminiAPI(apiKey, prompt);
+}

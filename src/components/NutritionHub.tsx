@@ -2,12 +2,13 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Plus, BookOpen, Star, Calendar, ShoppingCart, Lock, ArrowLeft, Trash2, Check, X, 
-  ChefHat, Flame, Zap, ChevronLeft, ChevronRight
+  ChefHat, Flame, Zap, ChevronLeft, ChevronRight, MessageSquare, Lightbulb, Sparkles, AlertCircle, Send
 } from "lucide-react";
 import { UserProfile, LoggedMeal, MealType, CustomFood } from "../types";
 import { getCustomFoods, addCustomFood, deleteCustomFood } from "../services/dbService";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
+import { getSmartFoodSuggestionsByIA, askNutriCoachIA } from "../services/geminiService";
 
 interface NutritionHubProps {
   profile: UserProfile;
@@ -80,7 +81,18 @@ export default function NutritionHub({
   const [customFoods, setCustomFoods] = useState<CustomFood[]>([]);
   const [isLoadingFoods, setIsLoadingFoods] = useState(false);
 
+  // AI Suggestions state
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [foodSuggestions, setFoodSuggestions] = useState<any[]>([]);
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
 
+  // IA Nutri-Coach Chat state
+  const [isCoachOpen, setIsCoachOpen] = useState(false);
+  const [coachMessage, setCoachMessage] = useState("");
+  const [coachChatHistory, setCoachChatHistory] = useState<{ sender: "user" | "coach"; text: string }[]>([
+    { sender: "coach", text: "¡Hola! Soy tu Nutri-Coach de Trophia IA. ¿Tienes alguna pregunta sobre tu dieta, suplementos o cómo mejorar tu alimentación hoy? Escribe tu duda aquí abajo." }
+  ]);
+  const [isCoachTyping, setIsCoachTyping] = useState(false);
   // Calorie bank state
   const [bankEventDate, setBankEventDate] = useState("");
   const [bankEventDesc, setBankEventDesc] = useState("");
@@ -199,6 +211,114 @@ export default function NutritionHub({
 
   const handleDeactivateBank = () => {
     onUpdateProfile({ ...profile, calorieBankPlan: undefined });
+  };
+
+  const pRemaining = Math.max(0, pTarget - totalP);
+  const cRemaining = Math.max(0, cTarget - totalC);
+  const fRemaining = Math.max(0, fTarget - totalF);
+  const kcalRemaining = Math.max(0, adjustedCal - totalCal);
+
+  const handleGetSuggestions = async () => {
+    const key = `trophia_suggestion_${userId}_${selectedDate}_${Math.round(pRemaining)}_${Math.round(cRemaining)}_${Math.round(fRemaining)}`;
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      try {
+        setFoodSuggestions(JSON.parse(cached));
+        setSuggestionsError(null);
+        return;
+      } catch (err) {
+        console.error("Failed to parse cached suggestions", err);
+      }
+    }
+
+    setIsLoadingSuggestions(true);
+    setSuggestionsError(null);
+    try {
+      const apiKey = profile.apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || "";
+      const result = await getSmartFoodSuggestionsByIA(
+        apiKey,
+        pRemaining,
+        cRemaining,
+        fRemaining,
+        kcalRemaining,
+        profile.goal || "lose_weight"
+      );
+      setFoodSuggestions(result);
+      localStorage.setItem(key, JSON.stringify(result));
+    } catch (err: any) {
+      console.error(err);
+      setSuggestionsError(err.message || "No se pudieron obtener sugerencias.");
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+
+  const handleSendCoachMessage = async () => {
+    if (!coachMessage.trim()) return;
+    const userText = coachMessage.trim();
+    setCoachMessage("");
+    setCoachChatHistory(prev => [...prev, { sender: "user", text: userText }]);
+    setIsCoachTyping(true);
+
+    try {
+      const apiKey = profile.apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || "";
+      const context = `Usuario: ${profile.name}. Edad: ${profile.age || "N/A"} años. Peso actual: ${profile.weight || "N/A"}kg. Altura: ${profile.height || "N/A"}cm. Meta: ${profile.goal === "lose_weight" ? "Pérdida de grasa" : "Ganancia muscular"}. Restantes hoy: calorías=${Math.round(kcalRemaining)}kcal, proteína=${Math.round(pRemaining)}g, carbohidratos=${Math.round(cRemaining)}g, grasa=${Math.round(fRemaining)}g.`;
+      
+      const response = await askNutriCoachIA(apiKey, userText, context);
+      setCoachChatHistory(prev => [...prev, { sender: "coach", text: response.answer }]);
+    } catch (err: any) {
+      console.error(err);
+      setCoachChatHistory(prev => [...prev, { sender: "coach", text: `Lo siento, ocurrió un error al consultar al coach: ${err.message || "Inténtalo de nuevo."}` }]);
+    } finally {
+      setIsCoachTyping(false);
+    }
+  };
+
+  const getWeeklyCompliance = () => {
+    const compliance = [];
+    let cumulativeBalance = 0;
+    
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const ds = toDateStr(d);
+      
+      let dayTarget = baseCal;
+      if (bankPlan?.isActive) {
+        if (ds === bankPlan.eventDate) {
+          dayTarget = baseCal + (bankPlan.extraCaloriesTarget || 0);
+        } else if (ds >= bankPlan.startDate && ds < bankPlan.eventDate) {
+          dayTarget = baseCal - bankPlan.dailyAdjustment;
+        }
+      }
+      
+      const dayMeals = loggedMeals.filter(m => m.timestamp.startsWith(ds));
+      const dayConsumed = dayMeals.reduce((s, m) => s + m.calories, 0);
+      const diff = dayTarget - dayConsumed;
+      
+      if (ds <= todayStr) {
+        cumulativeBalance += diff;
+      }
+      
+      let status: "pending" | "success" | "warning" = "pending";
+      if (dayMeals.length > 0) {
+        if (dayConsumed <= dayTarget * 1.05) {
+          status = "success";
+        } else {
+          status = "warning";
+        }
+      }
+      
+      compliance.push({
+        date: d,
+        dateStr: ds,
+        consumed: dayConsumed,
+        target: dayTarget,
+        status
+      });
+    }
+    
+    return { compliance, cumulativeBalance };
   };
 
   // ─── Custom Foods Sub-view ─────────────────────────
@@ -391,7 +511,7 @@ export default function NutritionHub({
 
   // ─── Main Hub View ─────────────────────────────────
   return (
-    <div className="flex-1 flex flex-col overflow-hidden relative">
+    <div className="flex flex-col h-full overflow-y-auto no-scrollbar pb-24 relative">
       {/* Floating Action Button (FAB) for Food logging */}
       {isToday && (
         <button
@@ -452,8 +572,8 @@ export default function NutritionHub({
         </div>
       </div>
 
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-4 space-y-4">
+      {/* Content wrapper */}
+      <div className="px-5 py-4 space-y-4">
         
         {/* Daily progress with SVG Ring */}
         <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-5 flex items-center gap-5">
@@ -531,12 +651,67 @@ export default function NutritionHub({
           </div>
         </div>
 
+        {/* Weekly Compliance & Balance */}
+        {(() => {
+          const { compliance, cumulativeBalance } = getWeeklyCompliance();
+          return (
+            <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-4.5 space-y-3.5 shadow-md">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-emerald-400" />
+                  Balance Semanal
+                </span>
+                <span className={`text-[9.5px] font-black uppercase px-2.5 py-0.5 rounded-full ${
+                  cumulativeBalance >= 0 ? "text-emerald-400 bg-emerald-500/10" : "text-rose-400 bg-rose-500/10"
+                }`}>
+                  {cumulativeBalance >= 0 ? `Ahorro: -${Math.round(cumulativeBalance)} kcal` : `Exceso: +${Math.round(Math.abs(cumulativeBalance))} kcal`}
+                </span>
+              </div>
+
+              {/* 7 circles calendar view */}
+              <div className="flex justify-between items-center gap-1">
+                {compliance.map((day, idx) => {
+                  const isSel = day.dateStr === selectedDate;
+                  const dayLabel = DAYS_SHORT[day.date.getDay()];
+                  
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setSelectedDate(day.dateStr)}
+                      className={`flex-1 flex flex-col items-center py-2 px-1 rounded-xl border transition-all cursor-pointer ${
+                        isSel 
+                          ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400 scale-105" 
+                          : "bg-white/[0.01] border-transparent text-white/40 hover:bg-white/5 hover:text-white"
+                      }`}
+                    >
+                      <span className="text-[7.5px] font-black uppercase tracking-wider">{dayLabel}</span>
+                      <span className="text-[11px] font-black mt-0.5 font-mono">{day.date.getDate()}</span>
+                      
+                      {/* Status Indicator Dot */}
+                      <div className="mt-1.5 flex items-center justify-center">
+                        {day.status === "success" ? (
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+                        ) : day.status === "warning" ? (
+                          <div className="w-1.5 h-1.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
+                        ) : (
+                          <div className="w-1.5 h-1 bg-white/10 rounded-full" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Grid menu cards for features */}
         <div className="grid grid-cols-2 gap-3">
           {/* Mis Comidas - first position, full width */}
           <button
             onClick={() => setActiveSection("custom_foods")}
-            className="col-span-2 p-4 bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 hover:border-emerald-500/40 rounded-3xl text-left hover:scale-[1.01] transition-all duration-300 cursor-pointer shadow-md group"
+            className="col-span-2 p-4 bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 hover:border-emerald-500/40 rounded-3xl text-left hover:scale-[1.01] transition-all duration-300 cursor-pointer shadow-md group animate-fadeIn"
           >
             <div className="flex items-center gap-3.5">
               <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-all">
@@ -547,6 +722,23 @@ export default function NutritionHub({
                 <p className="text-[10px] text-white/50 leading-snug mt-0.5">Tus platos habituales y productos en la nube</p>
               </div>
             </div>
+          </button>
+
+          {/* Nutri-Coach IA - active */}
+          <button
+            onClick={() => setIsCoachOpen(true)}
+            className="p-3.5 bg-gradient-to-br from-emerald-500/5 to-transparent border border-emerald-500/10 hover:border-emerald-500/30 rounded-3xl text-left hover:scale-[1.02] transition-all duration-300 cursor-pointer shadow-md group"
+          >
+            <div className="flex items-start justify-between">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-all">
+                <MessageSquare className="h-4.5 w-4.5" />
+              </div>
+              <span className="text-[7.5px] font-extrabold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                Activo
+              </span>
+            </div>
+            <h4 className="text-[11px] font-black text-white mt-2.5">Nutri-Coach IA</h4>
+            <p className="text-[9px] text-white/45 leading-normal mt-0.5">Resuelve tus dudas nutricionales al instante</p>
           </button>
 
           {/* Crear Dieta - locked */}
@@ -561,20 +753,6 @@ export default function NutritionHub({
             </div>
             <h4 className="text-[11px] font-black text-white/70 mt-2.5">Crear Dieta</h4>
             <p className="text-[9px] text-white/30 leading-normal mt-0.5">Planificador semanal</p>
-          </div>
-
-          {/* Recetas - locked */}
-          <div className="p-3.5 bg-white/[0.02] border border-white/5 rounded-3xl text-left relative opacity-60">
-            <div className="flex items-start justify-between">
-              <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center text-white/40">
-                <BookOpen className="h-4.5 w-4.5" />
-              </div>
-              <span className="text-[8px] font-bold text-white/30 bg-white/5 px-1.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
-                <Lock className="h-2 w-2" /> Próximamente
-              </span>
-            </div>
-            <h4 className="text-[11px] font-black text-white/70 mt-2.5">Recetas</h4>
-            <p className="text-[9px] text-white/30 leading-normal mt-0.5">Chef IA y recetario</p>
           </div>
 
           {/* Banco de Calorías - locked */}
@@ -594,6 +772,94 @@ export default function NutritionHub({
               </span>
             </div>
           </div>
+        </div>
+
+        {/* IA Smart Food Suggestions */}
+        <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest flex items-center gap-1.5">
+              <Lightbulb className="h-3.5 w-3.5 text-emerald-400" />
+              Sugerencias de Alimentos (IA)
+            </span>
+            <span className="text-[7.5px] font-black text-white/35 bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+              En base a tus macros restantes
+            </span>
+          </div>
+
+          {foodSuggestions.length === 0 ? (
+            <div className="space-y-3">
+              <p className="text-xs text-white/50 leading-relaxed">
+                ¿Te quedan macros hoy y no sabes qué comer? La IA analiza tu saldo de carbohidratos, grasas y proteínas para sugerirte alimentos específicos.
+              </p>
+              <button
+                onClick={handleGetSuggestions}
+                disabled={isLoadingSuggestions}
+                className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-500/20 text-black text-xs font-black flex items-center justify-center gap-1.5 transition cursor-pointer border-none shadow-md"
+              >
+                {isLoadingSuggestions ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                    Calculando con IA...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-3.5 w-3.5 fill-black" />
+                    Obtener Sugerencias Inteligentes
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3.5 animate-fadeIn">
+              <div className="space-y-2">
+                {foodSuggestions.map((item: any, idx: number) => (
+                  <div key={idx} className="bg-white/[0.02] border border-white/5 rounded-2xl p-3 flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                      {idx + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-black text-white truncate uppercase tracking-tight">{item.name}</span>
+                        <span className="text-[9px] font-bold text-emerald-400 shrink-0 bg-emerald-500/10 px-1.5 py-0.5 rounded-full font-mono">{item.calories} kcal</span>
+                      </div>
+                      <span className="block text-[9px] text-white/30 font-medium mt-0.5">Porción sugerida: {item.servingSize}</span>
+                      <p className="text-[10px] text-white/50 leading-snug mt-1.5 italic">"{item.reason}"</p>
+                      
+                      {/* Macro values preview */}
+                      <div className="flex gap-2.5 mt-2 pt-2 border-t border-white/[0.03]">
+                        <span className="text-[8.5px] text-emerald-400 font-mono">P: <b>{item.protein}g</b></span>
+                        <span className="text-[8.5px] text-blue-400 font-mono">C: <b>{item.carbs}g</b></span>
+                        <span className="text-[8.5px] text-amber-400 font-mono">F: <b>{item.fat}g</b></span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {suggestionsError && (
+                <div className="flex items-center gap-1.5 text-rose-400 text-[10px] font-medium bg-rose-500/5 p-2 rounded-xl border border-rose-500/10">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  {suggestionsError}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handleGetSuggestions}
+                  disabled={isLoadingSuggestions}
+                  className="flex-1 py-2 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-40 text-white text-[10px] font-bold flex items-center justify-center gap-1 transition cursor-pointer border-0"
+                >
+                  <Sparkles className="h-3 w-3" /> Re-generar
+                </button>
+                <button
+                  onClick={() => setFoodSuggestions([])}
+                  className="py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white/60 text-[10px] font-bold transition cursor-pointer border-0"
+                >
+                  Ocultar
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Meals grouped by type */}
@@ -655,6 +921,103 @@ export default function NutritionHub({
         {/* Bottom spacer */}
         <div className="h-4" />
       </div>
+
+      {/* IA Nutri-Coach Drawer Overlay */}
+      <AnimatePresence>
+        {isCoachOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsCoachOpen(false)}
+              className="absolute inset-0 bg-black/65 z-50 backdrop-blur-sm"
+            />
+
+            {/* Slide up Drawer */}
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 220 }}
+              className="absolute bottom-0 left-0 right-0 h-[80%] bg-[#0d0e15] border-t border-white/10 rounded-t-[32px] z-50 flex flex-col overflow-hidden shadow-2xl"
+            >
+              {/* Drag Handle & Header */}
+              <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between shrink-0 bg-white/[0.01]">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-400">
+                    <MessageSquare className="h-4.5 w-4.5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-white tracking-tight uppercase tracking-wide flex items-center gap-1.5">
+                      Nutri-Coach IA
+                      <Sparkles className="h-3 w-3 text-emerald-400 fill-emerald-400/10" />
+                    </h3>
+                    <p className="text-[9px] text-white/40">Resuelve dudas sobre alimentación y macros</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsCoachOpen(false)}
+                  className="w-8 h-8 rounded-full bg-white/5 border border-white/5 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Chat Messages scroll area */}
+              <div className="flex-1 overflow-y-auto no-scrollbar p-5 space-y-4">
+                {coachChatHistory.map((msg, index) => (
+                  <div
+                    key={index}
+                    className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${
+                        msg.sender === "user"
+                          ? "bg-emerald-500 text-black font-semibold rounded-tr-none"
+                          : "bg-white/5 text-white/80 rounded-tl-none border border-white/5"
+                      }`}
+                    >
+                      {msg.text}
+                    </div>
+                  </div>
+                ))}
+                
+                {isCoachTyping && (
+                  <div className="flex justify-start">
+                    <div className="bg-white/5 border border-white/5 text-white/40 rounded-2xl rounded-tl-none px-3.5 py-3 text-[10px] font-bold flex items-center gap-2 animate-pulse">
+                      <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                      Escribiendo respuesta...
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Chat Input panel */}
+              <div className="p-4 border-t border-white/5 bg-white/[0.01] shrink-0 flex gap-2 items-center">
+                <input
+                  type="text"
+                  placeholder="Ej: ¿El arroz blanco de noche es malo?"
+                  value={coachMessage}
+                  onChange={(e) => setCoachMessage(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSendCoachMessage()}
+                  className="flex-1 p-3 bg-white/5 border border-white/10 rounded-2xl text-xs text-white placeholder-white/20 focus:outline-none focus:border-emerald-500/40 focus:bg-white/[0.07] transition"
+                />
+                <button
+                  onClick={handleSendCoachMessage}
+                  disabled={!coachMessage.trim() || isCoachTyping}
+                  className="w-10 h-10 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-30 flex items-center justify-center text-black font-black transition cursor-pointer border-none shadow-md"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
