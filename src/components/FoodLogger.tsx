@@ -1154,24 +1154,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                   </div>
 
                   <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-gray-500 dark:text-white/40 uppercase tracking-wider">Cantidad</span>
-                      <button
-                        type="button"
-                        onClick={handleLoadVisualPortions}
-                        disabled={isLoadingPortions}
-                        className="flex items-center gap-0.5 text-[9px] text-emerald-400 hover:text-emerald-300 font-black bg-transparent border-0 cursor-pointer transition shrink-0"
-                      >
-                        {isLoadingPortions ? (
-                          <RefreshCw className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <>
-                            <HelpCircle className="h-3 w-3" />
-                            ¿Medir al ojo?
-                          </>
-                        )}
-                      </button>
-                    </div>
+                    <span className="text-[10px] font-bold text-gray-500 dark:text-white/40 uppercase tracking-wider">Cantidad</span>
                     <div className="flex items-center gap-1.5">
                       <Input
                         type="number"
@@ -1184,6 +1167,25 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                         {portionUnit === "unit" ? unitLabel : portionUnit === "ml" ? "ml" : "g"}
                       </span>
                     </div>
+                  </div>
+
+                  {/* Botón "¿Medir al ojo?" abajo de la cantidad para mejor responsividad */}
+                  <div className="flex justify-end pt-0.5">
+                    <button
+                      type="button"
+                      onClick={handleLoadVisualPortions}
+                      disabled={isLoadingPortions}
+                      className="flex items-center gap-1 text-[9.5px] text-emerald-450 hover:text-emerald-400 font-bold bg-white/[0.03] border border-white/5 px-2.5 py-1 rounded-xl cursor-pointer transition hover:bg-white/[0.06] hover:border-emerald-500/20"
+                    >
+                      {isLoadingPortions ? (
+                        <RefreshCw className="h-3 w-3 animate-spin text-emerald-400" />
+                      ) : (
+                        <>
+                          <HelpCircle className="h-3.5 w-3.5 text-emerald-450" />
+                          ¿Medir al ojo con IA?
+                        </>
+                      )}
+                    </button>
                   </div>
 
                   {/* IA Visual Portions scroll */}
@@ -1334,10 +1336,10 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                         <button
                           type="button"
                           onClick={() => {
-                            setCorrectedCalories(selectedFood.calories);
-                            setCorrectedProtein(selectedFood.protein);
-                            setCorrectedCarbs(selectedFood.carbs);
-                            setCorrectedFat(selectedFood.fat);
+                            setCorrectedCalories(Math.round(selectedFood.calories));
+                            setCorrectedProtein(Number(Number(selectedFood.protein).toFixed(1)));
+                            setCorrectedCarbs(Number(Number(selectedFood.carbs).toFixed(1)));
+                            setCorrectedFat(Number(Number(selectedFood.fat).toFixed(1)));
                             setIsCorrectingBarcode(true);
                           }}
                           className="text-[10px] text-amber-400 hover:text-amber-300 font-black transition bg-transparent border-0 cursor-pointer flex items-center gap-0.5"
@@ -1379,7 +1381,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                               <input
                                 type="number"
                                 value={correctedCalories}
-                                onChange={(e) => setCorrectedCalories(e.target.value === "" ? "" : Number(e.target.value))}
+                                onChange={(e) => setCorrectedCalories(e.target.value === "" ? "" : Math.round(Number(e.target.value)))}
                                 className="w-full bg-[#0c0d15] border border-white/10 rounded-lg text-center text-xs text-white font-mono h-7 px-1 focus:border-amber-500/40 focus:outline-none"
                               />
                             </div>
@@ -1388,7 +1390,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                               <input
                                 type="number"
                                 value={correctedProtein}
-                                onChange={(e) => setCorrectedProtein(e.target.value === "" ? "" : Number(e.target.value))}
+                                onChange={(e) => setCorrectedProtein(e.target.value === "" ? "" : Number(Number(e.target.value).toFixed(1)))}
                                 className="w-full bg-[#0c0d15] border border-white/10 rounded-lg text-center text-xs text-white font-mono h-7 px-1 focus:border-amber-500/40 focus:outline-none"
                               />
                             </div>
@@ -1397,7 +1399,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                               <input
                                 type="number"
                                 value={correctedCarbs}
-                                onChange={(e) => setCorrectedCarbs(e.target.value === "" ? "" : Number(e.target.value))}
+                                onChange={(e) => setCorrectedCarbs(e.target.value === "" ? "" : Number(Number(e.target.value).toFixed(1)))}
                                 className="w-full bg-[#0c0d15] border border-white/10 rounded-lg text-center text-xs text-white font-mono h-7 px-1 focus:border-amber-500/40 focus:outline-none"
                               />
                             </div>
@@ -1406,7 +1408,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                               <input
                                 type="number"
                                 value={correctedFat}
-                                onChange={(e) => setCorrectedFat(e.target.value === "" ? "" : Number(e.target.value))}
+                                onChange={(e) => setCorrectedFat(e.target.value === "" ? "" : Number(Number(e.target.value).toFixed(1)))}
                                 className="w-full bg-[#0c0d15] border border-white/10 rounded-lg text-center text-xs text-white font-mono h-7 px-1 focus:border-amber-500/40 focus:outline-none"
                               />
                             </div>
