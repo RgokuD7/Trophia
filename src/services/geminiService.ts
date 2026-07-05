@@ -737,6 +737,7 @@ Requisitos:
 - Si la información no es legible o no se encuentra, pon 0 en los macros correspondientes.
 - Tu respuesta debe ser estrictamente en formato JSON con la siguiente estructura:
 {
+  "productName": "Nombre o descripción del producto detectado (opcional, en español, ej: Avena Integral, Leche Entera)",
   "calories": número (calorías por 100g en kcal, entero),
   "protein": número (proteínas por 100g en gramos, entero o decimal),
   "carbs": número (carbohidratos por 100g en gramos, entero o decimal),

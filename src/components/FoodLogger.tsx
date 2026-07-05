@@ -470,9 +470,13 @@ export default function FoodLogger({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const isManualMode = !selectedFood || selectedFood.name === "";
+
     setIsScanningLabel(true);
     setLabelScanError(null);
-    setIsCorrectingBarcode(true);
+    if (!isManualMode) {
+      setIsCorrectingBarcode(true);
+    }
     setBarcodeSaveSuccess(false);
 
     const reader = new FileReader();
@@ -487,6 +491,9 @@ export default function FoodLogger({
           setCustomProtein(Number((data.protein * scale).toFixed(1)));
           setCustomCarbs(Number((data.carbs * scale).toFixed(1)));
           setCustomFat(Number((data.fat * scale).toFixed(1)));
+          if (isManualMode && data.productName) {
+            setCustomName(data.productName);
+          }
         } else {
           setLabelScanError("No se pudo detectar una tabla de información nutricional legible. Intenta con otra foto.");
           setIsCorrectingBarcode(false);
@@ -1200,36 +1207,36 @@ export default function FoodLogger({
                   <div className="w-full h-1 bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-[#f97316] rounded-full transition-all duration-300"
-                      style={{ width: `${selectedFood.name === "" ? 33 : Math.min(100, pPct)}%` }}
+                      style={{ width: `${selectedFood.name === "" ? 0 : Math.min(100, pPct)}%` }}
                     ></div>
                   </div>
-                  <span className="block text-[8px] text-[#f97316]/60 font-bold font-mono">{selectedFood.name === "" ? "-" : `${pPct}%`}</span>
+                  <span className="block text-[8px] text-[#f97316]/60 font-bold font-mono">{selectedFood.name === "" ? "0%" : `${pPct}%`}</span>
                 </div>
 
                 {/* Carbs */}
                 <div className="bg-[#3b82f6]/5 border border-[#3b82f6]/10 p-3 rounded-2xl text-center space-y-1.5 flex flex-col justify-between">
                   <span className="block text-[8px] font-bold text-[#3b82f6]/80 uppercase tracking-wider">Carbos</span>
-                  <span className="block text-sm font-extrabold text-gray-900 dark:text-white font-mono">{formatMacro(customCarbs)}g</span>
+                  <span className="block text-sm font-extrabold text-gray-900 dark:text-white font-mono">{formatMacro(customProtein ? customCarbs : 0)}g</span>
                   <div className="w-full h-1 bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-[#3b82f6] rounded-full transition-all duration-300"
-                      style={{ width: `${selectedFood.name === "" ? 33 : Math.min(100, cPct)}%` }}
+                      style={{ width: `${selectedFood.name === "" ? 0 : Math.min(100, cPct)}%` }}
                     ></div>
                   </div>
-                  <span className="block text-[8px] text-[#3b82f6]/60 font-bold font-mono">{selectedFood.name === "" ? "-" : `${cPct}%`}</span>
+                  <span className="block text-[8px] text-[#3b82f6]/60 font-bold font-mono">{selectedFood.name === "" ? "0%" : `${cPct}%`}</span>
                 </div>
 
                 {/* Fat */}
                 <div className="bg-[#eab308]/5 border border-[#eab308]/10 p-3 rounded-2xl text-center space-y-1.5 flex flex-col justify-between">
                   <span className="block text-[8px] font-bold text-[#eab308]/80 uppercase tracking-wider">Grasa</span>
-                  <span className="block text-sm font-extrabold text-gray-900 dark:text-white font-mono">{formatMacro(customFat)}g</span>
+                  <span className="block text-sm font-extrabold text-gray-900 dark:text-white font-mono">{formatMacro(customProtein ? customFat : 0)}g</span>
                   <div className="w-full h-1 bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-[#eab308] rounded-full transition-all duration-300"
-                      style={{ width: `${selectedFood.name === "" ? 33 : Math.min(100, fPct)}%` }}
+                      style={{ width: `${selectedFood.name === "" ? 0 : Math.min(100, fPct)}%` }}
                     ></div>
                   </div>
-                  <span className="block text-[8px] text-[#eab308]/60 font-bold font-mono">{selectedFood.name === "" ? "-" : `${fPct}%`}</span>
+                  <span className="block text-[8px] text-[#eab308]/60 font-bold font-mono">{selectedFood.name === "" ? "0%" : `${fPct}%`}</span>
                 </div>
               </div>
 
@@ -1454,6 +1461,36 @@ export default function FoodLogger({
 
                   <div className="space-y-2.5">
                     {selectedFood.name === "" && (
+                      <div className="mb-2">
+                        {labelScanError && (
+                          <span className="block text-[8.5px] text-rose-455 font-bold text-center mb-1">
+                            ⚠️ {labelScanError}
+                          </span>
+                        )}
+                        {!isScanningLabel ? (
+                          <label className="text-[10px] text-amber-500 hover:text-amber-450 font-black transition cursor-pointer flex items-center gap-1.5 justify-center py-2 bg-amber-500/5 border border-dashed border-amber-500/20 rounded-xl font-sans">
+                            <Camera className="h-3.5 w-3.5" />
+                            Escanear Tabla de Macros con IA (Foto/Etiqueta)
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              onChange={handleLabelPhotoUpload}
+                              className="hidden"
+                            />
+                          </label>
+                        ) : (
+                          <div className="bg-emerald-500/5 border border-emerald-500/20 p-2 rounded-xl text-center">
+                            <span className="text-[9.5px] font-bold text-emerald-400 flex items-center justify-center gap-1.5 font-sans">
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                              Analizando tabla nutricional con IA...
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedFood.name === "" && (
                       <div>
                         <label className="block text-[10px] text-gray-500 dark:text-white/40 mb-1">Nombre del Alimento</label>
                         <Input
@@ -1531,18 +1568,26 @@ export default function FoodLogger({
                     </div>
 
                     {/* Option to also save to My Meals as a template */}
+                    {/* Option to also save to My Meals as a template */}
                     {!isCustomFoodOnlyMode && userId && selectedFood.name === "" && (
-                      <label className="flex items-center gap-2.5 mt-2 px-1 cursor-pointer select-none bg-emerald-500/5 border border-emerald-500/10 p-2 rounded-xl transition">
-                        <input
-                          type="checkbox"
-                          checked={alsoSaveToCustom}
-                          onChange={(e) => setAlsoSaveToCustom(e.target.checked)}
-                          className="rounded border-gray-300 dark:border-white/15 text-emerald-500 focus:ring-emerald-500/25 bg-white/5 w-4 h-4 cursor-pointer"
-                        />
+                      <div className="flex items-center justify-between mt-2 px-3 py-2.5 bg-emerald-500/5 border border-emerald-500/10 rounded-xl select-none">
                         <span className="text-[10.5px] text-emerald-600 dark:text-emerald-400 font-extrabold uppercase tracking-wide">
                           Guardar también en Mis Comidas
                         </span>
-                      </label>
+                        <button
+                          type="button"
+                          onClick={() => setAlsoSaveToCustom(!alsoSaveToCustom)}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            alsoSaveToCustom ? "bg-emerald-500" : "bg-gray-250 dark:bg-white/10"
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                              alsoSaveToCustom ? "translate-x-4" : "translate-x-0"
+                            }`}
+                          />
+                        </button>
+                      </div>
                     )}
 
                     {/* Community Correction workflow for barcode foods */}
