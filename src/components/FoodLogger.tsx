@@ -146,11 +146,6 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
   const [showBarcodeHelp, setShowBarcodeHelp] = useState(false);
   const [barcodeSaveSuccess, setBarcodeSaveSuccess] = useState(false);
 
-  const [correctedCalories, setCorrectedCalories] = useState<number | "">("");
-  const [correctedProtein, setCorrectedProtein] = useState<number | "">("");
-  const [correctedCarbs, setCorrectedCarbs] = useState<number | "">("");
-  const [correctedFat, setCorrectedFat] = useState<number | "">("");
-
   // IA visual portions states
   const [visualPortions, setVisualPortions] = useState<{ label: string; value: number }[]>([]);
   const [isLoadingPortions, setIsLoadingPortions] = useState(false);
@@ -399,10 +394,12 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
 
     try {
       const barcode = selectedFood.barcode;
-      const baseCal = Number(correctedCalories);
-      const baseProt = Number(correctedProtein) || 0;
-      const baseCarb = Number(correctedCarbs) || 0;
-      const baseFat = Number(correctedFat) || 0;
+      const scale = portionUnit === "unit" ? unitWeight / 100 : portionValue / 100;
+      
+      const baseCal = Math.round(Number(customCalories) / scale);
+      const baseProt = Number((Number(customProtein) / scale).toFixed(1));
+      const baseCarb = Number((Number(customCarbs) / scale).toFixed(1));
+      const baseFat = Number((Number(customFat) / scale).toFixed(1));
 
       await saveBarcodeCorrection(barcode, {
         barcode,
@@ -412,12 +409,6 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
         carbs: baseCarb,
         fat: baseFat
       });
-
-      const scale = portionUnit === "unit" ? unitWeight / 100 : portionValue / 100;
-      setCustomCalories(Math.round(baseCal * scale));
-      setCustomProtein(Number((baseProt * scale).toFixed(1)));
-      setCustomCarbs(Number((baseCarb * scale).toFixed(1)));
-      setCustomFat(Number((baseFat * scale).toFixed(1)));
 
       setSelectedFood(prev => prev ? {
         ...prev,
@@ -1169,63 +1160,6 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                     </div>
                   </div>
 
-                  {/* Botón "¿Medir al ojo?" abajo de la cantidad para mejor responsividad */}
-                  <div className="flex justify-end pt-0.5">
-                    <button
-                      type="button"
-                      onClick={handleLoadVisualPortions}
-                      disabled={isLoadingPortions}
-                      className="flex items-center gap-1 text-[9.5px] text-emerald-450 hover:text-emerald-400 font-bold bg-white/[0.03] border border-white/5 px-2.5 py-1 rounded-xl cursor-pointer transition hover:bg-white/[0.06] hover:border-emerald-500/20"
-                    >
-                      {isLoadingPortions ? (
-                        <RefreshCw className="h-3 w-3 animate-spin text-emerald-400" />
-                      ) : (
-                        <>
-                          <HelpCircle className="h-3.5 w-3.5 text-emerald-450" />
-                          ¿Medir al ojo con IA?
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* IA Visual Portions scroll */}
-                  {showPortionsInfo && visualPortions.length > 0 && (
-                    <div className="bg-white/[0.02] border border-white/5 p-2.5 rounded-xl space-y-1.5 animate-fadeIn">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Equivalencias Visuales (IA)</span>
-                        <button
-                          type="button"
-                          onClick={() => setShowPortionsInfo(false)}
-                          className="text-white/40 hover:text-white transition cursor-pointer"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                      <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
-                        {visualPortions.map((sug, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => {
-                              const isMl = selectedFood.servingSize?.toLowerCase().includes("ml") || selectedFood.name.toLowerCase().includes("leche") || selectedFood.name.toLowerCase().includes("bebida");
-                              setPortionUnit(isMl ? "ml" : "g");
-                              updatePortion(sug.value, isMl ? "ml" : "g");
-                            }}
-                            className="px-2 py-0.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 rounded-lg text-[9px] font-bold transition cursor-pointer whitespace-nowrap shrink-0 animate-fadeIn"
-                          >
-                            {sug.label} ({sug.value}{selectedFood.servingSize?.toLowerCase().includes("ml") || selectedFood.name.toLowerCase().includes("leche") ? "ml" : "g"})
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {portionsError && (
-                    <span className="block text-[8.5px] text-rose-400 font-bold mt-1">
-                      ⚠️ {portionsError}
-                    </span>
-                  )}
-
                   {/* Range Slider */}
                   <input
                     type="range"
@@ -1254,184 +1188,209 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                       </button>
                     ))}
                   </div>
+
+                  {/* Botón "¿Medir al ojo?" abajo de la cantidad para mejor responsividad */}
+                  <div className="flex justify-center pt-1 border-t border-gray-200 dark:border-white/5">
+                    <button
+                      type="button"
+                      onClick={handleLoadVisualPortions}
+                      disabled={isLoadingPortions}
+                      className="w-full flex items-center justify-center gap-1.5 text-[9.5px] text-emerald-450 hover:text-emerald-450 font-black bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 px-3 py-2 rounded-xl cursor-pointer transition shadow-md"
+                    >
+                      {isLoadingPortions ? (
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-400" />
+                      ) : (
+                        <>
+                          <HelpCircle className="h-3.5 w-3.5" />
+                          ¿Cómo medir al ojo? Equivalencias con IA
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* IA Visual Portions scroll */}
+                  {showPortionsInfo && visualPortions.length > 0 && (
+                    <div className="bg-white/[0.02] border border-white/5 p-2.5 rounded-xl space-y-1.5 animate-fadeIn">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Medidas Visuales Encontradas</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowPortionsInfo(false)}
+                          className="text-white/40 hover:text-white transition cursor-pointer bg-transparent border-0"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+                        {visualPortions.map((sug, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              const isMl = selectedFood.servingSize?.toLowerCase().includes("ml") || selectedFood.name.toLowerCase().includes("leche") || selectedFood.name.toLowerCase().includes("bebida");
+                              setPortionUnit(isMl ? "ml" : "g");
+                              updatePortion(sug.value, isMl ? "ml" : "g");
+                            }}
+                            className="px-2 py-0.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 rounded-lg text-[9px] font-bold transition cursor-pointer whitespace-nowrap shrink-0 animate-fadeIn"
+                          >
+                            {sug.label} ({sug.value}{selectedFood.servingSize?.toLowerCase().includes("ml") || selectedFood.name.toLowerCase().includes("leche") ? "ml" : "g"})
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {portionsError && (
+                    <span className="block text-[8.5px] text-rose-400 font-bold mt-1">
+                      ⚠️ {portionsError}
+                    </span>
+                  )}
                 </div>
               )}
 
               {/* Adjust Details Accordion Box */}
-              <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-2xl border border-gray-200 dark:border-white/10 space-y-3">
-                <span className="block text-[10px] font-bold text-gray-500 dark:text-white/40 border-b border-gray-200 dark:border-white/5 pb-1.5 uppercase tracking-wider">
-                  Verificar / Editar Macros {selectedFood.name === "" && "Manualmente"}
-                </span>
+              {(selectedFood.name === "" || selectedFood.barcode) && (
+                <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-2xl border border-gray-200 dark:border-white/10 space-y-3">
+                  <div className="flex justify-between items-center border-b border-gray-200 dark:border-white/5 pb-1.5">
+                    <span className="block text-[10px] font-bold text-gray-500 dark:text-white/40 uppercase tracking-wider">
+                      {selectedFood.name === "" ? "Verificar / Editar Macros Manualmente" : "Información de Macros (OFF)"}
+                    </span>
+                    {selectedFood.barcode && isCorrectingBarcode && (
+                      <button
+                        type="button"
+                        onClick={() => setShowBarcodeHelp(!showBarcodeHelp)}
+                        className="text-amber-400 hover:text-amber-300 transition cursor-pointer bg-transparent border-0 flex items-center gap-0.5 text-[9px] font-bold"
+                      >
+                        <HelpCircle className="h-3 w-3" />
+                        ¿Dónde buscar?
+                      </button>
+                    )}
+                  </div>
 
-                <div className="space-y-2.5">
-                  {selectedFood.name === "" && (
-                    <div>
-                      <label className="block text-[10px] text-gray-500 dark:text-white/40 mb-1">Nombre del Alimento</label>
-                      <Input
-                        type="text"
-                        value={customName}
-                        onChange={(e) => setCustomName(e.target.value)}
-                        placeholder="Ej: Pollo desmenuzado con arroz..."
-                        className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl focus:border-emerald-500/40 text-gray-900 dark:text-white"
-                        size="md"
-                      />
+                  {showBarcodeHelp && isCorrectingBarcode && (
+                    <div className="bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20 text-[9px] text-gray-700 dark:text-white/60 leading-normal space-y-1 animate-fadeIn">
+                      <p className="font-black text-amber-500 dark:text-amber-400 uppercase tracking-wider">💡 ¿Cómo buscar los macros?</p>
+                      <p>Busca la tabla nutricional en el envase físico. Modifica los campos inferiores ingresando los macros **según tu porción actual**. El sistema calculará automáticamente la proporción de 100g para guardarlo en la comunidad.</p>
                     </div>
                   )}
 
-                  <div className="grid grid-cols-4 gap-2">
-                    <div>
-                      <label className="block text-[9px] text-gray-500 dark:text-white/40 text-center mb-1">Calorías</label>
-                      <Input
-                        type="number"
-                        value={customCalories}
-                        onChange={(e) => setCustomCalories(e.target.value === "" ? "" : Number(e.target.value))}
-                        placeholder="kcal"
-                        className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-emerald-600 dark:text-emerald-400 font-mono font-bold px-1 focus:border-emerald-500/40 disabled:opacity-75"
-                        size="sm"
-                        disabled={selectedFood.name !== ""}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] text-gray-500 dark:text-white/40 text-center mb-1">Proteínas</label>
-                      <Input
-                        type="number"
-                        value={customProtein}
-                        onChange={(e) => setCustomProtein(e.target.value === "" ? "" : Number(e.target.value))}
-                        placeholder="g"
-                        className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-75"
-                        size="sm"
-                        disabled={selectedFood.name !== ""}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] text-gray-500 dark:text-white/40 text-center mb-1">Carbos</label>
-                      <Input
-                        type="number"
-                        value={customCarbs}
-                        onChange={(e) => setCustomCarbs(e.target.value === "" ? "" : Number(e.target.value))}
-                        placeholder="g"
-                        className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-75"
-                        size="sm"
-                        disabled={selectedFood.name !== ""}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] text-gray-500 dark:text-white/40 text-center mb-1">Grasas</label>
-                      <Input
-                        type="number"
-                        value={customFat}
-                        onChange={(e) => setCustomFat(e.target.value === "" ? "" : Number(e.target.value))}
-                        placeholder="g"
-                        className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-75"
-                        size="sm"
-                        disabled={selectedFood.name !== ""}
-                      />
-                    </div>
-                  </div>
+                  <div className="space-y-2.5">
+                    {selectedFood.name === "" && (
+                      <div>
+                        <label className="block text-[10px] text-gray-500 dark:text-white/40 mb-1">Nombre del Alimento</label>
+                        <Input
+                          type="text"
+                          value={customName}
+                          onChange={(e) => setCustomName(e.target.value)}
+                          placeholder="Ej: Pollo desmenuzado con arroz..."
+                          className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl focus:border-emerald-500/40 text-gray-900 dark:text-white"
+                          size="md"
+                        />
+                      </div>
+                    )}
 
-                  {/* Community Correction workflow for barcode foods */}
-                  {selectedFood.name !== "" && selectedFood.barcode && (
-                    <div className="pt-1 border-t border-gray-200 dark:border-white/5">
-                      {!isCorrectingBarcode && !barcodeSaveSuccess ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCorrectedCalories(Math.round(selectedFood.calories));
-                            setCorrectedProtein(Number(Number(selectedFood.protein).toFixed(1)));
-                            setCorrectedCarbs(Number(Number(selectedFood.carbs).toFixed(1)));
-                            setCorrectedFat(Number(Number(selectedFood.fat).toFixed(1)));
-                            setIsCorrectingBarcode(true);
+                    <div className="grid grid-cols-4 gap-2">
+                      <div>
+                        <label className="block text-[9px] text-gray-500 dark:text-white/40 text-center mb-1">Calorías</label>
+                        <Input
+                          type="number"
+                          value={customCalories}
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? "" : Math.round(Number(e.target.value));
+                            setCustomCalories(val);
                           }}
-                          className="text-[10px] text-amber-400 hover:text-amber-300 font-black transition bg-transparent border-0 cursor-pointer flex items-center gap-0.5"
-                        >
-                          ¿No son correctos los macros del empaque? Corregir
-                        </button>
-                      ) : isCorrectingBarcode ? (
-                        <div className="bg-white/[0.02] border border-white/5 p-3 rounded-xl space-y-2.5 animate-fadeIn mt-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
-                              Corregir Tabla Nutricional
-                              <button
-                                type="button"
-                                onClick={() => setShowBarcodeHelp(!showBarcodeHelp)}
-                                className="text-white/40 hover:text-white transition cursor-pointer bg-transparent border-0"
-                              >
-                                <HelpCircle className="h-3 w-3.5" />
-                              </button>
-                            </span>
+                          placeholder="kcal"
+                          className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-emerald-600 dark:text-emerald-400 font-mono font-bold px-1 focus:border-emerald-500/40 disabled:opacity-50"
+                          size="sm"
+                          disabled={selectedFood.name !== "" && !isCorrectingBarcode}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] text-gray-500 dark:text-white/40 text-center mb-1">Proteínas</label>
+                        <Input
+                          type="number"
+                          value={customProtein}
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? "" : Number(Number(e.target.value).toFixed(1));
+                            setCustomProtein(val);
+                          }}
+                          placeholder="g"
+                          className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-50"
+                          size="sm"
+                          disabled={selectedFood.name !== "" && !isCorrectingBarcode}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] text-gray-500 dark:text-white/40 text-center mb-1">Carbos</label>
+                        <Input
+                          type="number"
+                          value={customCarbs}
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? "" : Number(Number(e.target.value).toFixed(1));
+                            setCustomCarbs(val);
+                          }}
+                          placeholder="g"
+                          className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-50"
+                          size="sm"
+                          disabled={selectedFood.name !== "" && !isCorrectingBarcode}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] text-gray-500 dark:text-white/40 text-center mb-1">Grasas</label>
+                        <Input
+                          type="number"
+                          value={customFat}
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? "" : Number(Number(e.target.value).toFixed(1));
+                            setCustomFat(val);
+                          }}
+                          placeholder="g"
+                          className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-50"
+                          size="sm"
+                          disabled={selectedFood.name !== "" && !isCorrectingBarcode}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Community Correction workflow for barcode foods */}
+                    {selectedFood.name !== "" && selectedFood.barcode && (
+                      <div className="pt-1.5 flex flex-col gap-2">
+                        {!isCorrectingBarcode && !barcodeSaveSuccess ? (
+                          <button
+                            type="button"
+                            onClick={() => setIsCorrectingBarcode(true)}
+                            className="text-[10px] text-amber-400 hover:text-amber-300 font-black transition bg-transparent border-0 cursor-pointer flex items-center gap-0.5 justify-center py-1"
+                          >
+                            ¿No son correctos los macros del empaque? Corregir
+                          </button>
+                        ) : isCorrectingBarcode ? (
+                          <div className="flex gap-2 animate-fadeIn pt-1">
+                            <button
+                              type="button"
+                              onClick={handleSaveBarcodeCorrection}
+                              className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-black text-[9.5px] font-black rounded-xl transition cursor-pointer"
+                            >
+                              Guardar Corrección
+                            </button>
                             <button
                               type="button"
                               onClick={() => setIsCorrectingBarcode(false)}
-                              className="text-white/40 hover:text-white transition cursor-pointer bg-transparent border-0"
+                              className="px-3 py-2 bg-white/5 border border-white/10 text-white/60 hover:text-white text-[9.5px] font-bold rounded-xl transition cursor-pointer"
                             >
-                              <X className="h-3.5 w-3.5" />
+                              Cancelar
                             </button>
                           </div>
-
-                          {showBarcodeHelp && (
-                            <div className="bg-white/5 p-2 rounded-lg border border-white/5 text-[9px] text-white/60 leading-normal space-y-1">
-                              <p className="font-bold text-white">💡 ¿Cómo buscar los macros?</p>
-                              <p>Revisa la tabla nutricional al reverso del empaque físico. Ingresa los valores expresados **por cada 100g** (o por porción base de 100g/ml) para que la app pueda calcular tus porciones de forma exacta en el futuro.</p>
-                            </div>
-                          )}
-
-                          <div className="grid grid-cols-4 gap-1.5">
-                            <div>
-                              <label className="block text-[8px] text-white/40 text-center mb-0.5">Calorías</label>
-                              <input
-                                type="number"
-                                value={correctedCalories}
-                                onChange={(e) => setCorrectedCalories(e.target.value === "" ? "" : Math.round(Number(e.target.value)))}
-                                className="w-full bg-[#0c0d15] border border-white/10 rounded-lg text-center text-xs text-white font-mono h-7 px-1 focus:border-amber-500/40 focus:outline-none"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[8px] text-white/40 text-center mb-0.5">Prot (g)</label>
-                              <input
-                                type="number"
-                                value={correctedProtein}
-                                onChange={(e) => setCorrectedProtein(e.target.value === "" ? "" : Number(Number(e.target.value).toFixed(1)))}
-                                className="w-full bg-[#0c0d15] border border-white/10 rounded-lg text-center text-xs text-white font-mono h-7 px-1 focus:border-amber-500/40 focus:outline-none"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[8px] text-white/40 text-center mb-0.5">Carb (g)</label>
-                              <input
-                                type="number"
-                                value={correctedCarbs}
-                                onChange={(e) => setCorrectedCarbs(e.target.value === "" ? "" : Number(Number(e.target.value).toFixed(1)))}
-                                className="w-full bg-[#0c0d15] border border-white/10 rounded-lg text-center text-xs text-white font-mono h-7 px-1 focus:border-amber-500/40 focus:outline-none"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[8px] text-white/40 text-center mb-0.5">Gras (g)</label>
-                              <input
-                                type="number"
-                                value={correctedFat}
-                                onChange={(e) => setCorrectedFat(e.target.value === "" ? "" : Number(Number(e.target.value).toFixed(1)))}
-                                className="w-full bg-[#0c0d15] border border-white/10 rounded-lg text-center text-xs text-white font-mono h-7 px-1 focus:border-amber-500/40 focus:outline-none"
-                              />
-                            </div>
+                        ) : (
+                          <div className="bg-emerald-500/10 border border-emerald-500/20 p-2 rounded-xl text-center animate-fadeIn">
+                            <span className="text-[9.5px] text-emerald-400 font-bold flex items-center justify-center gap-1">
+                              <Check className="h-3 w-3" />
+                              ¡Macros corregidos y guardados en la comunidad!
+                            </span>
                           </div>
-
-                          <button
-                            type="button"
-                            onClick={handleSaveBarcodeCorrection}
-                            className="w-full py-1.5 bg-amber-500 hover:bg-amber-600 text-black text-[10px] font-black rounded-lg transition cursor-pointer"
-                          >
-                            Guardar y Enviar Corrección
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="bg-emerald-500/10 border border-emerald-500/20 p-2 rounded-xl text-center mt-1 animate-fadeIn">
-                          <span className="text-[9.5px] text-emerald-400 font-bold flex items-center justify-center gap-1">
-                            <Check className="h-3 w-3" />
-                            ¡Macros corregidos y guardados en la comunidad!
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   {selectedFood.name === "" && (
                     <div className="mt-3 pt-3 border-t border-gray-150 dark:border-white/5">
@@ -1509,7 +1468,7 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                   )}
 
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>
