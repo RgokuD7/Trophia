@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Search, Camera, Plus, History, Trash, AlertCircle, Check, X, RefreshCw, Star, Barcode, Sparkles, HelpCircle } from "lucide-react";
 import { LoggedMeal, FoodItem, MealType, BarcodeCorrection } from "../types";
 import { GLOBAL_FOODS_DB } from "../utils/fitnessUtils";
-import { analyzeFoodByIA, estimateMacrosFromDescription, getVisualServingSizesByIA } from "../services/geminiService";
+import { analyzeFoodByIA, estimateMacrosFromDescription, getVisualServingSizesByIA, analyzeNutritionLabelByIA } from "../services/geminiService";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { searchAllFoods, getProductByBarcode } from "../services/foodDatabaseService";
@@ -145,6 +145,8 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
   const [isCorrectingBarcode, setIsCorrectingBarcode] = useState(false);
   const [showBarcodeHelp, setShowBarcodeHelp] = useState(false);
   const [barcodeSaveSuccess, setBarcodeSaveSuccess] = useState(false);
+  const [isScanningLabel, setIsScanningLabel] = useState(false);
+  const [labelScanError, setLabelScanError] = useState<string | null>(null);
 
   // IA visual portions states
   const [visualPortions, setVisualPortions] = useState<{ label: string; value: number }[]>([]);
@@ -424,6 +426,42 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
       console.error(err);
       setIsCorrectingBarcode(false);
     }
+  };
+
+  const handleLabelPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsScanningLabel(true);
+    setLabelScanError(null);
+    setIsCorrectingBarcode(true);
+    setBarcodeSaveSuccess(false);
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      try {
+        const base64Image = reader.result as string;
+        const data = await analyzeNutritionLabelByIA(apiKey || "", base64Image);
+        
+        if (data && data.calories !== undefined) {
+          const scale = portionUnit === "unit" ? unitWeight / 100 : portionValue / 100;
+          setCustomCalories(Math.round(data.calories * scale));
+          setCustomProtein(Number((data.protein * scale).toFixed(1)));
+          setCustomCarbs(Number((data.carbs * scale).toFixed(1)));
+          setCustomFat(Number((data.fat * scale).toFixed(1)));
+        } else {
+          setLabelScanError("No se pudo detectar una tabla de información nutricional legible. Intenta con otra foto.");
+          setIsCorrectingBarcode(false);
+        }
+      } catch (err: any) {
+        console.error("Error doing OCR label scan:", err);
+        setLabelScanError(`Error al escanear la tabla: ${err.message || "Fallo de conexión"}`);
+        setIsCorrectingBarcode(false);
+      } finally {
+        setIsScanningLabel(false);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleLoadVisualPortions = async () => {
@@ -1355,30 +1393,63 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                     {/* Community Correction workflow for barcode foods */}
                     {selectedFood.name !== "" && selectedFood.barcode && (
                       <div className="pt-1.5 flex flex-col gap-2">
+                        {labelScanError && (
+                          <span className="block text-[8.5px] text-rose-450 font-bold text-center">
+                            ⚠️ {labelScanError}
+                          </span>
+                        )}
                         {!isCorrectingBarcode && !barcodeSaveSuccess ? (
-                          <button
-                            type="button"
-                            onClick={() => setIsCorrectingBarcode(true)}
-                            className="text-[10px] text-amber-400 hover:text-amber-300 font-black transition bg-transparent border-0 cursor-pointer flex items-center gap-0.5 justify-center py-1"
-                          >
-                            ¿No son correctos los macros del empaque? Corregir
-                          </button>
+                          <label className="text-[10px] text-amber-400 hover:text-amber-350 font-black transition cursor-pointer flex items-center gap-1 justify-center py-2 bg-amber-500/5 border border-dashed border-amber-500/20 rounded-xl">
+                            <Camera className="h-3.5 w-3.5" />
+                            ¿Macros incorrectos? Escanear Tabla con IA
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              onChange={handleLabelPhotoUpload}
+                              className="hidden"
+                            />
+                          </label>
                         ) : isCorrectingBarcode ? (
-                          <div className="flex gap-2 animate-fadeIn pt-1">
-                            <button
-                              type="button"
-                              onClick={handleSaveBarcodeCorrection}
-                              className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-black text-[9.5px] font-black rounded-xl transition cursor-pointer"
-                            >
-                              Guardar Corrección
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setIsCorrectingBarcode(false)}
-                              className="px-3 py-2 bg-white/5 border border-white/10 text-white/60 hover:text-white text-[9.5px] font-bold rounded-xl transition cursor-pointer"
-                            >
-                              Cancelar
-                            </button>
+                          <div className="bg-amber-500/5 border border-amber-500/20 p-2.5 rounded-xl space-y-2.5 animate-fadeIn">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                                {isScanningLabel ? "Escaneando tabla..." : "Revisar Macros Detectados"}
+                              </span>
+                              {isScanningLabel && <RefreshCw className="h-3 w-3 animate-spin text-amber-400" />}
+                            </div>
+
+                            {isScanningLabel ? (
+                              <p className="text-[9px] text-white/50 animate-pulse text-center py-2">
+                                Analizando la foto y extrayendo macros con IA. Por favor espera...
+                              </p>
+                            ) : (
+                              <div className="space-y-2">
+                                <p className="text-[9px] text-emerald-450 font-bold text-center leading-normal">
+                                  ✓ Tabla escaneada con éxito. Confirma si los valores de arriba corresponden al empaque físico.
+                                </p>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={handleSaveBarcodeCorrection}
+                                    className="flex-1 py-1.5 bg-amber-500 hover:bg-amber-600 text-black text-[9.5px] font-black rounded-lg transition cursor-pointer"
+                                  >
+                                    Confirmar y Guardar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setIsCorrectingBarcode(false);
+                                      // Restore original values
+                                      handleSelectFood(selectedFood);
+                                    }}
+                                    className="px-3 py-1.5 bg-white/5 border border-white/10 text-white/60 hover:text-white text-[9.5px] font-bold rounded-lg transition cursor-pointer"
+                                  >
+                                    Descartar
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="bg-emerald-500/10 border border-emerald-500/20 p-2 rounded-xl text-center animate-fadeIn">

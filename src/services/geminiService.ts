@@ -722,4 +722,29 @@ Sé extremadamente conciso. Tu respuesta debe ser estrictamente en formato JSON 
   return await callGeminiAPI(apiKey, prompt);
 }
 
+// 11. Extract macros and details from a physical nutrition label image using OCR
+export async function analyzeNutritionLabelByIA(
+  apiKey: string,
+  base64Image: string
+): Promise<any> {
+  const cleanImg = cleanBase64Image(base64Image);
+  const prompt = `Actúas como un extractor OCR de tablas de información nutricional para alimentos empaquetados. Analiza la imagen de la etiqueta nutricional proporcionada y extrae con precisión los valores de macronutrientes.
+  
+IMPORTANTE: Debes normalizar y calcular todos los valores (calorías, proteínas, carbohidratos, grasas) para que estén expresados por cada **100 gramos** (o 100 mililitros si es líquido). Si la tabla del empaque físico muestra los valores por porción (ej: "por porción de 30g"), calcula matemáticamente los valores correspondientes para 100g/ml para estandarizar el resultado.
+
+Requisitos:
+- Haz tu mayor esfuerzo por ser preciso basándote en los números y textos visibles.
+- Si la información no es legible o no se encuentra, pon 0 en los macros correspondientes.
+- Tu respuesta debe ser estrictamente en formato JSON con la siguiente estructura:
+{
+  "calories": número (calorías por 100g en kcal, entero),
+  "protein": número (proteínas por 100g en gramos, entero o decimal),
+  "carbs": número (carbohidratos por 100g en gramos, entero o decimal),
+  "fat": número (grasas por 100g en gramos, entero o decimal),
+  "servingSize": "Descripción corta de la porción original sugerida del empaque, ej: 30g o 1 rebanada"
+}`;
+
+  return await callGeminiAPI(apiKey, prompt, [cleanImg]);
+}
+
 
