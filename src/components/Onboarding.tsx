@@ -273,6 +273,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   const [showNavyEstimator, setShowNavyEstimator] = useState(false);
   const [showCaliperEstimator, setShowCaliperEstimator] = useState(false);
   const [showIaEstimator, setShowIaEstimator] = useState(false);
+  const [showCaptureGuide, setShowCaptureGuide] = useState(false);
 
   // Navy inputs
   const [neck, setNeck] = useState<number | "">("");
@@ -1725,10 +1726,16 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                   </div>
 
                   {/* 3. IA Estimator Header/Toggler */}
-                  <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
+                  <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden font-sans">
                     <button
                       type="button"
-                      onClick={() => setShowIaEstimator(!showIaEstimator)}
+                      onClick={() => {
+                        const next = !showIaEstimator;
+                        setShowIaEstimator(next);
+                        if (next) {
+                          setShowCaptureGuide(true);
+                        }
+                      }}
                       className="w-full p-3.5 text-left flex justify-between items-center hover:bg-white/5 transition"
                     >
                       <div className="flex items-center gap-2">
@@ -1749,7 +1756,15 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                     </button>
 
                     {showIaEstimator && (
-                      <div className="p-3.5 bg-black/20 border-t border-white/5 space-y-3.5 text-left">
+                      <div className="p-3.5 bg-black/20 border-t border-white/5 space-y-3.5 text-left font-sans">
+                        <button
+                          type="button"
+                          onClick={() => setShowCaptureGuide(true)}
+                          className="w-full py-2 bg-gradient-to-r from-amber-500/10 to-amber-600/10 hover:from-amber-500/20 hover:to-amber-600/20 border border-amber-500/20 text-amber-400 text-[10px] font-black rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider font-sans shadow-md"
+                        >
+                          <Camera className="h-3.5 w-3.5" /> Ver Poses y Reglas de Captura 📐
+                        </button>
+
                         <div className="bg-white/5 p-3 rounded-xl border border-white/5 flex gap-2 items-start">
                           <Sparkles className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                           <p className="text-[9.5px] text-white/60 leading-relaxed">
@@ -2986,6 +3001,121 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                     : "💡 Fórmula Jackson-Pollock (3 Pliegues): Método clínico de plicometría estándar para atletas y control antropométrico."}
                 </p>
               </div>
+            </motion.div>
+          </div>
+        )}
+
+        {showCaptureGuide && (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#0f101a] border border-white/10 rounded-[32px] p-6 max-w-md w-full space-y-4 shadow-2xl relative text-xs text-left overflow-y-auto max-h-[90vh] no-scrollbar font-sans"
+            >
+              <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                <h3 className="text-sm font-black text-white tracking-tight flex items-center gap-1.5 uppercase font-sans">
+                  <Sparkles className="h-4.5 w-4.5 text-amber-400" />
+                  <span>Guía de Captura Fisiológica</span>
+                </h3>
+                <button 
+                  onClick={() => setShowCaptureGuide(false)}
+                  className="text-amber-400 hover:text-amber-350 text-[10px] font-black px-3 py-1 bg-amber-500/10 rounded-xl border border-amber-500/20 hover:bg-amber-500/20 transition cursor-pointer font-sans"
+                >
+                  Cerrar
+                </button>
+              </div>
+
+              {/* Ghost Silhouette visual indicator */}
+              <div className="bg-gradient-to-b from-amber-500/10 to-transparent p-4 rounded-2xl border border-amber-500/25 flex flex-col items-center gap-3">
+                <div className="w-24 h-32 bg-black/40 rounded-xl border border-white/10 flex items-center justify-center relative overflow-hidden">
+                  <svg className="w-20 h-28 text-amber-500/30 animate-pulse" viewBox="0 0 100 150" fill="currentColor">
+                    <path d="M50 15c4.5 0 8-3.5 8-8s-3.5-8-8-8-8 3.5-8 8 3.5 8 8 8zm15 17c-2-3-6-4.5-11-5h-8c-5 .5-9 2-11 5-4.5 7-7.5 22-8.5 29-.5 4 1 6 3.5 5s4.5-3 5-7.5l2-16.5c.5-2 1.5-3.5 3-4 1.5-.5 3 .5 3 2.5v44c0 3 1.5 5.5 3.5 6s4.5-2 4.5-5V42c0-2.5 3.5-2.5 3.5 0v39.5c0 3 2.5 5 4.5 5s3.5-3 3.5-6V35c0-2 1.5-3 3-2.5 1.5.5 2.5 2 3 4l2 16.5c.5 4.5 2.5 8.5 5 7.5s4-1 3.5-5c-1-7-4-22-8.5-29z" />
+                  </svg>
+                  <div className="absolute inset-2 border border-amber-500/15 border-dashed rounded-lg pointer-events-none"></div>
+                </div>
+                <div className="text-center">
+                  <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest block font-sans">💡 Tip de UX: Silueta Guía</span>
+                  <p className="text-[9.5px] text-white/60 leading-normal mt-1">
+                    Apoya tu teléfono móvil en una superficie estable. Aléjate y encuadra tu cuerpo completo haciendo calzar tu postura con la silueta virtual en pantalla.
+                  </p>
+                </div>
+              </div>
+
+              {/* 1. Las 3 Poses de Evaluación */}
+              <div className="space-y-2">
+                <span className="block text-[10px] font-black text-white uppercase tracking-wider font-sans border-b border-white/5 pb-1">
+                  1. Las 3 Poses de Evaluación
+                </span>
+                
+                <div className="space-y-2.5">
+                  <div className="bg-white/5 p-2.5 rounded-xl border border-white/5 space-y-1">
+                    <span className="block text-[9.5px] font-bold text-amber-400 uppercase">🕴️ Frente (Frontal)</span>
+                    <p className="text-[9px] text-white/60 leading-relaxed font-medium">
+                      Párate erguido de cara a la cámara. Separa tus brazos del torso entre <b>15° a 30° (formando una letra "A")</b> para que la IA no confunda los brazos con el ancho del tronco. Piernas a la anchura de hombros y abdomen relajado (sin contraer ni meter panza).
+                    </p>
+                  </div>
+
+                  <div className="bg-white/5 p-2.5 rounded-xl border border-white/5 space-y-1">
+                    <span className="block text-[9.5px] font-bold text-amber-400 uppercase">🚶 Perfil (Lateral a 90°)</span>
+                    <p className="text-[9px] text-white/60 leading-relaxed font-medium">
+                      Párate completamente de lado (perfil derecho). Cruza los brazos ligeramente sobre el pecho o colócalos adelante de forma que <b>no obstruyan la línea del abdomen ni la espalda baja</b>. La IA requiere ver la curva espinal y el volumen abdominal.
+                    </p>
+                  </div>
+
+                  <div className="bg-white/5 p-2.5 rounded-xl border border-white/5 space-y-1">
+                    <span className="block text-[9.5px] font-bold text-amber-400 uppercase">🚶‍♂️ Espalda (Posterior)</span>
+                    <p className="text-[9px] text-white/60 leading-relaxed font-medium">
+                      Párate de espaldas a la cámara en la misma postura que la frontal. Esto es clave para evaluar la acumulación de grasa en la espalda baja, flancos ("llantitas") y hombros.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Reglas del Entorno */}
+              <div className="space-y-2 pt-1">
+                <span className="block text-[10px] font-black text-white uppercase tracking-wider font-sans border-b border-white/5 pb-1">
+                  2. Reglas Estrictas del Entorno
+                </span>
+                
+                <div className="grid grid-cols-2 gap-2 text-[9px]">
+                  <div className="bg-white/5 p-2.5 rounded-xl border border-white/5 space-y-1">
+                    <span className="block font-bold text-white leading-none">🩳 Ropa Mínima</span>
+                    <p className="text-white/50 leading-snug">
+                      Hombres: bóxer ajustado o short de baño corto. Mujeres: top deportivo y calza corta o bikini. Ropa holgada distorsionará la silueta corporal.
+                    </p>
+                  </div>
+
+                  <div className="bg-white/5 p-2.5 rounded-xl border border-white/5 space-y-1">
+                    <span className="block font-bold text-white leading-none">📐 Altura de Cámara</span>
+                    <p className="text-white/50 leading-snug">
+                      Apoya el móvil a la <b>altura de tu ombligo</b>, completamente vertical (90°). Fotos desde arriba (picado) o abajo distorsionan las proporciones.
+                    </p>
+                  </div>
+
+                  <div className="bg-white/5 p-2.5 rounded-xl border border-white/5 space-y-1">
+                    <span className="block font-bold text-white leading-none">💡 Luz Neutra</span>
+                    <p className="text-white/50 leading-snug">
+                      Usa luz frontal o de techo uniforme. Luces laterales fuertes crean sombras profundas que la IA confunde con definición muscular.
+                    </p>
+                  </div>
+
+                  <div className="bg-white/5 p-2.5 rounded-xl border border-white/5 space-y-1">
+                    <span className="block font-bold text-white leading-none">🧱 Fondo Contrario</span>
+                    <p className="text-white/50 leading-snug">
+                      Párate frente a una pared limpia y lisa de color uniforme que contraste con tu tono de piel. Facilita la detección de bordes.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowCaptureGuide(false)}
+                className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-black text-xs font-black rounded-xl transition cursor-pointer shadow-lg shadow-amber-500/10 uppercase tracking-wider font-sans border-none"
+              >
+                Entendido, Continuar
+              </button>
             </motion.div>
           </div>
         )}
