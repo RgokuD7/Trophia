@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { 
-  Utensils, Droplets, Dumbbell, Settings, Lock, CookingPot
+  Utensils, Droplets, Dumbbell, Settings, Lock, CookingPot, MessageSquare, Sparkles, X, Send
 } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { askNutriCoachIA } from "./services/geminiService";
 import { User } from "firebase/auth";
 import { UserProfile, LoggedMeal, WaterLog, WorkoutSession, MealType } from "./types";
 import Onboarding from "./components/Onboarding";
@@ -43,6 +45,48 @@ export default function App() {
   const [isRecipeAssistantOpen, setIsRecipeAssistantOpen] = useState(false);
   const [defaultMealTypeForLogger, setDefaultMealTypeForLogger] = useState<MealType>("lunch");
   const [isCheckingStorage, setIsCheckingStorage] = useState(true);
+
+  // Nutri-Coach state
+  const [isCoachOpen, setIsCoachOpen] = useState(false);
+  const [coachMessage, setCoachMessage] = useState("");
+  const [coachChatHistory, setCoachChatHistory] = useState<{ sender: "user" | "coach"; text: string }[]>([
+    { sender: "coach", text: "¡Hola! Soy tu Nutri-Coach de Trophia IA. ¿Tienes alguna pregunta sobre tu dieta, suplementos o cómo mejorar tu alimentación hoy? Escribe tu duda aquí abajo." }
+  ]);
+  const [isCoachTyping, setIsCoachTyping] = useState(false);
+
+  const handleSendCoachMessage = async () => {
+    if (!coachMessage.trim() || !profile) return;
+    const userText = coachMessage.trim();
+    setCoachMessage("");
+    setCoachChatHistory(prev => [...prev, { sender: "user", text: userText }]);
+    setIsCoachTyping(true);
+
+    try {
+      const apiKey = profile.apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || "";
+      
+      const todayStr = new Date().toISOString().split("T")[0];
+      const todayMeals = loggedMeals.filter(m => m.timestamp.startsWith(todayStr));
+      const totalCal = todayMeals.reduce((s, m) => s + m.calories, 0);
+      const totalP = todayMeals.reduce((s, m) => s + m.protein, 0);
+      const totalC = todayMeals.reduce((s, m) => s + m.carbs, 0);
+      const totalF = todayMeals.reduce((s, m) => s + m.fat, 0);
+      
+      const targetCal = profile.dailyCalorieTarget || 2000;
+      const targetP = profile.proteinTarget || 140;
+      const targetC = profile.carbsTarget || 230;
+      const targetF = profile.fatTarget || 65;
+
+      const context = `Usuario: ${profile.name}. Meta: ${profile.goal === "lose_weight" ? "Pérdida de peso" : "Ganancia de masa"}. Consumido hoy: ${totalCal}/${targetCal} kcal. P: ${Math.round(totalP)}/${targetP}g, C: ${Math.round(totalC)}/${targetC}g, G: ${Math.round(totalF)}/${targetF}g.`;
+      
+      const response = await askNutriCoachIA(apiKey, userText, context);
+      setCoachChatHistory(prev => [...prev, { sender: "coach", text: response.answer }]);
+    } catch (err: any) {
+      console.error(err);
+      setCoachChatHistory(prev => [...prev, { sender: "coach", text: `Lo siento, ocurrió un error al procesar tu duda: ${err.message || "Inténtalo de nuevo."}` }]);
+    } finally {
+      setIsCoachTyping(false);
+    }
+  };
 
   const handleOpenFoodLogger = (suggestedType?: MealType, isCustomOnly?: boolean) => {
     setDefaultMealTypeForLogger(suggestedType || getSuggestedMealTypeByTime().type);
@@ -307,6 +351,7 @@ export default function App() {
                   onOpenFoodLogger={handleOpenFoodLogger}
                   onOpenRecipeAssistant={() => setIsRecipeAssistantOpen(true)}
                   onUpdateProfile={handleUpdateProfile}
+                  onOpenCoach={() => setIsCoachOpen(true)}
                 />
               )}
 
@@ -373,6 +418,103 @@ export default function App() {
             onClose={() => setIsRecipeAssistantOpen(false)}
           />
         )}
+
+        {/* IA Nutri-Coach Drawer Overlay */}
+        <AnimatePresence>
+          {isCoachOpen && profile && (
+            <>
+              {/* Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsCoachOpen(false)}
+                className="absolute inset-0 bg-black/65 z-50 backdrop-blur-sm"
+              />
+
+              {/* Slide up Drawer */}
+              <motion.div
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 25, stiffness: 220 }}
+                className="absolute bottom-0 left-0 right-0 h-[80%] bg-[#0d0e15] border-t border-white/10 rounded-t-[32px] z-50 flex flex-col overflow-hidden shadow-2xl"
+              >
+                {/* Header */}
+                <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between shrink-0 bg-white/[0.01]">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-400">
+                      <MessageSquare className="h-4.5 w-4.5" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black text-white tracking-tight uppercase tracking-wide flex items-center gap-1.5">
+                        Nutri-Coach IA
+                        <Sparkles className="h-3 w-3 text-emerald-400 fill-emerald-400/10" />
+                      </h3>
+                      <p className="text-[9px] text-white/40">Resuelve dudas sobre alimentación y macros</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsCoachOpen(false)}
+                    className="w-8 h-8 rounded-full bg-white/5 border border-white/5 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {/* Chat Messages scroll area */}
+                <div className="flex-1 overflow-y-auto no-scrollbar p-5 space-y-4">
+                  {coachChatHistory.map((msg, index) => (
+                    <div
+                      key={index}
+                      className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${
+                          msg.sender === "user"
+                            ? "bg-emerald-500 text-black font-semibold rounded-tr-none"
+                            : "bg-white/5 text-white/80 rounded-tl-none border border-white/5"
+                        }`}
+                      >
+                        {msg.text}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {isCoachTyping && (
+                    <div className="flex justify-start">
+                      <div className="bg-white/5 border border-white/5 text-white/40 rounded-2xl rounded-tl-none px-3.5 py-3 text-[10px] font-bold flex items-center gap-2 animate-pulse">
+                        <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                        Escribiendo respuesta...
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Chat Input panel */}
+                <div className="p-4 border-t border-white/5 bg-white/[0.01] shrink-0 flex gap-2 items-center">
+                  <input
+                    type="text"
+                    placeholder="Ej: ¿El arroz blanco de noche es malo?"
+                    value={coachMessage}
+                    onChange={(e) => setCoachMessage(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSendCoachMessage()}
+                    className="flex-1 p-3 bg-white/5 border border-white/10 rounded-2xl text-xs text-white placeholder-white/20 focus:outline-none focus:border-emerald-500/40 focus:bg-white/[0.07] transition"
+                  />
+                  <button
+                    onClick={handleSendCoachMessage}
+                    disabled={!coachMessage.trim() || isCoachTyping}
+                    className="w-10 h-10 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-30 flex items-center justify-center text-black font-black transition cursor-pointer border-none shadow-md"
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
 
         {/* Bottom Tab Navigation Bar */}
         {user && profile && (
