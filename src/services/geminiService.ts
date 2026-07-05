@@ -702,4 +702,24 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   return await callGeminiAPI(apiKey, prompt);
 }
 
+// 10. Estimate common visual serving sizes for a food item
+export async function getVisualServingSizesByIA(
+  apiKey: string,
+  foodName: string
+): Promise<any> {
+  const prompt = `Actúas como un experto en nutrición y medición visual de porciones. Para el alimento "${foodName}", determina las formas y medidas caseras/visuales más comunes en las que la gente suele consumirlo al ojo (ej: cucharadas, tazas, unidades, vasos, puñados) y estima el peso aproximado en gramos o mililitros para cada una.
+  
+Sé extremadamente conciso. Tu respuesta debe ser estrictamente en formato JSON con la siguiente estructura:
+{
+  "unitType": "g" | "ml",
+  "suggestions": [
+    { "label": "1 cucharada sopera", "value": 15 },
+    { "label": "1 cucharadita", "value": 5 },
+    { "label": "1 taza colmada", "value": 150 }
+  ]
+}`;
+
+  return await callGeminiAPI(apiKey, prompt);
+}
+
 

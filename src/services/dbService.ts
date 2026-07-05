@@ -8,10 +8,12 @@ import {
   query, 
   orderBy, 
   writeBatch,
-  serverTimestamp
+  serverTimestamp,
+  updateDoc,
+  increment
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { UserProfile, LoggedMeal, WaterLog, WorkoutSession, CustomFood } from "../types";
+import { UserProfile, LoggedMeal, WaterLog, WorkoutSession, CustomFood, BarcodeCorrection } from "../types";
 
 // User Profile Operations
 export const getUserProfile = async (userId: string): Promise<UserProfile | null> => {
@@ -328,5 +330,55 @@ export const deleteCustomFood = async (userId: string, foodId: string): Promise<
   } catch (error) {
     console.error("Error deleting custom food:", error);
     throw error;
+  }
+};
+
+// Community Barcode Corrections Operations
+export const getBarcodeCorrection = async (barcode: string): Promise<BarcodeCorrection | null> => {
+  if (!barcode || barcode.trim() === "") return null;
+  try {
+    const docRef = doc(db, "barcodes", barcode);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data() as BarcodeCorrection;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error getting barcode correction:", error);
+    return null;
+  }
+};
+
+export const saveBarcodeCorrection = async (
+  barcode: string,
+  data: Omit<BarcodeCorrection, "yesVotes" | "noVotes" | "updatedAt">
+): Promise<void> => {
+  if (!barcode || barcode.trim() === "") return;
+  try {
+    const docRef = doc(db, "barcodes", barcode);
+    await setDoc(docRef, {
+      ...data,
+      barcode,
+      yesVotes: 1, // Start with 1 vote from creator
+      noVotes: 0,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+  } catch (error) {
+    console.error("Error saving barcode correction:", error);
+    throw error;
+  }
+};
+
+export const voteBarcodeCorrection = async (barcode: string, approved: boolean): Promise<void> => {
+  if (!barcode || barcode.trim() === "") return;
+  try {
+    const docRef = doc(db, "barcodes", barcode);
+    await updateDoc(docRef, {
+      yesVotes: approved ? increment(1) : increment(0),
+      noVotes: !approved ? increment(1) : increment(0),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Error voting on barcode correction:", error);
   }
 };

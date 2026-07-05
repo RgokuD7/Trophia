@@ -170,3 +170,15 @@ export interface CustomFood {
   category?: "dish" | "product" | "recipe";
   createdAt: string;
 }
+
+export interface BarcodeCorrection {
+  barcode: string;
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  yesVotes: number;
+  noVotes: number;
+  updatedAt?: any;
+}

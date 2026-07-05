@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { Search, Camera, Plus, History, Trash, AlertCircle, Check, X, RefreshCw, Star, Barcode, Sparkles } from "lucide-react";
-import { LoggedMeal, FoodItem, MealType } from "../types";
+import { Search, Camera, Plus, History, Trash, AlertCircle, Check, X, RefreshCw, Star, Barcode, Sparkles, HelpCircle } from "lucide-react";
+import { LoggedMeal, FoodItem, MealType, BarcodeCorrection } from "../types";
 import { GLOBAL_FOODS_DB } from "../utils/fitnessUtils";
-import { analyzeFoodByIA, estimateMacrosFromDescription } from "../services/geminiService";
+import { analyzeFoodByIA, estimateMacrosFromDescription, getVisualServingSizesByIA } from "../services/geminiService";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { searchAllFoods, getProductByBarcode } from "../services/foodDatabaseService";
 import BarcodeScannerModal from "./BarcodeScannerModal";
+import { getBarcodeCorrection, saveBarcodeCorrection, voteBarcodeCorrection } from "../services/dbService";
 
 interface FoodLoggerProps {
   apiKey?: string;
@@ -138,6 +139,24 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
   const [isEstimating, setIsEstimating] = useState(false);
   const [iaEstimationError, setIaEstimationError] = useState<string | null>(null);
 
+  // Community correction states
+  const [communityCorrection, setCommunityCorrection] = useState<BarcodeCorrection | null>(null);
+  const [showCommunityPrompt, setShowCommunityPrompt] = useState(false);
+  const [isCorrectingBarcode, setIsCorrectingBarcode] = useState(false);
+  const [showBarcodeHelp, setShowBarcodeHelp] = useState(false);
+  const [barcodeSaveSuccess, setBarcodeSaveSuccess] = useState(false);
+
+  const [correctedCalories, setCorrectedCalories] = useState<number | "">("");
+  const [correctedProtein, setCorrectedProtein] = useState<number | "">("");
+  const [correctedCarbs, setCorrectedCarbs] = useState<number | "">("");
+  const [correctedFat, setCorrectedFat] = useState<number | "">("");
+
+  // IA visual portions states
+  const [visualPortions, setVisualPortions] = useState<{ label: string; value: number }[]>([]);
+  const [isLoadingPortions, setIsLoadingPortions] = useState(false);
+  const [portionsError, setPortionsError] = useState<string | null>(null);
+  const [showPortionsInfo, setShowPortionsInfo] = useState(false);
+
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
 
   // Search Results
@@ -219,6 +238,16 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
 
   const handleSelectFood = (food: FoodItem) => {
     setSelectedFood(food);
+    
+    // Reset community correction and portion assistant states
+    setCommunityCorrection(null);
+    setShowCommunityPrompt(false);
+    setIsCorrectingBarcode(false);
+    setBarcodeSaveSuccess(false);
+    setVisualPortions([]);
+    setShowPortionsInfo(false);
+    setPortionsError(null);
+
     const info = getDefaultServingInfo(food.name, food.servingSize);
     setPortionUnit(info.defaultUnit);
     setUnitWeight(info.unitWeight);
@@ -236,6 +265,19 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
     setCustomProtein(Number((food.protein * scale).toFixed(1)));
     setCustomCarbs(Number((food.carbs * scale).toFixed(1)));
     setCustomFat(Number((food.fat * scale).toFixed(1)));
+
+    // Check Firestore for community correction if it has a barcode
+    if (food.barcode) {
+      getBarcodeCorrection(food.barcode).then((correction) => {
+        if (correction) {
+          const netVotes = (correction.yesVotes || 0) - (correction.noVotes || 0);
+          if (netVotes >= 0) {
+            setCommunityCorrection(correction);
+            setShowCommunityPrompt(true);
+          }
+        }
+      }).catch((err) => console.error("Error checking barcode correction:", err));
+    }
   };
 
   const updatePortion = (val: number, unit = portionUnit) => {
@@ -320,6 +362,96 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
       setIaEstimationError(`Error al estimar macros con IA: ${err.message || "Fallo de conexión"}`);
     } finally {
       setIsEstimating(false);
+    }
+  };
+
+  const handleAcceptCommunityCorrection = async () => {
+    if (!communityCorrection || !selectedFood?.barcode) return;
+    setShowCommunityPrompt(false);
+    
+    const scale = portionUnit === "unit" ? unitWeight / 100 : portionValue / 100;
+    setCustomCalories(Math.round(communityCorrection.calories * scale));
+    setCustomProtein(Number((communityCorrection.protein * scale).toFixed(1)));
+    setCustomCarbs(Number((communityCorrection.carbs * scale).toFixed(1)));
+    setCustomFat(Number((communityCorrection.fat * scale).toFixed(1)));
+    
+    setSelectedFood(prev => prev ? {
+      ...prev,
+      calories: communityCorrection.calories,
+      protein: communityCorrection.protein,
+      carbs: communityCorrection.carbs,
+      fat: communityCorrection.fat
+    } : null);
+
+    voteBarcodeCorrection(selectedFood.barcode, true).catch(err => console.error(err));
+  };
+
+  const handleRejectCommunityCorrection = () => {
+    if (!selectedFood?.barcode) return;
+    setShowCommunityPrompt(false);
+    voteBarcodeCorrection(selectedFood.barcode, false).catch(err => console.error(err));
+  };
+
+  const handleSaveBarcodeCorrection = async () => {
+    if (!selectedFood?.barcode || !customName) return;
+    setIsCorrectingBarcode(true);
+    setBarcodeSaveSuccess(false);
+
+    try {
+      const barcode = selectedFood.barcode;
+      const baseCal = Number(correctedCalories);
+      const baseProt = Number(correctedProtein) || 0;
+      const baseCarb = Number(correctedCarbs) || 0;
+      const baseFat = Number(correctedFat) || 0;
+
+      await saveBarcodeCorrection(barcode, {
+        barcode,
+        name: customName,
+        calories: baseCal,
+        protein: baseProt,
+        carbs: baseCarb,
+        fat: baseFat
+      });
+
+      const scale = portionUnit === "unit" ? unitWeight / 100 : portionValue / 100;
+      setCustomCalories(Math.round(baseCal * scale));
+      setCustomProtein(Number((baseProt * scale).toFixed(1)));
+      setCustomCarbs(Number((baseCarb * scale).toFixed(1)));
+      setCustomFat(Number((baseFat * scale).toFixed(1)));
+
+      setSelectedFood(prev => prev ? {
+        ...prev,
+        calories: baseCal,
+        protein: baseProt,
+        carbs: baseCarb,
+        fat: baseFat
+      } : null);
+
+      setBarcodeSaveSuccess(true);
+      setIsCorrectingBarcode(false);
+    } catch (err) {
+      console.error(err);
+      setIsCorrectingBarcode(false);
+    }
+  };
+
+  const handleLoadVisualPortions = async () => {
+    if (!selectedFood) return;
+    setIsLoadingPortions(true);
+    setPortionsError(null);
+    try {
+      const data = await getVisualServingSizesByIA(apiKey || "", selectedFood.name);
+      if (data && Array.isArray(data.suggestions)) {
+        setVisualPortions(data.suggestions);
+        setShowPortionsInfo(true);
+      } else {
+        setPortionsError("No se encontraron porciones comunes para este alimento.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setPortionsError("Error al obtener porciones por IA.");
+    } finally {
+      setIsLoadingPortions(false);
     }
   };
 
@@ -825,6 +957,40 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                 ← Volver a la búsqueda
               </button>
 
+              {/* Community Correction Banner */}
+              {showCommunityPrompt && communityCorrection && (
+                <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-2xl space-y-2.5 animate-fadeIn">
+                  <div className="flex gap-2 items-start">
+                    <Sparkles className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <span className="block text-[10.5px] font-black text-amber-400 uppercase tracking-wider leading-none">Macros de la Comunidad</span>
+                      <p className="text-[10px] text-gray-700 dark:text-white/60 leading-normal">
+                        Nuestra comunidad ha sugerido una corrección para este código de barras:
+                        <span className="block font-mono mt-1 text-[9px] bg-white/5 p-1 rounded border border-white/5">
+                          Cal: {communityCorrection.calories} | P: {communityCorrection.protein}g | C: {communityCorrection.carbs}g | G: {communityCorrection.fat}g
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 border-t border-amber-500/10 pt-2">
+                    <button
+                      type="button"
+                      onClick={handleAcceptCommunityCorrection}
+                      className="flex-1 py-1 bg-amber-500 text-black text-[9.5px] font-black rounded-lg transition hover:bg-amber-450 cursor-pointer"
+                    >
+                      Sí, usar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRejectCommunityCorrection}
+                      className="flex-1 py-1 bg-white/5 border border-white/10 text-white/50 text-[9.5px] font-bold rounded-lg transition hover:bg-white/10 cursor-pointer"
+                    >
+                      No, ignorar
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Food Info Header Card */}
               <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-2xl border border-gray-200 dark:border-white/10 flex gap-4 items-center relative overflow-hidden">
                 {selectedFood.image && (
@@ -988,7 +1154,24 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                   </div>
 
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-gray-500 dark:text-white/40 uppercase tracking-wider">Cantidad</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-gray-500 dark:text-white/40 uppercase tracking-wider">Cantidad</span>
+                      <button
+                        type="button"
+                        onClick={handleLoadVisualPortions}
+                        disabled={isLoadingPortions}
+                        className="flex items-center gap-0.5 text-[9px] text-emerald-400 hover:text-emerald-300 font-black bg-transparent border-0 cursor-pointer transition shrink-0"
+                      >
+                        {isLoadingPortions ? (
+                          <RefreshCw className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <>
+                            <HelpCircle className="h-3 w-3" />
+                            ¿Medir al ojo?
+                          </>
+                        )}
+                      </button>
+                    </div>
                     <div className="flex items-center gap-1.5">
                       <Input
                         type="number"
@@ -1002,6 +1185,44 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                       </span>
                     </div>
                   </div>
+
+                  {/* IA Visual Portions scroll */}
+                  {showPortionsInfo && visualPortions.length > 0 && (
+                    <div className="bg-white/[0.02] border border-white/5 p-2.5 rounded-xl space-y-1.5 animate-fadeIn">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Equivalencias Visuales (IA)</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowPortionsInfo(false)}
+                          className="text-white/40 hover:text-white transition cursor-pointer"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+                        {visualPortions.map((sug, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              const isMl = selectedFood.servingSize?.toLowerCase().includes("ml") || selectedFood.name.toLowerCase().includes("leche") || selectedFood.name.toLowerCase().includes("bebida");
+                              setPortionUnit(isMl ? "ml" : "g");
+                              updatePortion(sug.value, isMl ? "ml" : "g");
+                            }}
+                            className="px-2 py-0.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 rounded-lg text-[9px] font-bold transition cursor-pointer whitespace-nowrap shrink-0 animate-fadeIn"
+                          >
+                            {sug.label} ({sug.value}{selectedFood.servingSize?.toLowerCase().includes("ml") || selectedFood.name.toLowerCase().includes("leche") ? "ml" : "g"})
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {portionsError && (
+                    <span className="block text-[8.5px] text-rose-400 font-bold mt-1">
+                      ⚠️ {portionsError}
+                    </span>
+                  )}
 
                   {/* Range Slider */}
                   <input
@@ -1063,8 +1284,9 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                         value={customCalories}
                         onChange={(e) => setCustomCalories(e.target.value === "" ? "" : Number(e.target.value))}
                         placeholder="kcal"
-                        className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-emerald-600 dark:text-emerald-400 font-mono font-bold px-1 focus:border-emerald-500/40"
+                        className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-emerald-600 dark:text-emerald-400 font-mono font-bold px-1 focus:border-emerald-500/40 disabled:opacity-75"
                         size="sm"
+                        disabled={selectedFood.name !== ""}
                       />
                     </div>
                     <div>
@@ -1074,8 +1296,9 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                         value={customProtein}
                         onChange={(e) => setCustomProtein(e.target.value === "" ? "" : Number(e.target.value))}
                         placeholder="g"
-                        className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40"
+                        className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-75"
                         size="sm"
+                        disabled={selectedFood.name !== ""}
                       />
                     </div>
                     <div>
@@ -1085,8 +1308,9 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                         value={customCarbs}
                         onChange={(e) => setCustomCarbs(e.target.value === "" ? "" : Number(e.target.value))}
                         placeholder="g"
-                        className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40"
+                        className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-75"
                         size="sm"
+                        disabled={selectedFood.name !== ""}
                       />
                     </div>
                     <div>
@@ -1096,11 +1320,116 @@ export default function FoodLogger({ apiKey, usdaApiKey, onAddMeal, loggedMeals,
                         value={customFat}
                         onChange={(e) => setCustomFat(e.target.value === "" ? "" : Number(e.target.value))}
                         placeholder="g"
-                        className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40"
+                        className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-75"
                         size="sm"
+                        disabled={selectedFood.name !== ""}
                       />
                     </div>
                   </div>
+
+                  {/* Community Correction workflow for barcode foods */}
+                  {selectedFood.name !== "" && selectedFood.barcode && (
+                    <div className="pt-1 border-t border-gray-200 dark:border-white/5">
+                      {!isCorrectingBarcode && !barcodeSaveSuccess ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCorrectedCalories(selectedFood.calories);
+                            setCorrectedProtein(selectedFood.protein);
+                            setCorrectedCarbs(selectedFood.carbs);
+                            setCorrectedFat(selectedFood.fat);
+                            setIsCorrectingBarcode(true);
+                          }}
+                          className="text-[10px] text-amber-400 hover:text-amber-300 font-black transition bg-transparent border-0 cursor-pointer flex items-center gap-0.5"
+                        >
+                          ¿No son correctos los macros del empaque? Corregir
+                        </button>
+                      ) : isCorrectingBarcode ? (
+                        <div className="bg-white/[0.02] border border-white/5 p-3 rounded-xl space-y-2.5 animate-fadeIn mt-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                              Corregir Tabla Nutricional
+                              <button
+                                type="button"
+                                onClick={() => setShowBarcodeHelp(!showBarcodeHelp)}
+                                className="text-white/40 hover:text-white transition cursor-pointer bg-transparent border-0"
+                              >
+                                <HelpCircle className="h-3 w-3.5" />
+                              </button>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setIsCorrectingBarcode(false)}
+                              className="text-white/40 hover:text-white transition cursor-pointer bg-transparent border-0"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+
+                          {showBarcodeHelp && (
+                            <div className="bg-white/5 p-2 rounded-lg border border-white/5 text-[9px] text-white/60 leading-normal space-y-1">
+                              <p className="font-bold text-white">💡 ¿Cómo buscar los macros?</p>
+                              <p>Revisa la tabla nutricional al reverso del empaque físico. Ingresa los valores expresados **por cada 100g** (o por porción base de 100g/ml) para que la app pueda calcular tus porciones de forma exacta en el futuro.</p>
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-4 gap-1.5">
+                            <div>
+                              <label className="block text-[8px] text-white/40 text-center mb-0.5">Calorías</label>
+                              <input
+                                type="number"
+                                value={correctedCalories}
+                                onChange={(e) => setCorrectedCalories(e.target.value === "" ? "" : Number(e.target.value))}
+                                className="w-full bg-[#0c0d15] border border-white/10 rounded-lg text-center text-xs text-white font-mono h-7 px-1 focus:border-amber-500/40 focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[8px] text-white/40 text-center mb-0.5">Prot (g)</label>
+                              <input
+                                type="number"
+                                value={correctedProtein}
+                                onChange={(e) => setCorrectedProtein(e.target.value === "" ? "" : Number(e.target.value))}
+                                className="w-full bg-[#0c0d15] border border-white/10 rounded-lg text-center text-xs text-white font-mono h-7 px-1 focus:border-amber-500/40 focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[8px] text-white/40 text-center mb-0.5">Carb (g)</label>
+                              <input
+                                type="number"
+                                value={correctedCarbs}
+                                onChange={(e) => setCorrectedCarbs(e.target.value === "" ? "" : Number(e.target.value))}
+                                className="w-full bg-[#0c0d15] border border-white/10 rounded-lg text-center text-xs text-white font-mono h-7 px-1 focus:border-amber-500/40 focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[8px] text-white/40 text-center mb-0.5">Gras (g)</label>
+                              <input
+                                type="number"
+                                value={correctedFat}
+                                onChange={(e) => setCorrectedFat(e.target.value === "" ? "" : Number(e.target.value))}
+                                className="w-full bg-[#0c0d15] border border-white/10 rounded-lg text-center text-xs text-white font-mono h-7 px-1 focus:border-amber-500/40 focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleSaveBarcodeCorrection}
+                            className="w-full py-1.5 bg-amber-500 hover:bg-amber-600 text-black text-[10px] font-black rounded-lg transition cursor-pointer"
+                          >
+                            Guardar y Enviar Corrección
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="bg-emerald-500/10 border border-emerald-500/20 p-2 rounded-xl text-center mt-1 animate-fadeIn">
+                          <span className="text-[9.5px] text-emerald-400 font-bold flex items-center justify-center gap-1">
+                            <Check className="h-3 w-3" />
+                            ¡Macros corregidos y guardados en la comunidad!
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {selectedFood.name === "" && (
                     <div className="mt-3 pt-3 border-t border-gray-150 dark:border-white/5">
