@@ -118,6 +118,7 @@ export async function analyzeFatByIA(
   input: {
     frontImage?: string | null;
     sideImage?: string | null;
+    backImage?: string | null;
     legsImage?: string | null;
     faceImage?: string | null;
     sex: string;
@@ -135,6 +136,7 @@ export async function analyzeFatByIA(
   const {
     frontImage,
     sideImage,
+    backImage,
     legsImage,
     faceImage,
     sex,
@@ -152,6 +154,7 @@ export async function analyzeFatByIA(
   const images: GeminiImage[] = [];
   if (frontImage) images.push(cleanBase64Image(frontImage));
   if (sideImage) images.push(cleanBase64Image(sideImage));
+  if (backImage) images.push(cleanBase64Image(backImage));
   if (legsImage) images.push(cleanBase64Image(legsImage));
   if (faceImage) images.push(cleanBase64Image(faceImage));
 

@@ -293,8 +293,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   const [iaEstimatedFat, setIaEstimatedFat] = useState<number | undefined>(undefined);
   const [frontPhoto, setFrontPhoto] = useState<string | null>(null);
   const [sidePhoto, setSidePhoto] = useState<string | null>(null);
-  const [legsPhoto, setLegsPhoto] = useState<string | null>(null);
-  const [facePhoto, setFacePhoto] = useState<string | null>(null);
+  const [backPhoto, setBackPhoto] = useState<string | null>(null);
   
   // General bodyFat output that gets saved
   const [bodyFat, setBodyFat] = useState<number | undefined>(undefined);
@@ -543,7 +542,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   // Helper variables for Step 2 Dynamic Buttons
   const hasNavyMeasurements = neck !== "" && waist !== "" && (sex === "male" || hip !== "");
   const hasCaliperMeasurements = caliper1 !== "" && caliper2 !== "" && caliper3 !== "";
-  const hasUploadedPhotos = !!(frontPhoto || sidePhoto || legsPhoto || facePhoto);
+  const hasUploadedPhotos = !!(frontPhoto || sidePhoto || backPhoto);
   const hasEstimationData = hasNavyMeasurements || hasCaliperMeasurements || hasUploadedPhotos;
 
   // AI Goal Recommendation states and effects
@@ -703,7 +702,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
     }
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, slot: "front" | "side" | "legs" | "face") => {
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, slot: "front" | "side" | "back") => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -712,14 +711,13 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
       const dataUrl = reader.result as string;
       if (slot === "front") setFrontPhoto(dataUrl);
       else if (slot === "side") setSidePhoto(dataUrl);
-      else if (slot === "legs") setLegsPhoto(dataUrl);
-      else if (slot === "face") setFacePhoto(dataUrl);
+      else if (slot === "back") setBackPhoto(dataUrl);
     };
     reader.readAsDataURL(file);
   };
 
   const handleAnalyzePhoto = async (): Promise<number | undefined> => {
-    if (!frontPhoto && !sidePhoto && !legsPhoto && !facePhoto) return undefined;
+    if (!frontPhoto && !sidePhoto && !backPhoto) return undefined;
     setIsAnalyzingFat(true);
     setAnalysisResult(null);
     setAnalysisError(null);
@@ -728,8 +726,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
       const data = await analyzeFatByIA(apiKey, { 
         frontImage: frontPhoto || undefined,
         sideImage: sidePhoto || undefined,
-        legsImage: legsPhoto || undefined,
-        faceImage: facePhoto || undefined,
+        backImage: backPhoto || undefined,
         sex,
         age,
         weight,
@@ -1782,10 +1779,10 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                         </div>
 
                         {/* Image slots */}
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-3 gap-2">
                           {/* Front Photo Slot */}
-                          <div className="bg-black/20 border border-white/5 rounded-2xl p-2 flex flex-col space-y-1.5 items-center justify-between text-center min-h-[135px]">
-                            <span className="text-[9px] font-bold text-white/70 uppercase tracking-wider flex items-center gap-1">
+                          <div className="bg-black/20 border border-white/5 rounded-2xl p-2 flex flex-col space-y-1.5 items-center justify-between text-center min-h-[140px] text-[8px]">
+                            <span className="font-bold text-white/70 uppercase tracking-wider flex items-center gap-0.5">
                               <span className="w-1 h-1 rounded-full bg-emerald-400"></span> Frente *
                             </span>
                             {frontPhoto ? (
@@ -1794,18 +1791,18 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                                 <button type="button" onClick={() => setFrontPhoto(null)} className="mt-1 text-[8px] text-rose-400 hover:underline font-bold">Eliminar</button>
                               </div>
                             ) : (
-                              <div className="flex-1 w-full flex flex-col items-center justify-between bg-black/40 p-1.5 rounded-xl border border-dashed border-white/10 min-h-[95px]">
+                              <div className="flex-1 w-full flex flex-col items-center justify-between bg-black/40 p-1 rounded-xl border border-dashed border-white/10 min-h-[95px]">
                                 <img src={poseFront} alt="Pose Frente" className="h-9 w-full object-contain opacity-25 grayscale mb-1" />
-                                <div className="flex gap-1 w-full mt-auto">
+                                <div className="flex flex-col gap-1 w-full mt-auto">
                                   <button
                                     type="button"
                                     onClick={() => setActiveCapturePose("front")}
-                                    className="flex-1 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 text-[8px] font-bold rounded-lg flex items-center justify-center gap-0.5 cursor-pointer border-none"
+                                    className="w-full py-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 font-bold rounded flex items-center justify-center gap-0.5 cursor-pointer border-none text-[8px]"
                                   >
                                     <Camera className="h-2.5 w-2.5" />
                                     Cámara
                                   </button>
-                                  <label className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 border border-white/5 text-white/60 text-[8px] font-bold rounded-lg flex items-center justify-center gap-0.5 cursor-pointer">
+                                  <label className="w-full py-1 bg-white/5 hover:bg-white/10 border border-white/5 text-white/60 font-bold rounded flex items-center justify-center gap-0.5 cursor-pointer text-[8px]">
                                     <span>Subir</span>
                                     <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, "front")} className="hidden" />
                                   </label>
@@ -1814,9 +1811,9 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                             )}
                           </div>
 
-                           {/* Side Photo Slot */}
-                          <div className="bg-black/20 border border-white/5 rounded-2xl p-2 flex flex-col space-y-1.5 items-center justify-between text-center min-h-[135px]">
-                            <span className="text-[9px] font-bold text-white/70 uppercase tracking-wider flex items-center gap-1">
+                          {/* Side Photo Slot */}
+                          <div className="bg-black/20 border border-white/5 rounded-2xl p-2 flex flex-col space-y-1.5 items-center justify-between text-center min-h-[140px] text-[8px]">
+                            <span className="font-bold text-white/70 uppercase tracking-wider flex items-center gap-0.5">
                               <span className="w-1 h-1 rounded-full bg-emerald-400"></span> Perfil *
                             </span>
                             {sidePhoto ? (
@@ -1825,18 +1822,18 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                                 <button type="button" onClick={() => setSidePhoto(null)} className="mt-1 text-[8px] text-rose-400 hover:underline font-bold">Eliminar</button>
                               </div>
                             ) : (
-                              <div className="flex-1 w-full flex flex-col items-center justify-between bg-black/40 p-1.5 rounded-xl border border-dashed border-white/10 min-h-[95px]">
+                              <div className="flex-1 w-full flex flex-col items-center justify-between bg-black/40 p-1 rounded-xl border border-dashed border-white/10 min-h-[95px]">
                                 <img src={poseSide} alt="Pose Perfil" className="h-9 w-full object-contain opacity-25 grayscale mb-1" />
-                                <div className="flex gap-1 w-full mt-auto">
+                                <div className="flex flex-col gap-1 w-full mt-auto">
                                   <button
                                     type="button"
                                     onClick={() => setActiveCapturePose("side")}
-                                    className="flex-1 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 text-[8px] font-bold rounded-lg flex items-center justify-center gap-0.5 cursor-pointer border-none"
+                                    className="w-full py-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 font-bold rounded flex items-center justify-center gap-0.5 cursor-pointer border-none text-[8px]"
                                   >
                                     <Camera className="h-2.5 w-2.5" />
                                     Cámara
                                   </button>
-                                  <label className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 border border-white/5 text-white/60 text-[8px] font-bold rounded-lg flex items-center justify-center gap-0.5 cursor-pointer">
+                                  <label className="w-full py-1 bg-white/5 hover:bg-white/10 border border-white/5 text-white/60 font-bold rounded flex items-center justify-center gap-0.5 cursor-pointer text-[8px]">
                                     <span>Subir</span>
                                     <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, "side")} className="hidden" />
                                   </label>
@@ -1845,58 +1842,31 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                             )}
                           </div>
 
-                          {/* Legs Photo Slot */}
-                          <div className="bg-black/20 border border-white/5 rounded-2xl p-2 flex flex-col space-y-1.5 items-center justify-between text-center min-h-[135px]">
-                            <span className="text-[9px] font-bold text-white/40 uppercase tracking-wider">Piernas</span>
-                            {legsPhoto ? (
+                          {/* Back Photo Slot */}
+                          <div className="bg-black/20 border border-white/5 rounded-2xl p-2 flex flex-col space-y-1.5 items-center justify-between text-center min-h-[140px] text-[8px]">
+                            <span className="font-bold text-white/70 uppercase tracking-wider flex items-center gap-0.5">
+                              <span className="w-1 h-1 rounded-full bg-emerald-400"></span> Espalda *
+                            </span>
+                            {backPhoto ? (
                               <div className="relative w-full flex-1 flex flex-col justify-center items-center">
-                                <img src={legsPhoto} alt="Piernas" className="h-16 w-full object-contain rounded-xl border border-white/10" referrerPolicy="no-referrer" />
-                                <button type="button" onClick={() => setLegsPhoto(null)} className="mt-1 text-[8px] text-rose-400 hover:underline font-bold">Eliminar</button>
+                                <img src={backPhoto} alt="Espalda" className="h-16 w-full object-contain rounded-xl border border-white/10" referrerPolicy="no-referrer" />
+                                <button type="button" onClick={() => setBackPhoto(null)} className="mt-1 text-[8px] text-rose-400 hover:underline font-bold">Eliminar</button>
                               </div>
                             ) : (
-                              <div className="flex-1 w-full flex flex-col items-center justify-between bg-black/30 p-1.5 rounded-xl border border-dashed border-white/5 min-h-[95px]">
-                                <img src={poseLegs} alt="Pose Piernas" className="h-9 w-full object-contain opacity-25 grayscale mb-1" />
-                                <div className="flex gap-1 w-full mt-auto">
+                              <div className="flex-1 w-full flex flex-col items-center justify-between bg-black/40 p-1 rounded-xl border border-dashed border-white/10 min-h-[95px]">
+                                <img src={poseFront} alt="Pose Espalda" className="h-9 w-full object-contain opacity-25 grayscale mb-1 scale-x-[-1]" />
+                                <div className="flex flex-col gap-1 w-full mt-auto">
                                   <button
                                     type="button"
-                                    onClick={() => setActiveCapturePose("legs")}
-                                    className="flex-1 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 text-[8px] font-bold rounded-lg flex items-center justify-center gap-0.5 cursor-pointer border-none"
+                                    onClick={() => setActiveCapturePose("back")}
+                                    className="w-full py-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 font-bold rounded flex items-center justify-center gap-0.5 cursor-pointer border-none text-[8px]"
                                   >
                                     <Camera className="h-2.5 w-2.5" />
                                     Cámara
                                   </button>
-                                  <label className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 border border-white/5 text-white/40 text-[8px] font-bold rounded-lg flex items-center justify-center gap-0.5 cursor-pointer">
+                                  <label className="w-full py-1 bg-white/5 hover:bg-white/10 border border-white/5 text-white/60 font-bold rounded flex items-center justify-center gap-0.5 cursor-pointer text-[8px]">
                                     <span>Subir</span>
-                                    <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, "legs")} className="hidden" />
-                                  </label>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Face Photo Slot */}
-                          <div className="bg-black/20 border border-white/5 rounded-2xl p-2 flex flex-col space-y-1.5 items-center justify-between text-center min-h-[135px]">
-                            <span className="text-[9px] font-bold text-white/40 uppercase tracking-wider">Cara</span>
-                            {facePhoto ? (
-                              <div className="relative w-full flex-1 flex flex-col justify-center items-center">
-                                <img src={facePhoto} alt="Cara" className="h-16 w-full object-contain rounded-xl border border-white/10" referrerPolicy="no-referrer" />
-                                <button type="button" onClick={() => setFacePhoto(null)} className="mt-1 text-[8px] text-rose-400 hover:underline font-bold">Eliminar</button>
-                              </div>
-                            ) : (
-                              <div className="flex-1 w-full flex flex-col items-center justify-between bg-black/30 p-1.5 rounded-xl border border-dashed border-white/5 min-h-[95px]">
-                                <img src={poseFace} alt="Pose Cara" className="h-9 w-full object-contain opacity-25 grayscale mb-1" />
-                                <div className="flex gap-1 w-full mt-auto">
-                                  <button
-                                    type="button"
-                                    onClick={() => setActiveCapturePose("face")}
-                                    className="flex-1 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 text-[8px] font-bold rounded-lg flex items-center justify-center gap-0.5 cursor-pointer border-none"
-                                  >
-                                    <Camera className="h-2.5 w-2.5" />
-                                    Cámara
-                                  </button>
-                                  <label className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 border border-white/5 text-white/40 text-[8px] font-bold rounded-lg flex items-center justify-center gap-0.5 cursor-pointer">
-                                    <span>Subir</span>
-                                    <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, "face")} className="hidden" />
+                                    <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, "back")} className="hidden" />
                                   </label>
                                 </div>
                               </div>
@@ -3166,8 +3136,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             onCapture={(base64Image) => {
               if (activeCapturePose === "front") setFrontPhoto(base64Image);
               else if (activeCapturePose === "side") setSidePhoto(base64Image);
-              else if (activeCapturePose === "legs") setLegsPhoto(base64Image);
-              else if (activeCapturePose === "face") setFacePhoto(base64Image);
+              else if (activeCapturePose === "back") setBackPhoto(base64Image);
             }}
           />
         )}

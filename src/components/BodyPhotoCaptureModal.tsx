@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Camera, X, RefreshCw, AlertCircle, FlipHorizontal } from "lucide-react";
+import { Camera, X, RefreshCw, AlertCircle, SwitchCamera } from "lucide-react";
 import silhouetteFront from "../assets/silhouette_front.jpg";
 import silhouetteSide from "../assets/silhouette_side.jpg";
 
 interface BodyPhotoCaptureModalProps {
   isOpen: boolean;
   onClose: () => void;
-  poseType: "front" | "side" | "legs" | "face";
+  poseType: "front" | "side" | "back";
   onCapture: (base64Image: string) => void;
 }
 
@@ -134,56 +134,65 @@ export default function BodyPhotoCaptureModal({
     switch (poseType) {
       case "front": return "Pose Frente (Frontal)";
       case "side": return "Pose Perfil (Lateral)";
-      case "legs": return "Pose Piernas";
-      case "face": return "Pose Rostro / Cara";
+      case "back": return "Pose Espalda (Posterior)";
       default: return "Foto Corporal";
     }
   };
 
   const getPoseDescription = () => {
     switch (poseType) {
-      case "front": return "Párate erguido de cara a la cámara. Separa tus brazos 15-30 grados (formando una A).";
-      case "side": return "Párate completamente de perfil a 90 grados. Brazos cruzados sobre el pecho para dejar libre el abdomen.";
-      case "legs": return "Toma de piernas completas para evaluar la distribución de grasa inferior.";
-      case "face": return "Encuadra tu rostro centrado dentro del óvalo guía.";
+      case "front": return "Frente: Párate erguido mirando directo. Separa los brazos del torso 15-30 grados (formando una A). No metas la panza.";
+      case "side": return "Perfil: De lado (perfil derecho). Brazos cruzados sobre el pecho o ligeramente adelantados para dejar libre el abdomen.";
+      case "back": return "Espalda: Igual que la frontal, pero de espaldas a la cámara. Permite evaluar flancos y espalda baja.";
       default: return "";
     }
   };
 
-  // Helper to render the custom transparent silhouette guide paths (improved tech-line guide)
+  // Helper to render the custom transparent silhouette guide paths
   const renderSilhouetteOverlay = () => {
-    if (poseType === "front" || poseType === "legs") {
+    if (poseType === "front") {
       return (
-        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none p-8">
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
           <img
             src={silhouetteFront}
-            alt="Guía Frontal"
-            className="w-full h-full object-contain opacity-40"
-            style={{ mixBlendMode: "screen" }}
+            alt="Guía Frente"
+            className="w-full h-full object-cover opacity-35"
+            style={{ 
+              mixBlendMode: "screen",
+              filter: "contrast(1.7) brightness(0.9)"
+            }}
           />
         </div>
       );
     }
     if (poseType === "side") {
       return (
-        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none p-8">
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
           <img
             src={silhouetteSide}
-            alt="Guía Lateral"
-            className="w-full h-full object-contain opacity-40"
-            style={{ mixBlendMode: "screen" }}
+            alt="Guía Perfil"
+            className="w-full h-full object-cover opacity-35"
+            style={{ 
+              mixBlendMode: "screen",
+              filter: "contrast(1.7) brightness(0.9)"
+            }}
           />
         </div>
       );
     }
-    if (poseType === "face") {
+    if (poseType === "back") {
       return (
-        <svg className="absolute w-[60%] h-[60%] text-emerald-400/50 pointer-events-none drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="1">
-          {/* Face oval guideline */}
-          <ellipse cx="50" cy="50" rx="28" ry="38" strokeDasharray="3 3" />
-          <line x1="50" y1="10" x2="50" y2="90" stroke="currentColor" strokeWidth="0.5" strokeDasharray="4 4" opacity="0.4" />
-          <line x1="20" y1="50" x2="80" y2="50" stroke="currentColor" strokeWidth="0.5" strokeDasharray="4 4" opacity="0.4" />
-        </svg>
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+          <img
+            src={silhouetteFront}
+            alt="Guía Espalda"
+            className="w-full h-full object-cover opacity-35 scale-x-[-1]"
+            style={{ 
+              mixBlendMode: "screen",
+              filter: "contrast(1.7) brightness(0.9)"
+            }}
+          />
+        </div>
       );
     }
     return null;
@@ -289,7 +298,7 @@ export default function BodyPhotoCaptureModal({
               className="p-2.5 bg-white/5 hover:bg-white/10 disabled:opacity-50 border border-white/5 rounded-2xl text-white/70 hover:text-white transition flex items-center justify-center cursor-pointer border-none"
               title="Cambiar Cámara"
             >
-              <FlipHorizontal className="h-4.5 w-4.5" />
+              <SwitchCamera className="h-4.5 w-4.5" />
             </button>
 
             {/* Shutter take capture button */}
