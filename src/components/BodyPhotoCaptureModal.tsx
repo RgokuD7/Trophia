@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Camera, X, RefreshCw, AlertCircle, CheckCircle, FlipHorizontal } from "lucide-react";
-import { Button } from "./ui/Button";
+import { Camera, X, RefreshCw, AlertCircle, FlipHorizontal } from "lucide-react";
 
 interface BodyPhotoCaptureModalProps {
   isOpen: boolean;
@@ -35,6 +34,18 @@ export default function BodyPhotoCaptureModal({
     };
   }, [isOpen, facingMode]);
 
+  // Keep srcObject synced with stream changes and when video element mounts in DOM
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+      
+      // Attempt to play explicitly (critical for iOS webviews/browsers)
+      videoRef.current.play().catch(err => {
+        console.warn("Explicit video play failed, waiting for autoplay:", err);
+      });
+    }
+  }, [stream, isCameraActive]);
+
   const startCamera = async () => {
     try {
       if (stream) {
@@ -52,9 +63,6 @@ export default function BodyPhotoCaptureModal({
       });
 
       setStream(mediaStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-      }
       setIsCameraActive(true);
     } catch (err: any) {
       console.error("Camera capture access failed:", err);
@@ -83,8 +91,8 @@ export default function BodyPhotoCaptureModal({
     const canvas = canvasRef.current;
     
     // Draw frame to canvas
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = video.videoWidth || 1080;
+    canvas.height = video.videoHeight || 1440;
     const ctx = canvas.getContext("2d");
     if (ctx) {
       // Mirror image if using front camera
@@ -140,44 +148,76 @@ export default function BodyPhotoCaptureModal({
     }
   };
 
-  // Helper to render the custom transparent silhouette guide paths
+  // Helper to render the custom transparent silhouette guide paths (improved tech-line guide)
   const renderSilhouetteOverlay = () => {
     if (poseType === "front") {
       return (
-        <svg className="absolute w-[80%] h-[85%] text-emerald-500/20 pointer-events-none drop-shadow-[0_0_15px_rgba(16,185,129,0.2)] animate-pulse" viewBox="0 0 100 150" fill="currentColor">
-          {/* Front body outline silhouette */}
-          <path d="M50 15c4.5 0 8-3.5 8-8s-3.5-8-8-8-8 3.5-8 8 3.5 8 8 8zm15 17c-2-3-6-4.5-11-5h-8c-5 .5-9 2-11 5-4.5 7-7.5 22-8.5 29-.5 4 1 6 3.5 5s4.5-3 5-7.5l2-16.5c.5-2 1.5-3.5 3-4 1.5-.5 3 .5 3 2.5v44c0 3 1.5 5.5 3.5 6s4.5-2 4.5-5V42c0-2.5 3.5-2.5 3.5 0v39.5c0 3 2.5 5 4.5 5s3.5-3 3.5-6V35c0-2 1.5-3 3-2.5 1.5.5 2.5 2 3 4l2 16.5c.5 4.5 2.5 8.5 5 7.5s4-1 3.5-5c-1-7-4-22-8.5-29z" />
-          {/* Alignment guide circles */}
-          <circle cx="50" cy="7" r="9" fill="none" stroke="currentColor" strokeWidth="0.5" strokeDasharray="2" />
-          <circle cx="50" cy="50" r="16" fill="none" stroke="currentColor" strokeWidth="0.5" strokeDasharray="2" />
+        <svg className="absolute w-[85%] h-[90%] text-emerald-400/50 pointer-events-none drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" viewBox="0 0 100 150" fill="none" stroke="currentColor" strokeWidth="1">
+          {/* Head & Neck */}
+          <ellipse cx="50" cy="20" rx="7.5" ry="9.5" />
+          <path d="M47.5 29.5 c0 3 5 3 5 0" />
+          {/* Torso Outline */}
+          <path d="M36 36 c3-1 8-2 14-2 s11 1 14 2 c4 2.5 5 7 5 11 c0 16-2 32-4 46 c-1 7-4.5 11-15 11 s-14-4-15-11 c-2-14-4-30-4-46 c0-4 1-8.5 5-11 Z" />
+          {/* Arms (A-Pose structure) */}
+          <path d="M33 37 c-3.5 9-7.5 21-10.5 33 c-1.5 5 1 7 3 4 c3-5.5 7.5-19 9.5-28.5" />
+          <path d="M67 37 c3.5 9 7.5 21 10.5 33 c1.5 5-1 7-3 4 c-3-5.5-7.5-19-9.5-28.5" />
+          {/* Legs */}
+          <path d="M39 104 c-1 12-2.5 26-3.5 41 c0 2 2.5 3 3.5 1 c2-12 3.5-26 3.5-41" />
+          <path d="M61 104 c1 12 2.5 26 3.5 41 c0 2-2.5 3-3.5 1 c-2-12-3.5-26-3.5-41" />
+          
+          {/* Scientific Overlay Grids */}
+          <line x1="50" y1="5" x2="50" y2="145" stroke="currentColor" strokeWidth="0.5" strokeDasharray="3 3" opacity="0.4" />
+          <line x1="15" y1="75" x2="85" y2="75" stroke="currentColor" strokeWidth="0.5" strokeDasharray="3 3" opacity="0.4" />
+          <circle cx="50" cy="75" r="2" fill="currentColor" opacity="0.6" />
+          {/* Frame brackets */}
+          <path d="M10 20 h6 M10 20 v6" strokeWidth="1.5" />
+          <path d="M90 20 h-6 M90 20 v6" strokeWidth="1.5" />
+          <path d="M10 130 h6 M10 130 v-6" strokeWidth="1.5" />
+          <path d="M90 130 h-6 M90 130 v-6" strokeWidth="1.5" />
         </svg>
       );
     }
     if (poseType === "side") {
       return (
-        <svg className="absolute w-[75%] h-[85%] text-emerald-500/20 pointer-events-none drop-shadow-[0_0_15px_rgba(16,185,129,0.2)] animate-pulse" viewBox="0 0 100 150" fill="currentColor">
-          {/* Side profile silhouette */}
-          <path d="M48 16c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm-5 13c3-3 8-4.5 13-4h2c4 1 6 3 6 7 0 5-2.5 15-4.5 25-.5 4-3 5-5 4s-3-3.5-3.5-7.5l-1.5-12.5c0-2-1.5-3-2.5-3-1 0-2 1-2 2.5v40c0 3-1 5-3 5s-3-2-3-5V45c0-2-3-2-3 0v30c0 3-2 5-4 5s-3-3-3-6V38c0-2-1-3-2-2.5s-1.5 2-2 4l-1 12.5c-.5 4-2.5 5-4.5 4.5s-2.5-2.5-2-6c1.5-7 4.5-20.5 8-26.5z" />
-          <circle cx="48" cy="9" r="8" fill="none" stroke="currentColor" strokeWidth="0.5" strokeDasharray="2" />
+        <svg className="absolute w-[80%] h-[90%] text-emerald-400/50 pointer-events-none drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" viewBox="0 0 100 150" fill="none" stroke="currentColor" strokeWidth="1">
+          {/* Head & Neck Profile */}
+          <ellipse cx="50" cy="20" rx="6.5" ry="8.5" />
+          <path d="M49 28.5 c-0.5 2.5 2 2.5 2 0" />
+          {/* Torso Profile */}
+          <path d="M46 34 c4 0 8.5 2 9.5 7 c2 8.5 3.5 23.5 1.5 37 c-2 13-6.5 21-11.5 26 c-5-5-7.5-12.5-8.5-26 c-1-13.5 1-28.5 4-37 c1-5 2-7 5-7 Z" />
+          {/* Crossed arms indicator */}
+          <path d="M54 42 c1.5 4.5 3.5 13 0.5 17 c-2 3-5.5 2-7.5 0" />
+          {/* Legs */}
+          <path d="M44 104 c-1 12-2 27.5-3 44 c0 2 3 3 4 1 c2-12 3-27.5 3-44" />
+          
+          {/* Grid guides */}
+          <line x1="50" y1="5" x2="50" y2="145" stroke="currentColor" strokeWidth="0.5" strokeDasharray="3 3" opacity="0.4" />
+          <line x1="15" y1="75" x2="85" y2="75" stroke="currentColor" strokeWidth="0.5" strokeDasharray="3 3" opacity="0.4" />
+          {/* Frame brackets */}
+          <path d="M10 20 h6 M10 20 v6" strokeWidth="1.5" />
+          <path d="M90 20 h-6 M90 20 v6" strokeWidth="1.5" />
+          <path d="M10 130 h6 M10 130 v-6" strokeWidth="1.5" />
+          <path d="M90 130 h-6 M90 130 v-6" strokeWidth="1.5" />
         </svg>
       );
     }
     if (poseType === "face") {
       return (
-        <svg className="absolute w-[60%] h-[60%] text-emerald-500/20 pointer-events-none drop-shadow-[0_0_15px_rgba(16,185,129,0.2)] animate-pulse" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="1">
+        <svg className="absolute w-[60%] h-[60%] text-emerald-400/50 pointer-events-none drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="1">
           {/* Face oval guideline */}
-          <ellipse cx="50" cy="50" rx="30" ry="40" strokeDasharray="3 3" />
-          <line x1="50" y1="10" x2="50" y2="90" stroke="currentColor" strokeWidth="0.5" strokeDasharray="4 4" />
-          <line x1="20" y1="50" x2="80" y2="50" stroke="currentColor" strokeWidth="0.5" strokeDasharray="4 4" />
+          <ellipse cx="50" cy="50" rx="28" ry="38" strokeDasharray="3 3" />
+          <line x1="50" y1="10" x2="50" y2="90" stroke="currentColor" strokeWidth="0.5" strokeDasharray="4 4" opacity="0.4" />
+          <line x1="20" y1="50" x2="80" y2="50" stroke="currentColor" strokeWidth="0.5" strokeDasharray="4 4" opacity="0.4" />
         </svg>
       );
     }
     if (poseType === "legs") {
       return (
-        <svg className="absolute w-[70%] h-[75%] text-emerald-500/20 pointer-events-none drop-shadow-[0_0_15px_rgba(16,185,129,0.2)] animate-pulse" viewBox="0 0 100 150" fill="currentColor">
-          {/* Legs outline only */}
-          <path d="M40 20c2 0 3 1.5 3 3.5v110c0 3-1.5 5.5-3.5 6s-4.5-2-4.5-5V20c0-2.5 5 0 5-4.5zm20 0c2 0 3 1.5 3 3.5v110c0 3-1.5 5.5-3.5 6s-4.5-2-4.5-5V20c0-2.5 5 0 5-4.5z" />
-          <line x1="10" y1="80" x2="90" y2="80" stroke="currentColor" strokeWidth="0.5" strokeDasharray="3 3" />
+        <svg className="absolute w-[70%] h-[80%] text-emerald-400/50 pointer-events-none drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" viewBox="0 0 100 150" fill="none" stroke="currentColor" strokeWidth="1">
+          {/* Leg lines */}
+          <path d="M40 20c2 0 3 1.5 3 3.5v110c0 3-1.5 5.5-3.5 6s-4.5-2-4.5-5V20c0-2.5 5 0 5-4.5z" fill="none" />
+          <path d="M60 20c2 0 3 1.5 3 3.5v110c0 3-1.5 5.5-3.5 6s-4.5-2-4.5-5V20c0-2.5 5 0 5-4.5z" fill="none" />
+          <line x1="10" y1="80" x2="90" y2="80" stroke="currentColor" strokeWidth="0.5" strokeDasharray="3 3" opacity="0.4" />
         </svg>
       );
     }
@@ -218,14 +258,18 @@ export default function BodyPhotoCaptureModal({
 
         {/* Camera Viewport Area */}
         <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
-          {isCameraActive && (
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              className={`absolute inset-0 w-full h-full object-cover z-0 ${facingMode === "user" ? "scale-x-[-1]" : ""}`}
-            />
-          )}
+          {/* 
+            UNCONDITIONAL RENDERING OF VIDEO ELEMENT WITH MUTED ATTRIBUTE:
+            Fixes mounting race conditions on Safari and iOS WebViews,
+            ensuring videoRef.current is never null when srcObject is assigned.
+          */}
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className={`absolute inset-0 w-full h-full object-cover z-0 ${facingMode === "user" ? "scale-x-[-1]" : ""} ${isCameraActive ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+          />
 
           {/* Transparent Silhouette overlay */}
           {isCameraActive && renderSilhouetteOverlay()}
