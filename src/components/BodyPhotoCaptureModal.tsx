@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Camera, X, RefreshCw, AlertCircle, FlipHorizontal } from "lucide-react";
+import silhouetteFront from "../assets/silhouette_front.jpg";
+import silhouetteSide from "../assets/silhouette_side.jpg";
 
 interface BodyPhotoCaptureModalProps {
   isOpen: boolean;
@@ -150,55 +152,28 @@ export default function BodyPhotoCaptureModal({
 
   // Helper to render the custom transparent silhouette guide paths (improved tech-line guide)
   const renderSilhouetteOverlay = () => {
-    if (poseType === "front") {
+    if (poseType === "front" || poseType === "legs") {
       return (
-        <svg className="absolute w-[85%] h-[90%] text-emerald-400/50 pointer-events-none drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" viewBox="0 0 100 150" fill="none" stroke="currentColor" strokeWidth="1">
-          {/* Head & Neck */}
-          <ellipse cx="50" cy="20" rx="7.5" ry="9.5" />
-          <path d="M47.5 29.5 c0 3 5 3 5 0" />
-          {/* Torso Outline */}
-          <path d="M36 36 c3-1 8-2 14-2 s11 1 14 2 c4 2.5 5 7 5 11 c0 16-2 32-4 46 c-1 7-4.5 11-15 11 s-14-4-15-11 c-2-14-4-30-4-46 c0-4 1-8.5 5-11 Z" />
-          {/* Arms (A-Pose structure) */}
-          <path d="M33 37 c-3.5 9-7.5 21-10.5 33 c-1.5 5 1 7 3 4 c3-5.5 7.5-19 9.5-28.5" />
-          <path d="M67 37 c3.5 9 7.5 21 10.5 33 c1.5 5-1 7-3 4 c-3-5.5-7.5-19-9.5-28.5" />
-          {/* Legs */}
-          <path d="M39 104 c-1 12-2.5 26-3.5 41 c0 2 2.5 3 3.5 1 c2-12 3.5-26 3.5-41" />
-          <path d="M61 104 c1 12 2.5 26 3.5 41 c0 2-2.5 3-3.5 1 c-2-12-3.5-26-3.5-41" />
-          
-          {/* Scientific Overlay Grids */}
-          <line x1="50" y1="5" x2="50" y2="145" stroke="currentColor" strokeWidth="0.5" strokeDasharray="3 3" opacity="0.4" />
-          <line x1="15" y1="75" x2="85" y2="75" stroke="currentColor" strokeWidth="0.5" strokeDasharray="3 3" opacity="0.4" />
-          <circle cx="50" cy="75" r="2" fill="currentColor" opacity="0.6" />
-          {/* Frame brackets */}
-          <path d="M10 20 h6 M10 20 v6" strokeWidth="1.5" />
-          <path d="M90 20 h-6 M90 20 v6" strokeWidth="1.5" />
-          <path d="M10 130 h6 M10 130 v-6" strokeWidth="1.5" />
-          <path d="M90 130 h-6 M90 130 v-6" strokeWidth="1.5" />
-        </svg>
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none p-8">
+          <img
+            src={silhouetteFront}
+            alt="Guía Frontal"
+            className="w-full h-full object-contain opacity-40"
+            style={{ mixBlendMode: "screen" }}
+          />
+        </div>
       );
     }
     if (poseType === "side") {
       return (
-        <svg className="absolute w-[80%] h-[90%] text-emerald-400/50 pointer-events-none drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" viewBox="0 0 100 150" fill="none" stroke="currentColor" strokeWidth="1">
-          {/* Head & Neck Profile */}
-          <ellipse cx="50" cy="20" rx="6.5" ry="8.5" />
-          <path d="M49 28.5 c-0.5 2.5 2 2.5 2 0" />
-          {/* Torso Profile */}
-          <path d="M46 34 c4 0 8.5 2 9.5 7 c2 8.5 3.5 23.5 1.5 37 c-2 13-6.5 21-11.5 26 c-5-5-7.5-12.5-8.5-26 c-1-13.5 1-28.5 4-37 c1-5 2-7 5-7 Z" />
-          {/* Crossed arms indicator */}
-          <path d="M54 42 c1.5 4.5 3.5 13 0.5 17 c-2 3-5.5 2-7.5 0" />
-          {/* Legs */}
-          <path d="M44 104 c-1 12-2 27.5-3 44 c0 2 3 3 4 1 c2-12 3-27.5 3-44" />
-          
-          {/* Grid guides */}
-          <line x1="50" y1="5" x2="50" y2="145" stroke="currentColor" strokeWidth="0.5" strokeDasharray="3 3" opacity="0.4" />
-          <line x1="15" y1="75" x2="85" y2="75" stroke="currentColor" strokeWidth="0.5" strokeDasharray="3 3" opacity="0.4" />
-          {/* Frame brackets */}
-          <path d="M10 20 h6 M10 20 v6" strokeWidth="1.5" />
-          <path d="M90 20 h-6 M90 20 v6" strokeWidth="1.5" />
-          <path d="M10 130 h6 M10 130 v-6" strokeWidth="1.5" />
-          <path d="M90 130 h-6 M90 130 v-6" strokeWidth="1.5" />
-        </svg>
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none p-8">
+          <img
+            src={silhouetteSide}
+            alt="Guía Lateral"
+            className="w-full h-full object-contain opacity-40"
+            style={{ mixBlendMode: "screen" }}
+          />
+        </div>
       );
     }
     if (poseType === "face") {
@@ -208,16 +183,6 @@ export default function BodyPhotoCaptureModal({
           <ellipse cx="50" cy="50" rx="28" ry="38" strokeDasharray="3 3" />
           <line x1="50" y1="10" x2="50" y2="90" stroke="currentColor" strokeWidth="0.5" strokeDasharray="4 4" opacity="0.4" />
           <line x1="20" y1="50" x2="80" y2="50" stroke="currentColor" strokeWidth="0.5" strokeDasharray="4 4" opacity="0.4" />
-        </svg>
-      );
-    }
-    if (poseType === "legs") {
-      return (
-        <svg className="absolute w-[70%] h-[80%] text-emerald-400/50 pointer-events-none drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" viewBox="0 0 100 150" fill="none" stroke="currentColor" strokeWidth="1">
-          {/* Leg lines */}
-          <path d="M40 20c2 0 3 1.5 3 3.5v110c0 3-1.5 5.5-3.5 6s-4.5-2-4.5-5V20c0-2.5 5 0 5-4.5z" fill="none" />
-          <path d="M60 20c2 0 3 1.5 3 3.5v110c0 3-1.5 5.5-3.5 6s-4.5-2-4.5-5V20c0-2.5 5 0 5-4.5z" fill="none" />
-          <line x1="10" y1="80" x2="90" y2="80" stroke="currentColor" strokeWidth="0.5" strokeDasharray="3 3" opacity="0.4" />
         </svg>
       );
     }
