@@ -3034,21 +3034,6 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                 </button>
               </div>
 
-              {/* Ghost Silhouette visual indicator */}
-              <div className="bg-gradient-to-b from-amber-500/10 to-transparent p-4 rounded-2xl border border-amber-500/25 flex flex-col items-center gap-3">
-                <div className="w-24 h-32 bg-black/40 rounded-xl border border-white/10 flex items-center justify-center relative overflow-hidden">
-                  <svg className="w-20 h-28 text-amber-500/30 animate-pulse" viewBox="0 0 100 150" fill="currentColor">
-                    <path d="M50 15c4.5 0 8-3.5 8-8s-3.5-8-8-8-8 3.5-8 8 3.5 8 8 8zm15 17c-2-3-6-4.5-11-5h-8c-5 .5-9 2-11 5-4.5 7-7.5 22-8.5 29-.5 4 1 6 3.5 5s4.5-3 5-7.5l2-16.5c.5-2 1.5-3.5 3-4 1.5-.5 3 .5 3 2.5v44c0 3 1.5 5.5 3.5 6s4.5-2 4.5-5V42c0-2.5 3.5-2.5 3.5 0v39.5c0 3 2.5 5 4.5 5s3.5-3 3.5-6V35c0-2 1.5-3 3-2.5 1.5.5 2.5 2 3 4l2 16.5c.5 4.5 2.5 8.5 5 7.5s4-1 3.5-5c-1-7-4-22-8.5-29z" />
-                  </svg>
-                  <div className="absolute inset-2 border border-amber-500/15 border-dashed rounded-lg pointer-events-none"></div>
-                </div>
-                <div className="text-center">
-                  <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest block font-sans">💡 Tip de UX: Silueta Guía</span>
-                  <p className="text-[9.5px] text-white/60 leading-normal mt-1">
-                    Apoya tu teléfono móvil en una superficie estable. Aléjate y encuadra tu cuerpo completo haciendo calzar tu postura con la silueta virtual en pantalla.
-                  </p>
-                </div>
-              </div>
 
               {/* 1. Las 3 Poses de Evaluación */}
               <div className="space-y-2">
