@@ -76,30 +76,55 @@ export function getDefaultServingInfo(name: string, servingSizeStr: string): {
   if (servingSizeStr) {
     const parenMatch = servingSizeStr.match(/\((\d+(?:\.\d+)?)\s*(?:g|ml)\)/i);
     const directMatch = servingSizeStr.match(/^(\d+(?:\.\d+)?)\s*(?:g|ml)/i);
+    const spaceMatch = servingSizeStr.match(/(\d+(?:\.\d+)?)\s*(?:g|ml)/i);
     
     let totalWeight = 0;
     if (parenMatch) {
       totalWeight = parseFloat(parenMatch[1]);
     } else if (directMatch) {
       totalWeight = parseFloat(directMatch[1]);
+    } else if (spaceMatch) {
+      totalWeight = parseFloat(spaceMatch[1]);
     }
 
     if (totalWeight > 0) {
-      const countMatch = servingSizeStr.match(/(\d+)\s*(?:slice|rebanada|cookie|galleta|unit|pieza|huevo|pan|slice)/i);
+      const countMatch = servingSizeStr.match(/(\d+)\s*(?:slice|rebanada|cookie|galleta|unit|pieza|huevo|pan|vaso|taza|botella|lata|envase|pote|porcion|porción)/i);
       const count = countMatch ? parseInt(countMatch[1]) : 1;
-      unitWeight = totalWeight / count;
-      defaultUnit = "unit";
+      unitWeight = Math.round(totalWeight / count);
       
-      if (servingSizeStr.includes("slice") || servingSizeStr.includes("rebanada")) {
+      const lowerServing = servingSizeStr.toLowerCase();
+      if (lowerServing.includes("slice") || lowerServing.includes("rebanada")) {
         unitLabel = "rebanada";
-      } else if (servingSizeStr.includes("cookie") || servingSizeStr.includes("galleta")) {
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("cookie") || lowerServing.includes("galleta")) {
         unitLabel = "galleta";
-      } else if (servingSizeStr.includes("cup") || servingSizeStr.includes("taza")) {
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("vaso")) {
+        unitLabel = "vaso";
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("cup") || lowerServing.includes("taza")) {
         unitLabel = "taza";
-      } else if (servingSizeStr.includes("bar") || servingSizeStr.includes("barra")) {
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("bottle") || lowerServing.includes("botella")) {
+        unitLabel = "botella";
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("can") || lowerServing.includes("lata")) {
+        unitLabel = "lata";
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("pot") || lowerServing.includes("pote") || lowerServing.includes("envase")) {
+        unitLabel = "pote";
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("bar") || lowerServing.includes("barra")) {
         unitLabel = "barra";
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("pack") || lowerServing.includes("paquete")) {
+        unitLabel = "paquete";
+        defaultUnit = "unit";
       } else {
         unitLabel = "porción";
+        if (unitWeight !== 100) {
+          defaultUnit = "unit";
+        }
       }
     }
   }
@@ -339,7 +364,7 @@ export default function FoodLogger({
     if (newUnit === "unit") {
       updatePortion(1, "unit");
     } else {
-      updatePortion(100, newUnit);
+      updatePortion(unitWeight > 0 ? unitWeight : 100, newUnit);
     }
   };
 
@@ -1382,7 +1407,7 @@ export default function FoodLogger({
                           : "border-transparent text-white/40 hover:text-white"
                       }`}
                     >
-                      Porción ({unitLabel})
+                      Porción ({unitLabel}{unitWeight && unitWeight !== 100 ? ` · ${unitWeight}${portionUnit === "ml" || selectedFood.servingSize?.toLowerCase().includes("ml") ? "ml" : "g"}` : ""})
                     </button>
                   </div>
 

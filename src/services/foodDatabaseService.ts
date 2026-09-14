@@ -22,6 +22,61 @@ export const getUsdaApiKey = (): string => {
 };
 
 /**
+ * Resolves the real serving size string and normalized 100g/100ml macros from an Open Food Facts product object.
+ */
+function parseOffProduct(p: any, barcode?: string): FoodItem {
+  const nut = p.nutriments || {};
+
+  let calories = Number(nut["energy-kcal_100g"]) || Number(nut["energy-kcal"]) || 0;
+  if (calories === 0 && Number(nut["energy-kj_100g"]) > 0) {
+    calories = Math.round(Number(nut["energy-kj_100g"]) / 4.184);
+  }
+  let protein = Number(nut.proteins_100g) || Number(nut.proteins) || 0;
+  let carbs = Number(nut.carbohydrates_100g) || Number(nut.carbohydrates) || 0;
+  let fat = Number(nut.fat_100g) || Number(nut.fat) || 0;
+
+  // Extract serving size
+  let servingSize = "100g";
+  if (p.serving_size && typeof p.serving_size === "string" && p.serving_size.trim() !== "") {
+    servingSize = p.serving_size.trim();
+  } else if (p.serving_quantity && Number(p.serving_quantity) > 0) {
+    const unit = (p.serving_quantity_unit || "g").trim();
+    servingSize = `${p.serving_quantity} ${unit}`;
+  } else if (p.quantity && typeof p.quantity === "string" && p.quantity.trim() !== "") {
+    const match = p.quantity.match(/^(\d+(?:\.\d+)?)\s*(g|ml|cl|l|kg)$/i);
+    if (match) {
+      servingSize = p.quantity.trim();
+    }
+  }
+
+  // If 100g macros were missing but serving macros exist, calculate the 100g base from the serving size
+  if (calories === 0 && Number(nut["energy-kcal_serving"]) > 0) {
+    const servingMatch = servingSize.match(/(\d+(?:\.\d+)?)\s*(?:g|ml)/i);
+    const servingGrams = servingMatch ? parseFloat(servingMatch[1]) : (Number(p.serving_quantity) || 0);
+    if (servingGrams > 0) {
+      const factor = 100 / servingGrams;
+      calories = Math.round(Number(nut["energy-kcal_serving"]) * factor);
+      protein = Number(((Number(nut.proteins_serving) || 0) * factor).toFixed(1));
+      carbs = Number(((Number(nut.carbohydrates_serving) || 0) * factor).toFixed(1));
+      fat = Number(((Number(nut.fat_serving) || 0) * factor).toFixed(1));
+    }
+  }
+
+  return {
+    name: p.product_name,
+    brand: p.brands || undefined,
+    image: p.image_front_url || undefined,
+    barcode: barcode || p.code || p._id || undefined,
+    calories: Math.round(calories),
+    protein: Number(protein.toFixed(1)),
+    carbs: Number(carbs.toFixed(1)),
+    fat: Number(fat.toFixed(1)),
+    servingSize: servingSize,
+    source: "off" as const
+  };
+}
+
+/**
  * Queries Open Food Facts for branded products matching the query.
  */
 export const searchOpenFoodFacts = async (query: string): Promise<FoodItem[]> => {
@@ -38,21 +93,7 @@ export const searchOpenFoodFacts = async (query: string): Promise<FoodItem[]> =>
 
     return data.products
       .filter((p: any) => p.product_name && p.product_name.trim() !== "")
-      .map((p: any) => {
-        const nut = p.nutriments || {};
-        return {
-          name: p.product_name,
-          brand: p.brands || undefined,
-          image: p.image_front_url || undefined,
-          barcode: p.code || p._id || undefined,
-          calories: Math.round(Number(nut["energy-kcal_100g"]) || 0),
-          protein: Number(nut.proteins_100g) || 0,
-          carbs: Number(nut.carbohydrates_100g) || 0,
-          fat: Number(nut.fat_100g) || 0,
-          servingSize: "100g",
-          source: "off" as const
-        };
-      });
+      .map((p: any) => parseOffProduct(p));
   } catch (error) {
     console.error("Error searching Open Food Facts:", error);
     return [];
@@ -111,20 +152,7 @@ export const getProductByBarcode = async (barcode: string): Promise<FoodItem | n
     const data = await response.json();
 
     if (data.status === 1 && data.product) {
-      const p = data.product;
-      const nut = p.nutriments || {};
-      return {
-        name: p.product_name,
-        brand: p.brands || undefined,
-        image: p.image_front_url || undefined,
-        barcode: barcode,
-        calories: Math.round(Number(nut["energy-kcal_100g"]) || 0),
-        protein: Number(nut.proteins_100g) || 0,
-        carbs: Number(nut.carbohydrates_100g) || 0,
-        fat: Number(nut.fat_100g) || 0,
-        servingSize: "100g",
-        source: "off" as const
-      };
+      return parseOffProduct(data.product, barcode);
     }
     return null;
   } catch (error) {
