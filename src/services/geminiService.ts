@@ -52,20 +52,26 @@ function cleanErrorMessage(rawMessage: string, status?: number): string {
   return rawMessage;
 }
 
-// Candidate models in order of stability and performance for Gemini API v1beta
+// Candidate models matching active Google AI Studio quotas (Gemini 2.5 Flash, 2.5 Flash Lite, Gemini 3 Flash, etc.)
 const GEMINI_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-3-flash",
+  "gemini-2.5-pro",
   "gemini-1.5-flash",
   "gemini-1.5-pro",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash-8b",
 ];
 
 // Cache the last verified working model in memory and localStorage for zero-latency calls
 let activeWorkingModel: string = (() => {
   try {
-    return localStorage.getItem("trophia_working_gemini_model") || "gemini-1.5-flash";
+    const saved = localStorage.getItem("trophia_working_gemini_model");
+    if (saved && GEMINI_MODELS.includes(saved)) {
+      return saved;
+    }
+    return "gemini-2.5-flash";
   } catch {
-    return "gemini-1.5-flash";
+    return "gemini-2.5-flash";
   }
 })();
 
@@ -116,23 +122,31 @@ async function callGeminiAPI(
         const errorData = await response.json().catch(() => ({}));
         const rawMessage = errorData?.error?.message || `Error en la comunicación con la IA (${response.status})`;
         
-        // Check if error is due to model name, not found, or unsupported on this endpoint
-        const isModelIssue =
+        // If API key is invalid or not found, fail immediately
+        if (rawMessage.toLowerCase().includes("api key") || rawMessage.toLowerCase().includes("invalid key")) {
+          throw new Error(cleanErrorMessage(rawMessage, response.status));
+        }
+
+        // Check if error is due to model name, not supported, or quota exceeded on this specific model (e.g. 0/0 RPM or 5/5 RPM)
+        const isModelIssueOrQuota =
           response.status === 404 ||
           response.status === 400 ||
+          response.status === 429 ||
           rawMessage.toLowerCase().includes("not found") ||
           rawMessage.toLowerCase().includes("not supported") ||
           rawMessage.toLowerCase().includes("is not available") ||
           rawMessage.toLowerCase().includes("unsupported") ||
-          rawMessage.toLowerCase().includes("invalid model");
+          rawMessage.toLowerCase().includes("invalid model") ||
+          rawMessage.toLowerCase().includes("resource_exhausted") ||
+          rawMessage.toLowerCase().includes("quota") ||
+          rawMessage.toLowerCase().includes("rate limit");
 
-        if (isModelIssue) {
-          console.warn(`Modelo Gemini '${model}' no disponible (${response.status}). Probando siguiente modelo...`, rawMessage);
+        if (isModelIssueOrQuota) {
+          console.warn(`Modelo Gemini '${model}' no disponible o sin cuota (${response.status}). Probando siguiente modelo...`, rawMessage);
           lastError = new Error(cleanErrorMessage(rawMessage, response.status));
           continue; // Try next model immediately
         }
 
-        // For non-model issues (e.g., quota exhausted or bad api key), fail fast
         throw new Error(cleanErrorMessage(rawMessage, response.status));
       }
 
