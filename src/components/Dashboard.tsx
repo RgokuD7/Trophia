@@ -101,11 +101,11 @@ export default function Dashboard({
   const todayMeals = loggedMeals.filter(m => m.timestamp.startsWith(todayStr));
   const todayWaterLogs = waterLogs.filter(w => w.timestamp.startsWith(todayStr));
 
-  // Calculate daily progress sums for today
-  const totalCalories = todayMeals.reduce((acc, meal) => acc + meal.calories, 0);
-  const totalProtein = todayMeals.reduce((acc, meal) => acc + meal.protein, 0);
-  const totalCarbs = todayMeals.reduce((acc, meal) => acc + meal.carbs, 0);
-  const totalFat = todayMeals.reduce((acc, meal) => acc + meal.fat, 0);
+  // Calculate daily progress sums for today (rounded to 1 decimal)
+  const totalCalories = Math.round(todayMeals.reduce((acc, meal) => acc + (meal.calories || 0), 0));
+  const totalProtein = Number(todayMeals.reduce((acc, meal) => acc + (meal.protein || 0), 0).toFixed(1));
+  const totalCarbs = Number(todayMeals.reduce((acc, meal) => acc + (meal.carbs || 0), 0).toFixed(1));
+  const totalFat = Number(todayMeals.reduce((acc, meal) => acc + (meal.fat || 0), 0).toFixed(1));
   const totalWater = todayWaterLogs.reduce((acc, log) => acc + log.amount, 0);
 
   // Calculate calories burned from active routes today
@@ -138,11 +138,11 @@ export default function Dashboard({
   const cTarget = profile.carbsTarget;
   const fTarget = profile.fatTarget;
 
-  // Remaining
+  // Remaining (rounded to 1 decimal)
   const remainingCalories = Math.max(0, adjustedCalTarget - totalCalories);
-  const remainingProtein = Math.max(0, pTarget - totalProtein);
-  const remainingCarbs = Math.max(0, cTarget - totalCarbs);
-  const remainingFat = Math.max(0, fTarget - totalFat);
+  const remainingProtein = Number(Math.max(0, pTarget - totalProtein).toFixed(1));
+  const remainingCarbs = Number(Math.max(0, cTarget - totalCarbs).toFixed(1));
+  const remainingFat = Number(Math.max(0, fTarget - totalFat).toFixed(1));
 
   // Status warnings
   const calExceeded = totalCalories > adjustedCalTarget;

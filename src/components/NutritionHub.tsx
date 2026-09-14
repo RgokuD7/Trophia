@@ -151,11 +151,11 @@ export default function NutritionHub({
   const isToday = selectedDate === todayStr;
   const isPast = selectedDate < todayStr;
 
-  // Calorie progress
-  const totalCal = selectedDayMeals.reduce((s, m) => s + m.calories, 0);
-  const totalP = selectedDayMeals.reduce((s, m) => s + m.protein, 0);
-  const totalC = selectedDayMeals.reduce((s, m) => s + m.carbs, 0);
-  const totalF = selectedDayMeals.reduce((s, m) => s + m.fat, 0);
+  // Calorie & Macros progress (rounded to 1 decimal)
+  const totalCal = Math.round(selectedDayMeals.reduce((s, m) => s + (m.calories || 0), 0));
+  const totalP = Number(selectedDayMeals.reduce((s, m) => s + (m.protein || 0), 0).toFixed(1));
+  const totalC = Number(selectedDayMeals.reduce((s, m) => s + (m.carbs || 0), 0).toFixed(1));
+  const totalF = Number(selectedDayMeals.reduce((s, m) => s + (m.fat || 0), 0).toFixed(1));
   
   // Check if calorie bank plan is active and adjust target
   const bankPlan = profile.calorieBankPlan;
