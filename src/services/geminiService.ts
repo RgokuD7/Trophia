@@ -52,15 +52,21 @@ function cleanErrorMessage(rawMessage: string, status?: number): string {
   return rawMessage;
 }
 
+// Candidate models in order of preference (Primary: gemini-2.5-pro for advanced reasoning, with resilient fallbacks)
+const GEMINI_MODELS = [
+  "gemini-2.5-pro",
+  "gemini-2.5-flash",
+  "gemini-1.5-pro",
+  "gemini-1.5-flash",
+  "gemini-2.0-flash",
+];
+
 // Main helper to call Gemini API directly from browser via HTTP fetch
 async function callGeminiAPI(
   apiKey: string,
   prompt: string,
   images?: GeminiImage[]
 ): Promise<any> {
-  const model = "gemini-2.0-flash";
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
   const parts: any[] = [{ text: prompt }];
   if (images && images.length > 0) {
     images.forEach((img) => {
@@ -73,43 +79,79 @@ async function callGeminiAPI(
     });
   }
 
-  let response;
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [{ parts }],
-        generationConfig: {
-          responseMimeType: "application/json",
+  let lastError: Error | null = null;
+
+  for (const model of GEMINI_MODELS) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      }),
-    });
-  } catch (netError: any) {
-    console.error("Network error calling Gemini:", netError);
-    throw new Error("No hay conexión a internet. Revisa tu red y vuelve a intentarlo.");
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: {
+            responseMimeType: "application/json",
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const rawMessage = errorData?.error?.message || `Error en la comunicación con la IA (${response.status})`;
+        const isModelUnavailable =
+          response.status === 404 ||
+          rawMessage.toLowerCase().includes("not found") ||
+          rawMessage.toLowerCase().includes("not supported") ||
+          rawMessage.toLowerCase().includes("is not available") ||
+          rawMessage.toLowerCase().includes("unsupported");
+
+        if (isModelUnavailable) {
+          console.warn(`Gemini model '${model}' no disponible o incompatible. Probando siguiente modelo de respaldo...`, rawMessage);
+          lastError = new Error(cleanErrorMessage(rawMessage, response.status));
+          continue; // Intentar siguiente modelo
+        }
+
+        // Si es un error de cuota o clave inválida, no iteramos modelos innecesariamente
+        throw new Error(cleanErrorMessage(rawMessage, response.status));
+      }
+
+      const data = await response.json();
+      let text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        throw new Error("No se recibió respuesta del modelo de IA.");
+      }
+
+      text = text.trim();
+      if (text.startsWith("```json")) {
+        text = text.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+      } else if (text.startsWith("```")) {
+        text = text.replace(/^```\s*/, "").replace(/\s*```$/, "");
+      }
+
+      try {
+        return JSON.parse(text.trim());
+      } catch (parseError) {
+        console.error(`Failed to parse JSON response from Gemini (${model}):`, text);
+        throw new Error("La respuesta de la IA no tiene un formato JSON válido.");
+      }
+    } catch (netError: any) {
+      if (
+        netError.message &&
+        (netError.message.includes("No hay conexión") ||
+          netError.message.includes("API Key") ||
+          netError.message.includes("Límite de consultas"))
+      ) {
+        throw netError;
+      }
+      lastError = netError;
+      console.warn(`Error llamando al modelo '${model}':`, netError);
+    }
   }
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const rawMessage = errorData?.error?.message || `Error en la comunicación con la IA (${response.status})`;
-    throw new Error(cleanErrorMessage(rawMessage, response.status));
-  }
-
-  const data = await response.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) {
-    throw new Error("No se recibió respuesta del modelo de IA.");
-  }
-  
-  try {
-    return JSON.parse(text.trim());
-  } catch (parseError) {
-    console.error("Failed to parse JSON response from Gemini:", text);
-    throw new Error("La respuesta de la IA no tiene un formato JSON válido.");
-  }
+  throw lastError || new Error("No fue posible comunicarse con ningún modelo de Inteligencia Artificial disponible.");
 }
 
 // 1. Analyze body fat percentage by image
