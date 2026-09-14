@@ -156,7 +156,7 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
           <div className="text-[9px] text-gray-400 dark:text-white/20 font-mono tracking-wider">
             <span>by Richard Bouryssieres</span>
             <span className="mx-1.5">•</span>
-            <span>v0.0.2</span>
+            <span>v0.1.0</span>
           </div>
         </div>
       </div>
@@ -278,7 +278,7 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
           <div className="text-[9px] text-gray-400 dark:text-white/20 font-mono tracking-wider">
             <span>by Richard Bouryssieres</span>
             <span className="mx-1.5">•</span>
-            <span>v0.0.2</span>
+            <span>v0.1.0</span>
           </div>
         </div>
       </div>

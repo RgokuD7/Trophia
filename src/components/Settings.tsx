@@ -1,42 +1,92 @@
 import React, { useState, useEffect } from "react";
 import { 
-  Settings, Key, Eye, User, Weight, Ruler, Award, RefreshCw, Check, Info, AlertCircle, Sun, Moon, LogOut, Bell, MapPin, Plus, Trash2
+  Settings, Key, CircleUser, RefreshCw, Check, Info, AlertCircle, 
+  LogOut, Bell, Utensils, Activity, Sliders, ShieldAlert, Sparkles, Scale, Target, Flame
 } from "lucide-react";
-import { UserProfile, BiologicalSex, FitnessGoal, ExperienceLevel, TrainingEnvironment, DietType, FrequentRoute } from "../types";
+import { motion, AnimatePresence } from "motion/react";
+import { UserProfile, BiologicalSex, FitnessGoal, ExperienceLevel, DietType } from "../types";
 import { calculateRequirements, calculateBMI } from "../utils/fitnessUtils";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { savePushSubscription, deletePushSubscription } from "../services/dbService";
+import BodyEvolutionTracker from "./BodyEvolutionTracker";
 
 interface SettingsProps {
   profile: UserProfile;
   userId: string;
   onUpdateProfile: (profile: UserProfile) => void;
   onResetApp: () => void;
+  onOpenRecalibration: () => void;
 }
 
-export default function SettingsView({ profile, userId, onUpdateProfile, onResetApp }: SettingsProps) {
+type SettingsSection = "profile" | "nutrition" | "system";
+
+export default function SettingsView({ 
+  profile, 
+  userId, 
+  onUpdateProfile, 
+  onResetApp,
+  onOpenRecalibration
+}: SettingsProps) {
+  const [activeSection, setActiveSection] = useState<SettingsSection>("profile");
+
+  // Profile data
   const [name, setName] = useState(profile.name);
   const [age, setAge] = useState(profile.age);
   const [sex, setSex] = useState<BiologicalSex>(profile.sex);
   const [weight, setWeight] = useState(profile.weight);
   const [height, setHeight] = useState(profile.height);
   const [goal, setGoal] = useState<FitnessGoal>(profile.goal);
-  const [level, setLevel] = useState<ExperienceLevel>(profile.level);
-  const [environment, setEnvironment] = useState<TrainingEnvironment>(profile.environment);
-  const [apiKey, setApiKey] = useState(profile.apiKey || "");
-  const [usdaApiKey, setUsdaApiKey] = useState(profile.usdaApiKey || "");
-  const [showKey, setShowKey] = useState(false);
-  const [theme, setTheme] = useState<"light" | "dark">(profile.theme || "dark");
-  const [takesCreatine, setTakesCreatine] = useState(profile.takesCreatine || false);
-  const [dietType, setDietType] = useState<DietType>(profile.dietType || "standard");
   const [activityLevel, setActivityLevel] = useState<"sedentary" | "lightly_active" | "moderately_active" | "highly_active" | "heavy_labor">(profile.activityLevel || "sedentary");
   const [stepsRange, setStepsRange] = useState<"under_4k" | "5k_7k" | "8k_10k" | "12k_15k" | "over_18k">(profile.stepsRange || "under_4k");
-  const [deficitPace, setDeficitPace] = useState<"conservative" | "moderate" | "aggressive">(profile.deficitPace || "moderate");
-  const [solidMealsCount, setSolidMealsCount] = useState<number>(profile.solidMealsCount || 4);
-  const [jointPainAreas, setJointPainAreas] = useState<("knee" | "back" | "shoulder")[]>(profile.jointPainAreas || []);
+  const [deficitPace] = useState<"conservative" | "moderate" | "aggressive">("moderate");
+
+  // Nutrition data
+  const [dietType, setDietType] = useState<DietType>(profile.dietType || "standard");
+  const [customDiet, setCustomDiet] = useState<string>(profile.customDiet || "");
   const [allergies, setAllergies] = useState<string[]>(profile.allergies || []);
+  const [customAllergies, setCustomAllergies] = useState<string>(profile.customAllergies || "");
+  const [solidMealsCount, setSolidMealsCount] = useState<number>(profile.solidMealsCount || 4);
+  const [takesCreatine, setTakesCreatine] = useState(profile.takesCreatine || false);
+
+  // System data
+  const [apiKey, setApiKey] = useState(profile.apiKey || "");
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Push Notifications state
+  const [pushSupported, setPushSupported] = useState<boolean | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("default");
+  const [isSubscribed, setIsSubscribed] = useState<boolean>(false);
+  const [pushLoading, setPushLoading] = useState<boolean>(false);
+  const [pushError, setPushError] = useState<string | null>(null);
+
+  // Keep local state in sync when profile updates
+  useEffect(() => {
+    setName(profile.name);
+    setAge(profile.age);
+    setSex(profile.sex);
+    setWeight(profile.weight);
+    setHeight(profile.height);
+    setGoal(profile.goal);
+    setDietType(profile.dietType || "standard");
+    setCustomDiet(profile.customDiet || "");
+    setAllergies(profile.allergies || []);
+    setCustomAllergies(profile.customAllergies || "");
+    setSolidMealsCount(profile.solidMealsCount || 4);
+    setTakesCreatine(profile.takesCreatine || false);
+    setActivityLevel(profile.activityLevel || "sedentary");
+    setStepsRange(profile.stepsRange || "under_4k");
+    setApiKey(profile.apiKey || "");
+  }, [profile]);
+
+  // Live BMI calculation
+  const currentBMI = height > 0 ? (weight / Math.pow(height / 100, 2)).toFixed(1) : "0.0";
+  const numBMI = parseFloat(currentBMI);
+  const bmiCategory = 
+    numBMI < 18.5 ? { label: "Bajo peso", color: "text-amber-400 bg-amber-500/10 border-amber-500/20" } :
+    numBMI < 25.0 ? { label: "Peso saludable", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" } :
+    numBMI < 30.0 ? { label: "Sobrepeso", color: "text-amber-400 bg-amber-500/10 border-amber-500/20" } :
+    { label: "Obesidad", color: "text-rose-400 bg-rose-500/10 border-rose-500/20" };
 
   const handlePasteApiKey = async () => {
     try {
@@ -48,46 +98,6 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
       console.error("Failed to read clipboard:", err);
     }
   };
-
-  // States for frequent routes
-  const [frequentRoutes, setFrequentRoutes] = useState<FrequentRoute[]>(profile.frequentRoutes || []);
-  const [newRouteName, setNewRouteName] = useState("");
-  const [newRouteDistance, setNewRouteDistance] = useState<number | "">("");
-  const [newRouteActivity, setNewRouteActivity] = useState<"walking" | "running" | "cycling">("walking");
-
-  const handleAddRoute = () => {
-    if (!newRouteName.trim() || !newRouteDistance || newRouteDistance <= 0) return;
-    
-    const multiplier = 
-      newRouteActivity === "walking" ? 0.75 :
-      newRouteActivity === "running" ? 1.03 :
-      0.35; // cycling
-    
-    const cal = Math.round(newRouteDistance * weight * multiplier);
-    
-    const newRoute: FrequentRoute = {
-      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9),
-      name: newRouteName.trim(),
-      distanceKm: newRouteDistance,
-      activityType: newRouteActivity,
-      caloriesBurned: cal
-    };
-    
-    setFrequentRoutes([...frequentRoutes, newRoute]);
-    setNewRouteName("");
-    setNewRouteDistance("");
-  };
-
-  const handleDeleteRoute = (id: string) => {
-    setFrequentRoutes(frequentRoutes.filter(r => r.id !== id));
-  };
-
-  // States for Push Notifications PWA
-  const [pushSupported, setPushSupported] = useState<boolean | null>(null);
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("default");
-  const [isSubscribed, setIsSubscribed] = useState<boolean>(false);
-  const [pushLoading, setPushLoading] = useState<boolean>(false);
-  const [pushError, setPushError] = useState<string | null>(null);
 
   const checkPushSubscription = async () => {
     try {
@@ -116,7 +126,7 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
 
   function urlBase64ToUint8Array(base64String: string) {
     const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding).replace(/\-/g, "+").replace(/_/g, "/");
+    const base64 = (base64String + padding).replace(/\\-/g, "+").replace(/_/g, "/");
 
     const rawData = window.atob(base64);
     const outputArray = new Uint8Array(rawData.length);
@@ -133,11 +143,10 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
     try {
       const isSupported = "serviceWorker" in navigator && "PushManager" in window;
       if (!isSupported) {
-        throw new Error("Push no soportado en este navegador.");
+        throw new Error("Notificaciones no soportadas en este navegador.");
       }
 
       if (isSubscribed) {
-        // Unsubscribe
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.getSubscription();
         if (subscription) {
@@ -146,7 +155,6 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
         }
         setIsSubscribed(false);
       } else {
-        // Subscribe
         let permission = Notification.permission;
         if (permission === "default") {
           permission = await Notification.requestPermission();
@@ -158,8 +166,6 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
         }
 
         const registration = await navigator.serviceWorker.ready;
-        
-        // Get public VAPID key from environment
         const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
         if (!vapidPublicKey) {
           throw new Error("Falta la clave pública VAPID en las variables de entorno.");
@@ -184,14 +190,13 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
   };
 
   const handleSave = () => {
-    // Recalculate targets based on updated parameters
     const reqs = calculateRequirements({ 
       weight, 
       height, 
       age, 
       sex, 
       goal, 
-      level,
+      level: profile.level || "beginner",
       bodyFat: profile.bodyFat,
       activityLevel,
       stepsRange,
@@ -199,20 +204,6 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
       dietType
     });
     const bmi = calculateBMI(weight, height);
-
-    // Recalculate frequent routes calories based on new weight!
-    const recalculatedRoutes = frequentRoutes.map(r => {
-      const multiplier = 
-        r.activityType === "walking" ? 0.75 :
-        r.activityType === "running" ? 1.03 :
-        0.35; // cycling
-      return {
-        ...r,
-        caloriesBurned: Math.round(r.distanceKm * weight * multiplier)
-      };
-    });
-
-    const requiresMedicalClearance = profile.parqAnswers ? (profile.parqAnswers.q1 || profile.parqAnswers.q2 || profile.parqAnswers.q3 || profile.parqAnswers.q7) : false;
 
     const updatedProfile: UserProfile = {
       ...profile,
@@ -222,26 +213,21 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
       weight,
       height,
       goal,
-      level,
-      environment,
       bmi,
       dailyCalorieTarget: reqs.calories,
       proteinTarget: reqs.protein,
       carbsTarget: reqs.carbs,
       fatTarget: reqs.fat,
       apiKey: apiKey || undefined,
-      usdaApiKey: usdaApiKey || undefined,
-      theme,
       takesCreatine,
       dietType,
+      customDiet: dietType === "other" && customDiet.trim() ? customDiet.trim() : undefined,
       activityLevel,
       stepsRange,
       deficitPace,
       solidMealsCount,
-      requiresMedicalClearance,
-      jointPainAreas,
-      frequentRoutes: recalculatedRoutes,
-      allergies: allergies.length > 0 ? allergies : undefined
+      allergies: allergies.length > 0 ? allergies : undefined,
+      customAllergies: allergies.includes("other") && customAllergies.trim() ? customAllergies.trim() : undefined
     };
 
     onUpdateProfile(updatedProfile);
@@ -250,623 +236,534 @@ export default function SettingsView({ profile, userId, onUpdateProfile, onReset
     } else {
       localStorage.removeItem("trophia_api_key");
     }
-    if (usdaApiKey && usdaApiKey.trim().length >= 10) {
-      localStorage.setItem("trophia_usda_api_key", usdaApiKey);
-    } else {
-      localStorage.removeItem("trophia_usda_api_key");
-    }
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2500);
   };
 
+  const sections = [
+    { id: "profile" as SettingsSection, label: "Perfil & Objetivos", icon: CircleUser },
+    { id: "nutrition" as SettingsSection, label: "Nutrición & Dieta", icon: Utensils },
+    { id: "system" as SettingsSection, label: "Sistema & App", icon: Sliders },
+  ];
+
   return (
-    <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0d0e15] text-gray-900 dark:text-gray-100 overflow-y-auto no-scrollbar pb-16">
+    <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0d0e15] text-gray-900 dark:text-gray-100 overflow-y-auto no-scrollbar pb-24">
       
-      {/* Title */}
-      <div className="p-6 pb-2 border-b border-gray-200 dark:border-gray-800/40">
-        <span className="text-xs font-mono font-bold text-gray-555 dark:text-gray-400 uppercase tracking-wider">Ajustes y Parámetros</span>
-        <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-1.5 mt-0.5">
-          <Settings className="h-5 w-5 text-emerald-400" />
-          <span>Configuración</span>
-        </h2>
+      {/* Header */}
+      <div className="p-5 pb-3 border-b border-gray-200 dark:border-gray-800/60 bg-white/70 dark:bg-[#0d0e15]/70 backdrop-blur-md sticky top-0 z-20">
+        <div>
+          <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest">Panel de Configuración</span>
+          <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2 mt-0.5">
+            <Settings className="h-5 w-5 text-emerald-400" />
+            <span>Ajustes</span>
+          </h2>
+        </div>
+
+        {/* 3 Categories Tab Bar */}
+        <div className="grid grid-cols-3 gap-1.5 mt-3.5 p-1 bg-gray-100 dark:bg-[#161824] rounded-2xl border border-gray-200 dark:border-gray-800">
+          {sections.map((sec) => {
+            const Icon = sec.icon;
+            const isActive = activeSection === sec.id;
+            return (
+              <button
+                key={sec.id}
+                onClick={() => setActiveSection(sec.id)}
+                className={`relative py-2.5 px-1 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition cursor-pointer ${
+                  isActive
+                    ? "text-emerald-500 dark:text-emerald-400 font-black"
+                    : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                }`}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="activeSettingsTab"
+                    className="absolute inset-0 bg-white dark:bg-[#202334] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700/60"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
+                <span className="relative z-10 flex items-center justify-center">
+                  <Icon className="h-4 w-4 shrink-0" />
+                </span>
+                <span className="relative z-10 text-[10px] truncate max-w-full font-bold">{sec.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="px-6 py-5 space-y-5">
+      <div className="px-5 py-4 space-y-4 max-w-2xl mx-auto w-full">
         
         {/* Success Alert */}
         {saveSuccess && (
-          <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl text-xs text-emerald-400 font-bold flex items-center gap-2">
-            <Check className="h-4 w-4" />
-            <span>Ajustes guardados e indicadores actualizados con éxito.</span>
-          </div>
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="bg-emerald-500/15 border border-emerald-500/30 p-3.5 rounded-2xl text-xs text-emerald-500 dark:text-emerald-400 font-bold flex items-center gap-2.5 shadow-sm"
+          >
+            <Check className="h-4 w-4 stroke-[3px]" />
+            <span>Ajustes guardados y metas recalculadas con éxito.</span>
+          </motion.div>
         )}
 
-        {/* Theme Settings */}
-        <div className="bg-white dark:bg-[#161824] p-4 rounded-xl border border-gray-200 dark:border-gray-800 space-y-3 shadow-md dark:shadow-lg">
-          <span className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Tema Visual</span>
-          <div className="flex bg-gray-50 dark:bg-[#0f101a] rounded-lg p-1 border border-gray-200 dark:border-gray-800">
-            <button
-              onClick={() => setTheme("light")}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-md flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                theme === "light" ? "bg-emerald-500 text-white shadow-sm" : "text-gray-500 dark:text-gray-400"
-              }`}
+        <AnimatePresence mode="wait">
+          {/* ========================================================================= */}
+          {/* SECCIÓN 1: PERFIL */}
+          {/* ========================================================================= */}
+          {activeSection === "profile" && (
+            <motion.div
+              key="profile"
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              transition={{ duration: 0.15 }}
+              className="space-y-4"
             >
-              <Sun className="h-3.5 w-3.5" />
-              Claro
-            </button>
-            <button
-              onClick={() => setTheme("dark")}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-md flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                theme === "dark" ? "bg-emerald-500 text-white shadow-sm" : "text-gray-500 dark:text-gray-400"
-              }`}
-            >
-              <Moon className="h-3.5 w-3.5" />
-              Oscuro
-            </button>
-          </div>
-        </div>
+              {/* Evolution & Progress Tracking */}
+              <BodyEvolutionTracker
+                profile={profile}
+                onUpdateProfile={onUpdateProfile}
+                onOpenRecalibration={onOpenRecalibration}
+              />
 
-        {/* Notificaciones Push Settings */}
-        <div className="bg-white dark:bg-[#161824] p-4 rounded-xl border border-gray-200 dark:border-gray-800 space-y-3 shadow-md dark:shadow-lg">
-          <span className="block text-xs font-bold text-gray-550 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-            <Bell className="h-3.5 w-3.5 text-emerald-400" />
-            <span>Notificaciones Push</span>
-          </span>
-          <p className="text-[10px] text-gray-650 dark:text-gray-400 leading-normal">
-            Mantente al día con recordatorios personalizados de agua, creatina y registro de tus comidas diarias.
-          </p>
+              {/* BMI Summary Card */}
+              <div className="bg-gradient-to-br from-emerald-500/10 via-white dark:via-[#161824] to-emerald-500/5 p-4 rounded-3xl border border-emerald-500/20 shadow-sm flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-emerald-500/15 text-emerald-500 rounded-2xl">
+                    <Scale className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">IMC Actual</span>
+                    <span className="text-xl font-black text-gray-900 dark:text-white">{currentBMI}</span>
+                  </div>
+                </div>
+                <div className={`px-3 py-1 rounded-full text-[10px] font-black border ${bmiCategory.color}`}>
+                  {bmiCategory.label}
+                </div>
+              </div>
 
-          {pushError && (
-            <div className="bg-red-500/10 border border-red-500/20 p-2.5 rounded-lg text-[10px] text-red-400 font-semibold flex items-center gap-2">
-              <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
-              <span>{pushError}</span>
-            </div>
-          )}
-
-          {pushSupported === false ? (
-            <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-lg text-left space-y-1.5">
-              <span className="text-[10px] font-extrabold text-amber-400 flex items-center gap-1.5">
-                <Info className="h-3.5 w-3.5" />
-                <span>No Soportado</span>
-              </span>
-              <p className="text-[9px] text-gray-650 dark:text-gray-400 leading-relaxed">
-                Las notificaciones push no son compatibles con este navegador o dispositivo.
-              </p>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between py-1">
-              <div className="space-y-0.5 text-left">
-                <span className="text-xs font-bold text-gray-900 dark:text-white block">Notificaciones Diarias</span>
-                <span className="text-[9px] text-gray-500 dark:text-gray-400">
-                  {notificationPermission === "denied"
-                    ? "Permisos bloqueados en el navegador."
-                    : isSubscribed
-                    ? "Suscripción activa y sincronizada."
-                    : "Recibe avisos directos en tu pantalla."}
+              {/* Biometrics Card */}
+              <div className="bg-white dark:bg-[#161824] p-4.5 rounded-3xl border border-gray-200 dark:border-gray-800 space-y-3.5 shadow-sm">
+                <span className="block text-xs font-black text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <CircleUser className="h-4 w-4 text-emerald-400" />
+                  <span>Datos Antropométricos</span>
                 </span>
-              </div>
 
-              <button
-                type="button"
-                disabled={pushLoading || notificationPermission === "denied"}
-                onClick={handleToggleNotifications}
-                className={`w-12 h-6.5 rounded-full p-1 transition-colors duration-200 focus:outline-none flex items-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isSubscribed ? "bg-emerald-500 justify-end" : "bg-gray-200 dark:bg-gray-800 justify-start"
-                }`}
-              >
-                {pushLoading ? (
-                  <RefreshCw className="w-4.5 h-4.5 rounded-full bg-white shadow-md animate-spin p-1 text-gray-700" />
-                ) : (
-                  <span className="w-4.5 h-4.5 rounded-full bg-white shadow-md"></span>
-                )}
-              </button>
-            </div>
-          )}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1">Nombre Completo</label>
+                    <Input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Tu nombre"
+                      className="bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 font-medium"
+                      size="md"
+                    />
+                  </div>
 
-          {notificationPermission === "denied" && (
-            <p className="text-[9px] text-amber-400/80 leading-normal text-left">
-              * El permiso de notificaciones fue denegado. Para activarlo, ingresa a la configuración del sitio en tu navegador y habilita el permiso de notificaciones para este dominio.
-            </p>
-          )}
-        </div>
-
-        {/* AI Key Configuration */}
-        <div className="bg-white dark:bg-[#161824] p-4 rounded-xl border border-gray-200 dark:border-gray-800 space-y-3 shadow-md dark:shadow-lg">
-          <span className="block text-xs font-bold text-gray-550 dark:text-gray-400 uppercase">Credencial de IA Descentralizada</span>
-          <p className="text-[10px] text-gray-650 dark:text-gray-400 leading-normal">
-            Cambia o actualiza tu clave de API de Gemini de Google AI Studio para mantener tus llamadas independientes de cuotas.
-          </p>
-          
-          <div className="flex gap-2 items-center">
-            <div className="flex-1">
-              <Input
-                type="password"
-                icon={Key}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Ingresa tu clave de API de Gemini..."
-                className="bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 focus:border-emerald-500/30 font-mono"
-                size="md"
-              />
-            </div>
-            <Button
-              variant="secondary"
-              onClick={handlePasteApiKey}
-              className="shrink-0 h-[42px] px-3.5 text-[11px] font-bold rounded-xl"
-            >
-              Pegar
-            </Button>
-          </div>
-        </div>
-
-        {/* USDA API Key Configuration */}
-        <div className="bg-white dark:bg-[#161824] p-4 rounded-xl border border-gray-200 dark:border-gray-800 space-y-3 shadow-md dark:shadow-lg">
-          <span className="block text-xs font-bold text-gray-555 dark:text-gray-400 uppercase">Credencial de USDA FoodData Central</span>
-          <p className="text-[10px] text-gray-650 dark:text-gray-400 leading-normal">
-            Configura tu propia clave de API de la USDA para la búsqueda de ingredientes y alimentos naturales. De forma predeterminada se usa una clave pública compartida.
-          </p>
-          
-          <Input
-            type="password"
-            icon={Key}
-            value={usdaApiKey}
-            onChange={(e) => setUsdaApiKey(e.target.value)}
-            placeholder="Ingresa tu clave de API de USDA..."
-            className="bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 focus:border-emerald-500/30 font-mono"
-            size="md"
-          />
-        </div>
-
-        {/* Biometric Override Fields */}
-        <div className="bg-white dark:bg-[#161824] p-4 rounded-xl border border-gray-200 dark:border-gray-800 space-y-3 shadow-md dark:shadow-lg">
-          <span className="block text-xs font-bold text-gray-550 dark:text-gray-400 uppercase">Perfil Físico</span>
-
-          <div className="space-y-2.5">
-             <div>
-              <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Nombre</label>
-              <Input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="bg-gray-50 dark:bg-[#0f101a] border-gray-250 dark:border-gray-800"
-                size="sm"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Edad</label>
-                <Input
-                  type="number"
-                  value={age}
-                  onChange={(e) => setAge(parseInt(e.target.value) || 0)}
-                  className="bg-gray-50 dark:bg-[#0f101a] border-gray-250 dark:border-gray-800"
-                  size="sm"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Sexo Biológico</label>
-                <select
-                  value={sex}
-                  onChange={(e) => setSex(e.target.value as BiologicalSex)}
-                  className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-250 dark:border-gray-800 rounded-lg py-1.5 px-3 text-xs text-gray-900 dark:text-white outline-none"
-                >
-                  <option value="male">Masculino</option>
-                  <option value="female">Femenino</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Peso (kg)</label>
-                <Input
-                  type="number"
-                  step="0.1"
-                  value={weight}
-                  onChange={(e) => setWeight(parseFloat(e.target.value) || 0)}
-                  className="bg-gray-50 dark:bg-[#0f101a] border-gray-250 dark:border-gray-800"
-                  size="sm"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Estatura (cm)</label>
-                <Input
-                  type="number"
-                  value={height}
-                  onChange={(e) => setHeight(parseInt(e.target.value) || 0)}
-                  className="bg-gray-50 dark:bg-[#0f101a] border-gray-250 dark:border-gray-800"
-                  size="sm"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Training Objectives Settings */}
-        <div className="bg-white dark:bg-[#161824] p-4 rounded-xl border border-gray-200 dark:border-gray-800 space-y-3 shadow-md dark:shadow-lg">
-          <span className="block text-xs font-bold text-gray-550 dark:text-gray-400 uppercase">Meta y Plan deportivo</span>
-
-          <div className="space-y-2.5">
-            <div>
-              <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Meta Nutricional</label>
-              <select
-                value={goal}
-                onChange={(e) => setGoal(e.target.value as FitnessGoal)}
-                className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-250 dark:border-gray-800 rounded-lg py-1.5 px-3 text-xs text-gray-900 dark:text-white outline-none"
-              >
-                <option value="lose_weight">Bajar de peso / Definición</option>
-                <option value="gain_muscle">Ganar masa muscular / Volumen</option>
-                <option value="aesthetics">Recomposición Estética</option>
-                <option value="maintenance">Mantenimiento general</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Tipo de Dieta</label>
-              <select
-                value={dietType}
-                onChange={(e) => setDietType(e.target.value as DietType)}
-                className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-250 dark:border-gray-800 rounded-lg py-1.5 px-3 text-xs text-gray-900 dark:text-white outline-none"
-              >
-                <option value="standard">Estándar (Todo / Sin restricciones)</option>
-                <option value="vegetarian">Vegetariana</option>
-                <option value="vegan">Vegana</option>
-                <option value="keto">Cetogénica (Keto)</option>
-                <option value="paleo">Paleolítica (Paleo)</option>
-                <option value="mediterranean">Mediterránea</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-1.5 uppercase font-bold tracking-wider">Alergias o Restricciones</label>
-              <div className="grid grid-cols-2 gap-1.5">
-                {[
-                  { id: "lactose", label: "🥛 Sin Lactosa" },
-                  { id: "gluten", label: "🌾 Sin Gluten" },
-                  { id: "nuts", label: "🥜 Sin Frutos Secos" },
-                  { id: "seafood", label: "🍤 Sin Mariscos" },
-                  { id: "soy", label: "🫘 Sin Soya" }
-                ].map((item) => {
-                  const isSelected = allergies.includes(item.id);
-                  const handleToggle = () => {
-                    if (isSelected) {
-                      setAllergies(allergies.filter(a => a !== item.id));
-                    } else {
-                      setAllergies([...allergies, item.id]);
-                    }
-                  };
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={handleToggle}
-                      className={`py-1.5 px-2.5 rounded-lg border text-center transition text-[10px] font-bold cursor-pointer ${
-                        isSelected
-                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                          : "bg-white/5 border-white/5 text-white/40"
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Nivel Histórico</label>
-                <select
-                  value={level}
-                  onChange={(e) => setLevel(e.target.value as ExperienceLevel)}
-                  className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-250 dark:border-gray-800 rounded-lg py-1.5 px-3 text-xs text-gray-900 dark:text-white outline-none"
-                >
-                  <option value="beginner">Principiante</option>
-                  <option value="intermediate">Intermedio</option>
-                  <option value="advanced">Avanzado</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Entorno de Ejercicio</label>
-                <select
-                  value={environment}
-                  onChange={(e) => setEnvironment(e.target.value as TrainingEnvironment)}
-                  className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-250 dark:border-gray-800 rounded-lg py-1.5 px-3 text-xs text-gray-900 dark:text-white outline-none"
-                >
-                  <option value="home">Casa</option>
-                  <option value="gym">Gimnasio</option>
-                  <option value="outdoor">Aire Libre</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Actividad Diaria / Laboral (NEAT)</label>
-              <select
-                value={activityLevel}
-                onChange={(e) => setActivityLevel(e.target.value as any)}
-                className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-250 dark:border-gray-800 rounded-lg py-1.5 px-3 text-xs text-gray-900 dark:text-white outline-none"
-              >
-                <option value="sedentary">Actividad Sedentaria (ej. estudio, clases, oficina, escritorio)</option>
-                <option value="lightly_active">Actividad Ligera (ej. estudio/escritorio con caminatas, tareas del hogar)</option>
-                <option value="moderately_active">Actividad Moderada (ej. de pie gran parte del día, caminar frecuente)</option>
-                <option value="highly_active">Actividad Intensa (ej. esfuerzo constante, deporte intensivo diario)</option>
-                <option value="heavy_labor">Trabajo Físico / Labor Pesada (ej. construcción, agricultura, carga)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Promedio de Pasos Diarios (NEAT)</label>
-              <select
-                value={stepsRange}
-                onChange={(e) => setStepsRange(e.target.value as any)}
-                className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-250 dark:border-gray-800 rounded-lg py-1.5 px-3 text-xs text-gray-900 dark:text-white outline-none"
-              >
-                <option value="under_4k">Menos de 4,000 pasos</option>
-                <option value="5k_7k">5,000 - 7,000 pasos</option>
-                <option value="8k_10k">8,000 - 10,000 pasos</option>
-                <option value="12k_15k">12,000 - 15,000 pasos</option>
-                <option value="over_18k">Más de 18,000 pasos</option>
-              </select>
-            </div>
-
-            {goal === "lose_weight" && (
-              <div>
-                <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Ritmo del Déficit (Pérdida de Peso)</label>
-                <select
-                  value={deficitPace}
-                  onChange={(e) => setDeficitPace(e.target.value as any)}
-                  className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-250 dark:border-gray-800 rounded-lg py-1.5 px-3 text-xs text-gray-900 dark:text-white outline-none"
-                >
-                  <option value="conservative">Conservador (lento y seguro, protege músculo)</option>
-                  <option value="moderate">Moderado (ritmo estándar clínico)</option>
-                  <option value="aggressive">Agresivo (rápido, solo si tu porcentaje de grasa es alto)</option>
-                </select>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Cantidad de Comidas al Día</label>
-              <select
-                value={solidMealsCount}
-                onChange={(e) => setSolidMealsCount(parseInt(e.target.value) || 4)}
-                className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-250 dark:border-gray-800 rounded-lg py-1.5 px-3 text-xs text-gray-900 dark:text-white outline-none"
-              >
-                <option value={2}>2 comidas al día</option>
-                <option value={3}>3 comidas al día</option>
-                <option value={4}>4 comidas al día</option>
-                <option value={5}>5 comidas al día</option>
-                <option value={6}>6 comidas al día</option>
-              </select>
-            </div>
-
-            <div className="pt-1.5">
-              <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-1.5">Molestias / Dolores Articulares</label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: "knee", label: "Rodilla" },
-                  { id: "back", label: "Espalda Baja" },
-                  { id: "shoulder", label: "Hombro" }
-                ].map((area) => {
-                  const selected = jointPainAreas.includes(area.id as any);
-                  return (
-                    <button
-                      key={area.id}
-                      type="button"
-                      onClick={() => {
-                        const newArea = area.id as any;
-                        if (selected) {
-                          setJointPainAreas(jointPainAreas.filter(a => a !== newArea));
-                        } else {
-                          setJointPainAreas([...jointPainAreas, newArea]);
-                        }
-                      }}
-                      className={`py-1.5 px-2 rounded-lg border text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                        selected
-                          ? "bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400 font-semibold"
-                          : "bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 text-gray-400 dark:text-gray-500"
-                      }`}
-                    >
-                      <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border transition ${
-                        selected ? "bg-amber-500 border-amber-500 text-white" : "border-gray-300 dark:border-gray-700"
-                      }`}>
-                        {selected && <Check className="h-2.5 w-2.5 text-white stroke-[3px]" />}
-                      </div>
-                      <span className="text-[10px]">{area.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-1 leading-normal">
-                Al seleccionar zonas, el generador de rutinas de IA evitará ejercicios contraindicados para las articulaciones afectadas.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Rutas Habituales y Gasto Base */}
-        <div className="bg-white dark:bg-[#161824] p-4 rounded-xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-md dark:shadow-lg">
-          <span className="block text-xs font-bold text-gray-550 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-            <MapPin className="h-3.5 w-3.5 text-emerald-400" />
-            <span>Rutas Habituales y Gasto Base</span>
-          </span>
-          <p className="text-[10px] text-gray-650 dark:text-gray-400 leading-normal">
-            Registra los trayectos o actividades frecuentes que realizas (caminar, correr o ciclismo). Podrás marcarlos en el Dashboard para sumar de forma directa las calorías quemadas a tu gasto calórico diario.
-          </p>
-
-          {/* Formulario de nueva ruta */}
-          <div className="bg-gray-50 dark:bg-[#0f101a] p-3 rounded-lg border border-gray-200 dark:border-gray-800 space-y-3">
-            <span className="block text-[10px] font-bold text-gray-400 uppercase">Agregar Nueva Ruta</span>
-            
-            <div className="space-y-2">
-              <div>
-                <label className="block text-[9px] text-gray-550 dark:text-gray-400 mb-0.5">Nombre / Identificador de la Ruta</label>
-                <Input
-                  type="text"
-                  value={newRouteName}
-                  onChange={(e) => setNewRouteName(e.target.value)}
-                  placeholder="Ej: Camino al trabajo, Trote matutino..."
-                  className="bg-white dark:bg-[#161824] border-gray-200 dark:border-gray-800"
-                  size="sm"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[9px] text-gray-550 dark:text-gray-400 mb-0.5">Distancia (km)</label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    min="0.1"
-                    value={newRouteDistance}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value);
-                      setNewRouteDistance(isNaN(val) ? "" : val);
-                    }}
-                    placeholder="Ej: 3.5"
-                    className="bg-white dark:bg-[#161824] border-gray-200 dark:border-gray-800"
-                    size="sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[9px] text-gray-550 dark:text-gray-400 mb-0.5">Actividad</label>
-                  <select
-                    value={newRouteActivity}
-                    onChange={(e) => setNewRouteActivity(e.target.value as "walking" | "running" | "cycling")}
-                    className="w-full bg-white dark:bg-[#161824] border border-gray-200 dark:border-gray-800 rounded-lg py-1.5 px-3 text-xs text-gray-900 dark:text-white outline-none"
-                  >
-                    <option value="walking">Caminar</option>
-                    <option value="running">Correr</option>
-                    <option value="cycling">Ciclismo</option>
-                  </select>
-                </div>
-              </div>
-
-              {newRouteDistance && newRouteDistance > 0 && (
-                <div className="text-[10px] text-emerald-400/90 font-bold bg-emerald-500/5 p-2 rounded border border-emerald-500/10 flex items-center justify-between">
-                  <span>Gasto calórico estimado:</span>
-                  <span>
-                    {Math.round(
-                      newRouteDistance *
-                        weight *
-                        (newRouteActivity === "walking"
-                          ? 0.75
-                          : newRouteActivity === "running"
-                          ? 1.03
-                          : 0.35)
-                    )}{" "}
-                    kcal
-                  </span>
-                </div>
-              )}
-
-              <Button
-                variant="primary"
-                onClick={handleAddRoute}
-                leftIcon={Plus}
-                className="w-full text-xs font-bold"
-                size="sm"
-              >
-                Agregar Ruta
-              </Button>
-            </div>
-          </div>
-
-          {/* Listado de rutas actuales */}
-          <div className="space-y-2">
-            <span className="block text-[10px] font-bold text-gray-400 uppercase">Mis Rutas Guardadas ({frequentRoutes.length})</span>
-            {frequentRoutes.length === 0 ? (
-              <div className="text-center py-4 border border-dashed border-gray-200 dark:border-gray-800 rounded-lg text-xs text-gray-450 dark:text-gray-500">
-                Aún no tienes rutas habituales registradas.
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-[220px] overflow-y-auto no-scrollbar">
-                {frequentRoutes.map((route) => (
-                  <div
-                    key={route.id}
-                    className="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-lg hover:border-gray-300 dark:hover:border-gray-700/60 transition"
-                  >
-                    <div className="flex-1 min-w-0 pr-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-black text-gray-900 dark:text-white truncate">{route.name}</span>
-                        <span className="text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase bg-gray-200 dark:bg-gray-800 text-gray-550 dark:text-gray-400">
-                          {route.activityType === "walking" ? "Caminar" : route.activityType === "running" ? "Correr" : "Ciclismo"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-500 dark:text-gray-450 font-bold">
-                        <span>Distancia: {route.distanceKm} km</span>
-                        <span>•</span>
-                        <span className="text-emerald-500">{route.caloriesBurned} kcal</span>
+                  {/* Edad & Sexo Biológico (Custom Pill Toggle) */}
+                  <div className="grid grid-cols-2 gap-3 items-end">
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1">Edad</label>
+                      <Input
+                        type="number"
+                        value={age}
+                        onChange={(e) => setAge(parseInt(e.target.value) || 0)}
+                        className="bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 font-bold"
+                        size="md"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1">Sexo Biológico</label>
+                      <div className="flex bg-gray-50 dark:bg-[#0f101a] p-1 rounded-xl border border-gray-200 dark:border-gray-800 h-[42px] items-center">
+                        <button
+                          type="button"
+                          onClick={() => setSex("male")}
+                          className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-1 ${
+                            sex === "male"
+                              ? "bg-emerald-500 text-white shadow-xs"
+                              : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                          }`}
+                        >
+                          <span>Hombre</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSex("female")}
+                          className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-1 ${
+                            sex === "female"
+                              ? "bg-emerald-500 text-white shadow-xs"
+                              : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                          }`}
+                        >
+                          <span>Mujer</span>
+                        </button>
                       </div>
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1">Peso Base (kg)</label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={weight}
+                        onChange={(e) => setWeight(parseFloat(e.target.value) || 0)}
+                        className="bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 font-bold"
+                        size="md"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1">Estatura (cm)</label>
+                      <Input
+                        type="number"
+                        value={height}
+                        onChange={(e) => setHeight(parseInt(e.target.value) || 0)}
+                        className="bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 font-bold"
+                        size="md"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Goal & Daily Activity (NEAT) */}
+              <div className="bg-white dark:bg-[#161824] p-4.5 rounded-3xl border border-gray-200 dark:border-gray-800 space-y-3.5 shadow-sm">
+                <span className="block text-xs font-black text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <Target className="h-4 w-4 text-emerald-400" />
+                  <span>Meta Nutricional y Actividad Base</span>
+                </span>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1">Objetivo Nutricional</label>
+                    <select
+                      value={goal}
+                      onChange={(e) => setGoal(e.target.value as FitnessGoal)}
+                      className="w-full h-10 bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-xl px-3 text-xs text-gray-900 dark:text-white outline-none font-bold transition"
+                    >
+                      <option value="lose_weight">Bajar de peso / Definición</option>
+                      <option value="gain_muscle">Ganar masa muscular / Volumen</option>
+                      <option value="aesthetics">Recomposición Estética</option>
+                      <option value="maintenance">Mantenimiento general</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1">Actividad Diaria / Laboral (NEAT)</label>
+                    <select
+                      value={activityLevel}
+                      onChange={(e) => setActivityLevel(e.target.value as any)}
+                      className="w-full h-10 bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-xl px-3 text-xs text-gray-900 dark:text-white outline-none font-bold transition"
+                    >
+                      <option value="sedentary">Actividad Sedentaria (oficina, escritorio, estudio)</option>
+                      <option value="lightly_active">Actividad Ligera (escritorio + caminatas, tareas del hogar)</option>
+                      <option value="moderately_active">Actividad Moderada (de pie gran parte del día, caminar frecuente)</option>
+                      <option value="highly_active">Actividad Intensa (esfuerzo físico constante diario)</option>
+                      <option value="heavy_labor">Trabajo Físico / Labor Pesada (construcción, carga, agricultura)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1">Promedio de Pasos Diarios</label>
+                    <select
+                      value={stepsRange}
+                      onChange={(e) => setStepsRange(e.target.value as any)}
+                      className="w-full h-10 bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-xl px-3 text-xs text-gray-900 dark:text-white outline-none font-bold transition"
+                    >
+                      <option value="under_4k">Menos de 4,000 pasos</option>
+                      <option value="5k_7k">5,000 - 7,000 pasos</option>
+                      <option value="8k_10k">8,000 - 10,000 pasos</option>
+                      <option value="12k_15k">12,000 - 15,000 pasos</option>
+                      <option value="over_18k">Más de 18,000 pasos</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* SECCIÓN 2: NUTRICIÓN */}
+          {/* ========================================================================= */}
+          {activeSection === "nutrition" && (
+            <motion.div
+              key="nutrition"
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              transition={{ duration: 0.15 }}
+              className="space-y-4"
+            >
+              {/* Diet Type */}
+              <div className="bg-white dark:bg-[#161824] p-4.5 rounded-3xl border border-gray-200 dark:border-gray-800 space-y-3.5 shadow-sm">
+                <span className="block text-xs font-black text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <Utensils className="h-4 w-4 text-emerald-400" />
+                  <span>Tipo de Alimentación</span>
+                </span>
+
+                <div className="space-y-2.5">
+                  <select
+                    value={dietType}
+                    onChange={(e) => setDietType(e.target.value as DietType)}
+                    className="w-full h-10 bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-xl px-3 text-xs text-gray-900 dark:text-white outline-none font-bold transition"
+                  >
+                    <option value="standard">Estándar (Todo / Sin restricciones)</option>
+                    <option value="vegetarian">Vegetariana</option>
+                    <option value="vegan">Vegana</option>
+                    <option value="keto">Cetogénica (Keto)</option>
+                    <option value="paleo">Paleolítica (Paleo)</option>
+                    <option value="mediterranean">Mediterránea</option>
+                    <option value="other">Otra (Personalizada)</option>
+                  </select>
+
+                  {dietType === "other" && (
+                    <Input
+                      type="text"
+                      value={customDiet}
+                      onChange={(e) => setCustomDiet(e.target.value)}
+                      placeholder="Describe tu tipo de dieta personalizada..."
+                      className="bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 font-medium"
+                      size="md"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Allergies & Intolerances */}
+              <div className="bg-white dark:bg-[#161824] p-4.5 rounded-3xl border border-gray-200 dark:border-gray-800 space-y-3.5 shadow-sm">
+                <span className="block text-xs font-black text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <ShieldAlert className="h-4 w-4 text-emerald-400" />
+                  <span>Alergias e Intolerancias</span>
+                </span>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: "lactose", label: "🥛 Sin Lactosa" },
+                    { id: "gluten", label: "🌾 Sin Gluten" },
+                    { id: "nuts", label: "🥜 Sin Frutos Secos" },
+                    { id: "seafood", label: "🍤 Sin Mariscos" },
+                    { id: "soy", label: "🫘 Sin Soya" },
+                    { id: "other", label: "✏️ Otra" }
+                  ].map((item) => {
+                    const isSelected = allergies.includes(item.id);
+                    const handleToggle = () => {
+                      if (isSelected) {
+                        setAllergies(allergies.filter(a => a !== item.id));
+                        if (item.id === "other") setCustomAllergies("");
+                      } else {
+                        setAllergies([...allergies, item.id]);
+                      }
+                    };
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={handleToggle}
+                        className={`py-2 px-3 rounded-xl border text-center transition text-xs font-bold cursor-pointer flex items-center justify-between ${
+                          isSelected
+                            ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-500 dark:text-emerald-400"
+                            : "bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400"
+                        }`}
+                      >
+                        <span>{item.label}</span>
+                        {isSelected && <Check className="h-3 w-3 text-emerald-500 stroke-[3px]" />}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {allergies.includes("other") && (
+                  <Input
+                    type="text"
+                    value={customAllergies}
+                    onChange={(e) => setCustomAllergies(e.target.value)}
+                    placeholder="Especifica tus alergias adicionales..."
+                    className="bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 font-medium"
+                    size="md"
+                  />
+                )}
+              </div>
+
+              {/* Meals Count & Creatine */}
+              <div className="bg-white dark:bg-[#161824] p-4.5 rounded-3xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-sm">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1.5">Cantidad de Comidas al Día</label>
+                  <select
+                    value={solidMealsCount}
+                    onChange={(e) => setSolidMealsCount(parseInt(e.target.value) || 4)}
+                    className="w-full h-10 bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-xl px-3 text-xs text-gray-900 dark:text-white outline-none font-bold transition"
+                  >
+                    <option value={2}>2 comidas al día</option>
+                    <option value={3}>3 comidas al día</option>
+                    <option value={4}>4 comidas al día</option>
+                    <option value={5}>5 comidas al día</option>
+                    <option value={6}>6 comidas al día</option>
+                  </select>
+                </div>
+
+                <div className="pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                  <div className="space-y-0.5 text-left">
+                    <span className="text-xs font-black text-gray-900 dark:text-white block">Consumo Diario de Creatina</span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 block">Recordatorio diario en tu Dashboard</span>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setTakesCreatine(!takesCreatine)}
+                    className={`w-12 h-6.5 rounded-full p-1 transition-colors duration-200 focus:outline-none flex items-center cursor-pointer ${
+                      takesCreatine ? "bg-emerald-500 justify-end" : "bg-gray-200 dark:bg-gray-800 justify-start"
+                    }`}
+                  >
+                    <span className="w-4.5 h-4.5 rounded-full bg-white shadow-md"></span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* SECCIÓN 3: SISTEMA & APP */}
+          {/* ========================================================================= */}
+          {activeSection === "system" && (
+            <motion.div
+              key="system"
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              transition={{ duration: 0.15 }}
+              className="space-y-4"
+            >
+              {/* Push Notifications */}
+              <div className="bg-white dark:bg-[#161824] p-4.5 rounded-3xl border border-gray-200 dark:border-gray-800 space-y-3 shadow-sm">
+                <span className="block text-xs font-black text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <Bell className="h-4 w-4 text-emerald-400" />
+                  <span>Notificaciones y Recordatorios</span>
+                </span>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-normal">
+                  Recibe avisos directos en tu pantalla para beber agua, tomar creatina y registrar tus comidas diarias.
+                </p>
+
+                {pushError && (
+                  <div className="bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl text-[10px] text-red-400 font-semibold flex items-center gap-2">
+                    <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span>{pushError}</span>
+                  </div>
+                )}
+
+                {pushSupported === false ? (
+                  <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl text-left space-y-1">
+                    <span className="text-[10px] font-extrabold text-amber-400 flex items-center gap-1.5">
+                      <Info className="h-3.5 w-3.5" />
+                      <span>No Soportado</span>
+                    </span>
+                    <p className="text-[9px] text-gray-400 leading-relaxed">
+                      Las notificaciones no son compatibles con este navegador o dispositivo.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between py-1">
+                    <div className="space-y-0.5 text-left">
+                      <span className="text-xs font-bold text-gray-900 dark:text-white block">Avisos y Alertas</span>
+                      <span className="text-[9px] text-gray-500 dark:text-gray-400">
+                        {notificationPermission === "denied"
+                          ? "Permisos bloqueados en el navegador."
+                          : isSubscribed
+                          ? "Suscripción activa y sincronizada."
+                          : "Activa avisos directos en tu dispositivo."}
+                      </span>
+                    </div>
+
                     <button
                       type="button"
-                      onClick={() => handleDeleteRoute(route.id)}
-                      className="p-1.5 text-gray-400 hover:text-red-400 transition rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/80 cursor-pointer"
+                      disabled={pushLoading || notificationPermission === "denied"}
+                      onClick={handleToggleNotifications}
+                      className={`w-12 h-6.5 rounded-full p-1 transition-colors duration-200 focus:outline-none flex items-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                        isSubscribed ? "bg-emerald-500 justify-end" : "bg-gray-200 dark:bg-gray-800 justify-start"
+                      }`}
                     >
-                      <Trash2 className="h-4.5 w-4.5" />
+                      {pushLoading ? (
+                        <RefreshCw className="w-4.5 h-4.5 rounded-full bg-white shadow-md animate-spin p-1 text-gray-700" />
+                      ) : (
+                        <span className="w-4.5 h-4.5 rounded-full bg-white shadow-md"></span>
+                      )}
                     </button>
                   </div>
-                ))}
+                )}
               </div>
-            )}
-          </div>
+
+              {/* Gemini AI Key */}
+              <div className="bg-white dark:bg-[#161824] p-4.5 rounded-3xl border border-gray-200 dark:border-gray-800 space-y-3 shadow-sm">
+                <span className="block text-xs font-black text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <Key className="h-4 w-4 text-emerald-400" />
+                  <span>Credencial de IA (Gemini API)</span>
+                </span>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-normal">
+                  Ingresa tu clave de API de Google AI Studio para análisis de comidas con fotos y planes sin límites.
+                </p>
+                
+                <div className="flex gap-2 items-center">
+                  <div className="flex-1">
+                    <Input
+                      type="password"
+                      icon={Key}
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="AIzaSy..."
+                      className="bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 font-mono"
+                      size="md"
+                    />
+                  </div>
+                  <Button
+                    variant="secondary"
+                    onClick={handlePasteApiKey}
+                    className="shrink-0 h-[42px] px-3.5 text-xs font-bold rounded-xl cursor-pointer"
+                  >
+                    Pegar
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Global Save Button (Always visible at bottom) */}
+        <div className="pt-2">
+          <Button
+            variant="primary"
+            onClick={handleSave}
+            leftIcon={Check}
+            className="w-full font-black py-3.5 rounded-2xl text-sm shadow-lg shadow-emerald-500/20 cursor-pointer"
+            size="lg"
+          >
+            Guardar Cambios y Recalcular Metas
+          </Button>
         </div>
 
-        {/* Supplements Configuration */}
-        <div className="bg-white dark:bg-[#161824] p-4 rounded-xl border border-gray-200 dark:border-gray-800 space-y-3 shadow-md dark:shadow-lg">
-          <span className="block text-xs font-bold text-gray-550 dark:text-gray-400 uppercase">Suplementación</span>
-          
-          <div className="flex items-center justify-between py-1">
-            <div className="space-y-0.5 text-left">
-              <span className="text-xs font-bold text-gray-900 dark:text-white block">Consumo de Creatina</span>
-              <span className="text-[10px] text-gray-500 dark:text-gray-400">Activa recordatorios diarios en tu dashboard.</span>
-            </div>
-            
-            <button
-              type="button"
-              onClick={() => setTakesCreatine(!takesCreatine)}
-              className={`w-12 h-6.5 rounded-full p-1 transition-colors duration-200 focus:outline-none flex items-center cursor-pointer ${
-                takesCreatine ? "bg-emerald-500 justify-end" : "bg-gray-200 dark:bg-gray-800 justify-start"
-              }`}
-            >
-              <span className="w-4.5 h-4.5 rounded-full bg-white shadow-md"></span>
-            </button>
-          </div>
-        </div>
-
-        {/* Trigger save */}
-        <Button
-          variant="primary"
-          onClick={handleSave}
-          leftIcon={Check}
-          className="w-full cursor-pointer"
-          size="md"
-        >
-          Guardar Cambios y Recalcular Metas
-        </Button>
-
-        {/* Reset App */}
-        <div className="border-t border-gray-200 dark:border-gray-800/80 pt-4 space-y-4">
+        {/* Global Account Logout Section (Always visible across all tabs) */}
+        <div className="pt-2 border-t border-gray-200 dark:border-gray-800 space-y-3">
           <Button
             variant="danger"
             onClick={() => {
-              if (window.confirm("¿Estás seguro de que deseas cerrar la sesión? Se borrará tu historial y volverás al onboarding.")) {
+              if (window.confirm("¿Estás seguro de que deseas cerrar la sesión? Se reiniciará la sesión y volverás a la pantalla inicial.")) {
                 onResetApp();
               }
             }}
             leftIcon={LogOut}
-            className="w-full font-extrabold cursor-pointer"
+            className="w-full font-extrabold cursor-pointer py-3 rounded-2xl"
             size="md"
           >
-            Cerrar Sesión (Reiniciar Datos)
+            Cerrar Sesión
           </Button>
 
-          <div className="text-center pt-2 text-[9px] text-gray-400 dark:text-white/20 font-mono tracking-wider">
-            <span>by Richard Bouryssieres</span>
+          {/* Credits footer (Independent from the logout button) */}
+          <div className="text-center pt-2 text-[10px] text-gray-400 font-mono tracking-wider">
+            <span>Trophia • by Richard Bouryssieres</span>
             <span className="mx-1.5">•</span>
-            <span>v0.0.2</span>
+            <span>v0.1.0</span>
           </div>
         </div>
 

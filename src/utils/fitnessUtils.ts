@@ -27,6 +27,22 @@ export const GLOBAL_FOODS_DB: FoodItem[] = [
   { name: "Proteína de Suero (Whey Gold Standard)", calories: 390, protein: 80, carbs: 6.7, fat: 3.3, servingSize: "100g" }
 ];
 
+export const SPORTS_METS: Record<string, { label: string; met: number; emoji: string }> = {
+  soccer: { label: "Fútbol", met: 8.0, emoji: "⚽" },
+  boxing: { label: "Boxeo / Kickboxing", met: 7.8, emoji: "🥊" },
+  gym: { label: "Gimnasio / Musculación", met: 6.0, emoji: "🏋️" },
+  swimming: { label: "Natación", met: 7.0, emoji: "🏊" },
+  running: { label: "Running / Carrera", met: 9.0, emoji: "🏃" },
+  cycling: { label: "Ciclismo / Spinning", met: 7.5, emoji: "🚴" },
+  tennis: { label: "Tenis / Pádel", met: 7.3, emoji: "🎾" },
+  basketball: { label: "Baloncesto", met: 8.0, emoji: "🏀" },
+  martial_arts: { label: "Artes Marciales", met: 10.0, emoji: "🥋" },
+  crossfit: { label: "Crossfit / HIIT", met: 9.0, emoji: "🥵" },
+  yoga: { label: "Yoga / Pilates", met: 3.0, emoji: "🧘" },
+  walking: { label: "Caminata Rápida", met: 4.0, emoji: "🚶" },
+  other: { label: "Otro deporte / actividad", met: 6.0, emoji: "⚡" }
+};
+
 // Calculate BMI
 export function calculateBMI(weight: number, height: number): number {
   if (weight <= 0 || height <= 0) return 0;

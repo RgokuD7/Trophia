@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Plus, BookOpen, Star, Calendar, ShoppingCart, Lock, ArrowLeft, Trash2, Check, X, 
-  ChefHat, Flame, Zap, ChevronLeft, ChevronRight, MessageSquare, Lightbulb, Sparkles, AlertCircle, Send, Utensils, Package
+  ChefHat, Flame, Zap, ChevronLeft, ChevronRight, MessageSquare, Lightbulb, Sparkles, AlertCircle, Send, Utensils, Package, Pencil
 } from "lucide-react";
 import { UserProfile, LoggedMeal, MealType, CustomFood } from "../types";
 import { getCustomFoods, addCustomFood, deleteCustomFood } from "../services/dbService";
@@ -15,6 +15,7 @@ interface NutritionHubProps {
   userId: string;
   loggedMeals: LoggedMeal[];
   onAddMeal: (meal: Omit<LoggedMeal, "id" | "timestamp">) => void;
+  onUpdateMeal?: (meal: LoggedMeal) => void;
   onDeleteMeal: (id: string) => void;
   onOpenFoodLogger: (suggestedType?: MealType, isCustomOnly?: boolean, isPantry?: boolean) => void;
   onOpenRecipeAssistant: () => void;
@@ -67,6 +68,7 @@ export default function NutritionHub({
   userId,
   loggedMeals,
   onAddMeal,
+  onUpdateMeal,
   onDeleteMeal,
   onOpenFoodLogger,
   onOpenRecipeAssistant,
@@ -84,6 +86,45 @@ export default function NutritionHub({
   // Custom foods state
   const [customFoods, setCustomFoods] = useState<CustomFood[]>([]);
   const [isLoadingFoods, setIsLoadingFoods] = useState(false);
+
+  // Edit Meal modal state
+  const [editingMeal, setEditingMeal] = useState<LoggedMeal | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editType, setEditType] = useState<MealType>("lunch");
+  const [editCalories, setEditCalories] = useState<number>(0);
+  const [editProtein, setEditProtein] = useState<number>(0);
+  const [editCarbs, setEditCarbs] = useState<number>(0);
+  const [editFat, setEditFat] = useState<number>(0);
+  const [editServingSize, setEditServingSize] = useState<string>("");
+
+  const handleStartEditMeal = (meal: LoggedMeal) => {
+    setEditingMeal(meal);
+    setEditName(meal.name);
+    setEditType(meal.type);
+    setEditCalories(meal.calories);
+    setEditProtein(meal.protein);
+    setEditCarbs(meal.carbs);
+    setEditFat(meal.fat);
+    setEditServingSize(meal.servingSize || "");
+  };
+
+  const handleSaveEditMeal = () => {
+    if (!editingMeal || !editName.trim()) return;
+    const updated: LoggedMeal = {
+      ...editingMeal,
+      name: editName.trim(),
+      type: editType,
+      calories: Math.max(0, Number(editCalories) || 0),
+      protein: Math.max(0, Number(editProtein) || 0),
+      carbs: Math.max(0, Number(editCarbs) || 0),
+      fat: Math.max(0, Number(editFat) || 0),
+      servingSize: editServingSize.trim() || undefined,
+    };
+    if (onUpdateMeal) {
+      onUpdateMeal(updated);
+    }
+    setEditingMeal(null);
+  };
 
   const handleDeletePantryItem = (itemId: string) => {
     const currentPantry = profile.pantry || [];
@@ -963,16 +1004,29 @@ export default function NutritionHub({
                 <div className="divide-y divide-white/[0.03]">
                   {meals.map((meal) => (
                     <div key={meal.id} className="px-3.5 py-2.5 flex items-center justify-between group hover:bg-white/[0.02] transition">
-                      <div className="min-w-0">
+                      <div className="min-w-0 pr-2">
                         <span className="text-xs font-bold text-white block truncate">{meal.name}</span>
                         <span className="text-[9px] text-white/30">P:{Number(meal.protein).toFixed(1).replace(/\.0$/, "")}g · C:{Number(meal.carbs).toFixed(1).replace(/\.0$/, "")}g · G:{Number(meal.fat).toFixed(1).replace(/\.0$/, "")}g</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-xs font-black text-emerald-400">{meal.calories}</span>
+                        <span className="text-xs font-black text-emerald-400 font-mono">{meal.calories} kcal</span>
                         {(isToday || isPast) && (
-                          <button onClick={() => onDeleteMeal(meal.id)} className="p-1 text-white/10 group-hover:text-rose-400 transition cursor-pointer">
-                            <Trash2 className="h-3 w-3" />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleStartEditMeal(meal)}
+                              className="p-1.5 text-white/30 hover:text-emerald-400 transition cursor-pointer rounded-lg hover:bg-white/5 border-none bg-transparent"
+                              title="Editar comida o tipo de comida"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => onDeleteMeal(meal.id)}
+                              className="p-1.5 text-white/30 hover:text-rose-400 transition cursor-pointer rounded-lg hover:bg-white/5 border-none bg-transparent"
+                              title="Eliminar comida"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -996,6 +1050,158 @@ export default function NutritionHub({
         {/* Bottom spacer */}
         <div className="h-24" />
       </div>
+
+      {/* Edit Meal Modal */}
+      <AnimatePresence>
+        {editingMeal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-sm bg-[#12131d] border border-white/10 rounded-3xl p-5 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                    <Pencil className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-white tracking-wide uppercase">Editar Comida</h3>
+                    <p className="text-[9px] text-white/40">Corrige el tipo de comida, nombre o macros</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setEditingMeal(null)}
+                  className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white transition cursor-pointer border-none"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {/* Meal Type selector */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-white/40 uppercase tracking-wider block">
+                    Tipo de Comida / Momento
+                  </label>
+                  <div className="grid grid-cols-4 gap-1.5 bg-white/[0.03] p-1 rounded-xl border border-white/5">
+                    {(["breakfast", "lunch", "snack", "dinner"] as MealType[]).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setEditType(t)}
+                        className={`py-2 px-1 rounded-lg text-[9.5px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border-none ${
+                          editType === t
+                            ? "bg-emerald-500 text-black shadow-xs font-black"
+                            : "bg-transparent text-white/50 hover:text-white"
+                        }`}
+                      >
+                        <span className="text-xs">{getMealEmoji(t)}</span>
+                        <span className="truncate">{getMealLabel(t)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Food Name */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-white/40 uppercase tracking-wider block">
+                    Nombre del Alimento
+                  </label>
+                  <Input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="Ej: Avena con proteína"
+                    size="sm"
+                    className="bg-white/5 border-white/10"
+                  />
+                </div>
+
+                {/* Calories */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-white/40 uppercase tracking-wider block">
+                    Calorías (kcal)
+                  </label>
+                  <Input
+                    type="number"
+                    value={editCalories || ""}
+                    onChange={(e) => setEditCalories(parseFloat(e.target.value) || 0)}
+                    placeholder="0"
+                    size="sm"
+                    className="bg-white/5 border-white/10 font-mono font-bold text-emerald-400"
+                  />
+                </div>
+
+                {/* Macros grid */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[8.5px] font-bold text-emerald-400 uppercase block">
+                      Prot (g)
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={editProtein || ""}
+                      onChange={(e) => setEditProtein(parseFloat(e.target.value) || 0)}
+                      placeholder="0"
+                      size="sm"
+                      className="bg-white/5 border-white/10 font-mono text-xs text-center"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[8.5px] font-bold text-blue-400 uppercase block">
+                      Carb (g)
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={editCarbs || ""}
+                      onChange={(e) => setEditCarbs(parseFloat(e.target.value) || 0)}
+                      placeholder="0"
+                      size="sm"
+                      className="bg-white/5 border-white/10 font-mono text-xs text-center"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[8.5px] font-bold text-amber-400 uppercase block">
+                      Grasa (g)
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={editFat || ""}
+                      onChange={(e) => setEditFat(parseFloat(e.target.value) || 0)}
+                      placeholder="0"
+                      size="sm"
+                      className="bg-white/5 border-white/10 font-mono text-xs text-center"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-2 pt-2 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setEditingMeal(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white text-xs font-bold transition cursor-pointer border-none"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEditMeal}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black transition cursor-pointer border-none shadow-md shadow-emerald-500/20"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

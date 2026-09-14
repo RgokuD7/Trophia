@@ -3,9 +3,9 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   User, Weight, Ruler, ChevronRight, ChevronLeft, Sparkles, 
   BookOpen, Key, AlertCircle, AlertTriangle, Camera, Check, Eye, Info, RefreshCw, Bell, Calendar,
-  Flame, Dumbbell, Zap, UserRound, Smartphone, Download, Share
+  Flame, Dumbbell, Zap, UserRound, Smartphone, Download, Share, X
 } from "lucide-react";
-import { UserProfile, BiologicalSex, FitnessGoal, ExperienceLevel, TrainingEnvironment, DietType } from "../types";
+import { UserProfile, BiologicalSex, FitnessGoal, ExperienceLevel, TrainingEnvironment, DietType, BodyMetricLog } from "../types";
 import { calculateBMI, getBMICategory, calculateNavyBodyFat, calculateCaliperBodyFat, calculateRequirements } from "../utils/fitnessUtils";
 import { analyzeFatByIA, recommendGoalByIA } from "../services/geminiService";
 import { Button } from "./ui/Button";
@@ -128,6 +128,9 @@ interface OnboardingProps {
   onComplete: (profile: UserProfile) => void;
   userId: string;
   defaultName?: string;
+  existingProfile?: UserProfile;
+  mode?: "onboarding" | "recalibration";
+  onCancel?: () => void;
 }
 
 const formatAnalysisText = (text: string) => {
@@ -204,9 +207,17 @@ const getDeviceInfo = (): DeviceInfo => {
   return { isIOS, isAndroid, isSafari, isChrome, isMobile };
 };
 
-export default function Onboarding({ onComplete, userId, defaultName }: OnboardingProps) {
+export default function Onboarding({ 
+  onComplete, 
+  userId, 
+  defaultName,
+  existingProfile,
+  mode = "onboarding",
+  onCancel
+}: OnboardingProps) {
   const deviceInfo = getDeviceInfo();
   const [step, setStep] = useState(() => {
+    if (mode === "recalibration") return 4;
     const savedKey = localStorage.getItem("trophia_api_key");
     return (savedKey && savedKey.trim().length >= 15) ? 2 : 1;
   });
@@ -219,13 +230,13 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
     }
   }, [step]);
 
-
-  const [name, setName] = useState(defaultName || "Richard");
-  const [birthDay, setBirthDay] = useState(1);
-  const [birthMonth, setBirthMonth] = useState(1);
-  const [birthYear, setBirthYear] = useState(1999);
-  const [birthdate, setBirthdate] = useState("1999-01-01");
-  const [age, setAge] = useState(25);
+  const parsedBirth = existingProfile?.birthdate ? new Date(existingProfile.birthdate) : null;
+  const [name, setName] = useState(existingProfile?.name || defaultName || "Richard");
+  const [birthDay, setBirthDay] = useState(parsedBirth && !isNaN(parsedBirth.getTime()) ? parsedBirth.getUTCDate() : 1);
+  const [birthMonth, setBirthMonth] = useState(parsedBirth && !isNaN(parsedBirth.getTime()) ? parsedBirth.getUTCMonth() + 1 : 1);
+  const [birthYear, setBirthYear] = useState(parsedBirth && !isNaN(parsedBirth.getTime()) ? parsedBirth.getUTCFullYear() : 1999);
+  const [birthdate, setBirthdate] = useState(existingProfile?.birthdate || "1999-01-01");
+  const [age, setAge] = useState(existingProfile?.age || 25);
 
   useEffect(() => {
     const pad = (n: number) => String(n).padStart(2, '0');
@@ -245,16 +256,18 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
     setAge(Math.max(1, calculatedAge));
   }, [birthdate]);
 
-  const [sex, setSex] = useState<BiologicalSex>("male");
-  const [weight, setWeight] = useState<number>(75);
-  const [height, setHeight] = useState<number>(175);
-  const [dietType, setDietType] = useState<DietType>("standard");
-  const [allergies, setAllergies] = useState<string[]>([]);
-  const [activityLevel, setActivityLevel] = useState<"sedentary" | "lightly_active" | "moderately_active" | "highly_active" | "heavy_labor">("sedentary");
-  const [stepsRange, setStepsRange] = useState<"under_4k" | "5k_7k" | "8k_10k" | "12k_15k" | "over_18k">("under_4k");
-  const [deficitPace, setDeficitPace] = useState<"conservative" | "moderate" | "aggressive">("moderate");
-  const [solidMealsCount, setSolidMealsCount] = useState<number>(4);
-  const [parqAnswers, setParqAnswers] = useState({
+  const [sex, setSex] = useState<BiologicalSex>(existingProfile?.sex || "male");
+  const [weight, setWeight] = useState<number>(existingProfile?.weight || 75);
+  const [height, setHeight] = useState<number>(existingProfile?.height || 175);
+  const [dietType, setDietType] = useState<DietType>(existingProfile?.dietType || "standard");
+  const [customDiet, setCustomDiet] = useState<string>(existingProfile?.customDiet || "");
+  const [allergies, setAllergies] = useState<string[]>(existingProfile?.allergies || []);
+  const [customAllergies, setCustomAllergies] = useState<string>(existingProfile?.customAllergies || "");
+  const [activityLevel, setActivityLevel] = useState<"sedentary" | "lightly_active" | "moderately_active" | "highly_active" | "heavy_labor">(existingProfile?.activityLevel || "sedentary");
+  const [stepsRange, setStepsRange] = useState<"under_4k" | "5k_7k" | "8k_10k" | "12k_15k" | "over_18k">(existingProfile?.stepsRange || "under_4k");
+  const [deficitPace, setDeficitPace] = useState<"conservative" | "moderate" | "aggressive">(existingProfile?.deficitPace || "moderate");
+  const [solidMealsCount, setSolidMealsCount] = useState<number>(existingProfile?.solidMealsCount || 4);
+  const [parqAnswers, setParqAnswers] = useState(existingProfile?.parqAnswers || {
     q1: false,
     q2: false,
     q3: false,
@@ -263,11 +276,11 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
     q6: false,
     q7: false
   });
-  const [jointPainAreas, setJointPainAreas] = useState<("knee" | "back" | "shoulder")[]>([]);
+  const [jointPainAreas, setJointPainAreas] = useState<("knee" | "back" | "shoulder")[]>(existingProfile?.jointPainAreas || []);
   const requiresMedicalClearance = parqAnswers.q1 || parqAnswers.q2 || parqAnswers.q3 || parqAnswers.q7;
   
   // Step 2 variables (Navy & Caliper & IA body fat)
-  const [knowsBodyFat, setKnowsBodyFat] = useState<"yes" | "no" | null>(null);
+  const [knowsBodyFat, setKnowsBodyFat] = useState<"yes" | "no" | null>(existingProfile?.bodyFat ? "yes" : null);
   const [manualBodyFat, setManualBodyFat] = useState<number | "">("");
   
   // Toggle states for showing the estimation sections
@@ -351,6 +364,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   const [isSubscribed, setIsSubscribed] = useState<boolean>(false);
   const [pushLoading, setPushLoading] = useState<boolean>(false);
   const [pushError, setPushError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const checkPushSubscription = async () => {
     try {
@@ -416,23 +430,24 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
         }
 
         if (permission !== "granted") {
-          throw new Error("Permiso de notificaciones denegado.");
+          throw new Error("Permiso de notificaciones no concedido.");
         }
 
-        const registration = await navigator.serviceWorker.ready;
-        const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-        if (!vapidPublicKey) {
-          throw new Error("Falta la clave pública VAPID en las variables de entorno.");
+        try {
+          const registration = await navigator.serviceWorker.ready;
+          const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+          if (vapidPublicKey) {
+            const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
+            const subscription = await registration.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: convertedKey,
+            });
+            await savePushSubscription(userId, subscription.toJSON());
+          }
+        } catch (pushSyncErr) {
+          console.warn("Push subscription sync failed, continuing locally:", pushSyncErr);
         }
-        
-        const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
-        
-        const subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: convertedKey,
-        });
 
-        await savePushSubscription(userId, subscription.toJSON());
         setIsSubscribed(true);
 
         try {
@@ -445,7 +460,6 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
               });
             } catch (ctorErr) {
               console.warn("Constructor-based notification failed, falling back to Service Worker:", ctorErr);
-              // Fallback to Service Worker registration (essential for iOS Safari / Mobile Chrome PWA)
               const reg = await navigator.serviceWorker.ready;
               await reg.showNotification("¡Bienvenido a Trophia! 🏆", {
                 body: "Tus notificaciones están activadas. Te recordaremos tus comidas, agua y entrenamientos.",
@@ -468,18 +482,22 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
   };
 
   // Step 3 variables (Goals)
-  const [goal, setGoal] = useState<FitnessGoal>("lose_weight");
+  const [goal, setGoal] = useState<FitnessGoal>(existingProfile?.goal || "lose_weight");
 
   // Step 4 variables (Workouts)
-  const [level, setLevel] = useState<ExperienceLevel>("intermediate");
-  const [selectedEnvironments, setSelectedEnvironments] = useState<TrainingEnvironment[]>(["home"]);
-  const [weeklyTrainingDays, setWeeklyTrainingDays] = useState<number>(4);
-  const [equipment, setEquipment] = useState<string[]>([
-    "Peso corporal / Calistenia básica",
-    "Mancuernas de peso fijo",
-    "Bandas de resistencia elásticas largas",
-    "Colchoneta de alta densidad / Mat de yoga"
-  ]);
+  const [level, setLevel] = useState<ExperienceLevel>(existingProfile?.level || "intermediate");
+  const [selectedEnvironments, setSelectedEnvironments] = useState<TrainingEnvironment[]>(
+    existingProfile?.environments || (existingProfile?.environment ? [existingProfile.environment] : ["home"])
+  );
+  const [weeklyTrainingDays, setWeeklyTrainingDays] = useState<number>(existingProfile?.weeklyTrainingDays || 4);
+  const [equipment, setEquipment] = useState<string[]>(
+    existingProfile?.equipment || [
+      "Peso corporal / Calistenia básica",
+      "Mancuernas de peso fijo",
+      "Bandas de resistencia elásticas largas",
+      "Colchoneta de alta densidad / Mat de yoga"
+    ]
+  );
 
   const environment = selectedEnvironments.includes("gym") 
     ? "gym" 
@@ -671,28 +689,23 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
   // Sync selectedFatSource or active calculations to bodyFat
   useEffect(() => {
-    if (knowsBodyFat === "yes") {
-      setBodyFat(manualBodyFat !== "" ? Number(manualBodyFat) : undefined);
-      setSelectedFatSource("manual");
-    } else if (knowsBodyFat === "no" && showStep2Results) {
-      if (iaEstimatedFat !== undefined) {
-        setBodyFat(iaEstimatedFat);
-        setSelectedFatSource("ia");
-      } else if (caliperEstimatedFat !== undefined) {
-        setBodyFat(caliperEstimatedFat);
-        setSelectedFatSource("caliper");
-      } else if (navyEstimatedFat !== undefined) {
-        setBodyFat(navyEstimatedFat);
-        setSelectedFatSource("navy");
-      } else {
-        setBodyFat(undefined);
-        setSelectedFatSource("none");
+    if (knowsBodyFat === "yes" && manualBodyFat !== "") {
+      const parsed = Number(manualBodyFat);
+      if (!isNaN(parsed) && parsed > 0) {
+        setBodyFat(parsed);
+        setSelectedFatSource("manual");
       }
-    } else {
-      setBodyFat(undefined);
-      setSelectedFatSource("none");
+    } else if (iaEstimatedFat !== undefined && iaEstimatedFat > 0) {
+      setBodyFat(iaEstimatedFat);
+      setSelectedFatSource("ia");
+    } else if (caliperEstimatedFat !== undefined && caliperEstimatedFat > 0) {
+      setBodyFat(caliperEstimatedFat);
+      setSelectedFatSource("caliper");
+    } else if (navyEstimatedFat !== undefined && navyEstimatedFat > 0) {
+      setBodyFat(navyEstimatedFat);
+      setSelectedFatSource("navy");
     }
-  }, [knowsBodyFat, manualBodyFat, navyEstimatedFat, caliperEstimatedFat, iaEstimatedFat, showStep2Results]);
+  }, [knowsBodyFat, manualBodyFat, navyEstimatedFat, caliperEstimatedFat, iaEstimatedFat]);
 
   const handleToggleEquipment = (eq: string) => {
     if (equipment.includes(eq)) {
@@ -773,7 +786,9 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
     setAnalysisResult(null);
 
     setIsCalculatingBF(true);
-    setShowCreatineScreen(true);
+    if (mode !== "recalibration") {
+      setShowCreatineScreen(true);
+    }
     const startTime = Date.now();
     
     let computedIaFat: number | undefined = undefined;
@@ -787,7 +802,10 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
     let fatToUse: number | undefined = undefined;
     const resolvedIaFat = computedIaFat !== undefined ? computedIaFat : iaEstimatedFat;
 
-    if (resolvedIaFat !== undefined) {
+    if (knowsBodyFat === "yes" && typeof manualBodyFat === "number" && !isNaN(manualBodyFat) && manualBodyFat > 0) {
+      fatToUse = manualBodyFat;
+      setSelectedFatSource("manual");
+    } else if (resolvedIaFat !== undefined) {
       fatToUse = resolvedIaFat;
       setSelectedFatSource("ia");
     } else if (caliperEstimatedFat !== undefined) {
@@ -800,11 +818,13 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
     if (fatToUse !== undefined) {
       setBodyFat(fatToUse);
+    } else {
+      setBodyFat(undefined);
     }
 
     // Trigger AI Goal recommendation and await it if not using photos
     if (!hasUploadedPhotos) {
-      const finalFat = fatToUse !== undefined ? fatToUse : bodyFat;
+      const finalFat = fatToUse !== undefined ? fatToUse : undefined;
       setIsRecommendingGoal(true);
       setRecommendGoalError(null);
       
@@ -829,14 +849,17 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
       }
     }
 
-    // Enforce 5-second minimum loading duration to let tips be read
-    const elapsedTime = Date.now() - startTime;
-    const minDelay = 5000;
-    if (elapsedTime < minDelay) {
-      await new Promise(resolve => setTimeout(resolve, minDelay - elapsedTime));
+    if (mode !== "recalibration") {
+      // Enforce 5-second minimum loading duration to let tips be read in onboarding
+      const elapsedTime = Date.now() - startTime;
+      const minDelay = 5000;
+      if (elapsedTime < minDelay) {
+        await new Promise(resolve => setTimeout(resolve, minDelay - elapsedTime));
+      }
     }
 
     setIsCalculatingBF(false);
+    setShowStep2Results(true);
   };
 
   const handleNext = () => {
@@ -855,6 +878,10 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
       // If we skipped Step 5 by accepting the suggested goal, go back to Step 4 results screen
       setStep(4);
       setShowStep2Results(true);
+    } else if (step === 5) {
+      // If going back from Step 5, return to Step 4 results screen
+      setStep(4);
+      setShowStep2Results(true);
     } else if (step === 4 && showStep2Results) {
       // Go back to measurements form
       setShowStep2Results(false);
@@ -863,61 +890,96 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
     }
   };
 
-  const handleSubmit = () => {
-    const reqs = calculateRequirements({ 
-      weight, 
-      height, 
-      age, 
-      sex, 
-      goal, 
-      level, 
-      bodyFat,
-      activityLevel,
-      stepsRange,
-      deficitPace,
-      dietType
-    });
-    
-    const finalProfile: UserProfile = {
-      name: name || "Usuario",
-      age: age || 25,
-      birthdate: birthdate || undefined,
-      sex,
-      weight,
-      height,
-      neck: neck !== "" ? Number(neck) : undefined,
-      waist: waist !== "" ? Number(waist) : undefined,
-      hip: (sex === "female" && hip !== "") ? Number(hip) : undefined,
-      bodyFat,
-      bmi,
-      goal,
-      level,
-      environment,
-      environments: selectedEnvironments,
-      weeklyTrainingDays,
-      equipment,
-      nutritionKnowledge,
-      dietType,
-      dailyCalorieTarget: reqs.calories,
-      proteinTarget: reqs.protein,
-      carbsTarget: reqs.carbs,
-      fatTarget: reqs.fat,
-      apiKey: apiKey || undefined,
-      isOnboardingCompleted: true,
-      theme: "dark",
-      takesCreatine: takesCreatine === true,
-      activityLevel,
-      stepsRange,
-      deficitPace,
-      solidMealsCount,
-      parqAnswers,
-      requiresMedicalClearance,
-      jointPainAreas,
-      trainingAge: level,
-      allergies: allergies.length > 0 ? allergies : undefined
-    };
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const resolvedFat = bodyFat !== undefined 
+        ? bodyFat 
+        : (iaEstimatedFat !== undefined 
+            ? iaEstimatedFat 
+            : (caliperEstimatedFat !== undefined 
+                ? caliperEstimatedFat 
+                : (navyEstimatedFat !== undefined 
+                    ? navyEstimatedFat 
+                    : (knowsBodyFat === "yes" && manualBodyFat ? Number(manualBodyFat) : undefined))));
 
-    onComplete(finalProfile);
+      const reqs = calculateRequirements({ 
+        weight, 
+        height, 
+        age, 
+        sex, 
+        goal, 
+        level, 
+        bodyFat: resolvedFat,
+        activityLevel,
+        stepsRange,
+        deficitPace,
+        dietType
+      });
+      
+      const todayStr = new Date().toISOString().split("T")[0];
+      const newMetricLog: BodyMetricLog = {
+        id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9),
+        date: todayStr,
+        weight,
+        bodyFat: resolvedFat,
+        method: "ai_scan",
+        notes: mode === "recalibration" ? "Recalibración de Perfil con IA" : "Registro inicial de Onboarding"
+      };
+
+      const existingLogs = (existingProfile?.bodyMetricLogs || []).filter(l => l.date !== todayStr);
+      const updatedLogs = [...existingLogs, newMetricLog].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      const finalProfile: UserProfile = {
+        ...(existingProfile || {}),
+        name: name || "Usuario",
+        age: age || 25,
+        birthdate: birthdate || undefined,
+        sex,
+        weight,
+        height,
+        neck: neck !== "" ? Number(neck) : undefined,
+        waist: waist !== "" ? Number(waist) : undefined,
+        hip: (sex === "female" && hip !== "") ? Number(hip) : undefined,
+        bodyFat: resolvedFat,
+        bmi,
+        goal,
+        level,
+        environment,
+        environments: selectedEnvironments,
+        weeklyTrainingDays,
+        equipment,
+        nutritionKnowledge,
+        dietType,
+        customDiet: dietType === "other" && customDiet.trim() ? customDiet.trim() : undefined,
+        dailyCalorieTarget: reqs.calories,
+        proteinTarget: reqs.protein,
+        carbsTarget: reqs.carbs,
+        fatTarget: reqs.fat,
+        apiKey: apiKey || existingProfile?.apiKey || undefined,
+        isOnboardingCompleted: true,
+        theme: existingProfile?.theme || "dark",
+        takesCreatine: takesCreatine === true,
+        activityLevel,
+        stepsRange,
+        deficitPace,
+        solidMealsCount,
+        parqAnswers,
+        requiresMedicalClearance,
+        jointPainAreas,
+        trainingAge: level,
+        allergies: allergies.length > 0 ? allergies : undefined,
+        customAllergies: allergies.includes("other") && customAllergies.trim() ? customAllergies.trim() : undefined,
+        bodyMetricLogs: updatedLogs
+      };
+
+      await onComplete(finalProfile);
+    } catch (error) {
+      console.error("Error completing onboarding:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (showCreatineScreen) {
@@ -1142,7 +1204,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
               <span className={`font-black transition-colors duration-200 ${takesCreatine !== null && creatineProgress > 50 ? "text-black" : "text-white"}`}>
                 {takesCreatine === null
                   ? "Selecciona una opción para continuar"
-                  : "Ver mi composición corporal estimada"}
+                  : "Ver mi recomendación y composición"}
               </span>
               {takesCreatine !== null && (
                 <ChevronRight className={`h-4 w-4 transition-colors duration-200 ${creatineProgress > 50 ? "text-black" : "text-emerald-400 group-hover:translate-x-0.5"}`} />
@@ -1163,24 +1225,35 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
       {/* Step Header */}
       <div className="p-6 pb-4 flex items-center justify-between border-b border-white/5 z-20 bg-[#050505] flex-shrink-0">
-        <div>
-          <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-widest">
-            Paso {step} de 7
-          </span>
-          <h2 className="text-xl font-black text-white tracking-tight italic">
-            {step === 1 && "Asistente Inteligente"}
-            {step === 2 && "Datos Básicos"}
-            {step === 3 && "Actividad & Movimiento"}
-            {step === 4 && "Análisis Biométrico"}
-            {step === 5 && "Tus Objetivos"}
-            {step === 6 && "Perfil Nutricional"}
-            {step === 7 && "Recordatorios"}
-          </h2>
+        <div className="flex items-center gap-3">
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              className="p-2 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white transition cursor-pointer"
+              title="Cerrar y volver a Ajustes"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+          <div>
+            <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-widest">
+              {mode === "recalibration" ? `Recalibración con IA (${step === 4 ? "Paso 1 de 2" : "Paso 2 de 2"})` : `Paso ${step} de 7`}
+            </span>
+            <h2 className="text-xl font-black text-white tracking-tight italic">
+              {step === 1 && "Asistente Inteligente"}
+              {step === 2 && "Datos Básicos"}
+              {step === 3 && "Actividad & Movimiento"}
+              {step === 4 && "Análisis Biométrico"}
+              {step === 5 && "Tus Objetivos"}
+              {step === 6 && "Perfil Nutricional"}
+              {step === 7 && "Recordatorios"}
+            </h2>
+          </div>
         </div>
         
         {/* Step Indicator dots */}
         <div className="flex gap-1.5">
-          {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+          {(mode === "recalibration" ? [4, 5] : [1, 2, 3, 4, 5, 6, 7]).map((i) => (
             <div 
               key={i} 
               className={`h-1 rounded-full transition-all duration-300 ${
@@ -1210,7 +1283,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                 <label className="block text-[10px] font-bold text-white/40 mb-1.5 uppercase tracking-wider">Tu Nombre</label>
                 <Input
                   type="text"
-                  icon={UserRound}
+                  icon={User}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Escribe tu nombre..."
@@ -1440,6 +1513,26 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             >
               {!showStep2Results && !isCalculatingBF && (
                 <>
+                  {mode === "recalibration" && (
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-2xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-emerald-400">Peso Actual para Recalibrar</span>
+                        <span className="text-[10px] text-white/50">Modifica si tu peso cambió</span>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={weight}
+                          onChange={(e) => setWeight(e.target.value)}
+                          className="w-full bg-black/40 border border-emerald-500/40 rounded-xl px-4 py-3 text-white text-base font-black focus:outline-none focus:border-emerald-400"
+                          placeholder="Ej: 75.5"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-400/70">kg</span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* BMI Card */}
                   <div className="bg-white/5 p-4 rounded-2xl border border-white/10 flex items-center justify-between">
                     <div>
@@ -1900,9 +1993,13 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                       <RefreshCw className="h-7 w-7 text-emerald-400 animate-spin" />
                       <span className="text-[11px] text-emerald-400 font-bold animate-pulse">🤖 La IA está revisando tus fotos y estimando tu % de grasa...</span>
                     </div>
-                  ) : (
+                  ) : bodyFat !== undefined ? (
                     <div className="text-5xl font-black font-mono text-white tracking-tight">
-                      {bodyFat !== undefined ? `${bodyFat}%` : "--"} <span className="text-xs text-white/40 font-sans font-normal italic">Grasa</span>
+                      {bodyFat}% <span className="text-xs text-white/40 font-sans font-normal italic">Grasa</span>
+                    </div>
+                  ) : (
+                    <div className="py-1">
+                      <span className="text-sm font-bold text-white/70">No especificado</span>
                     </div>
                   )}
                   
@@ -1921,7 +2018,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                           bodyFat <= 21 ? "Atlético / Excelente" :
                           bodyFat <= 29 ? "Saludable / Moderado" : "Sobrepeso / Grasa Alta"
                         )
-                      ) : "Por calcular"}
+                      ) : `Estimación según IMC (${bmiCat.label})`}
                     </span>
                   </p>
                 </div>
@@ -1929,8 +2026,10 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                 <div className="border-t border-white/5 pt-3 text-[11px] text-white/50 leading-relaxed max-w-xs mx-auto">
                   {isCalculatingBF ? (
                     "Por favor espera un momento mientras procesamos tus datos..."
-                  ) : (
+                  ) : bodyFat !== undefined ? (
                     "Composición corporal calculada exitosamente a partir de tu perfil antropométrico."
+                  ) : (
+                    "Cálculo de grasa corporal omitido. Estructuramos tu objetivo y requerimientos calóricos utilizando tu IMC y perfil físico."
                   )}
                 </div>
               </div>
@@ -1998,38 +2097,11 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                     )}
                   </div>
 
-                  {/* If recommended goal is lose_weight, show the pace selector directly in the card */}
+                  {/* If recommended goal is lose_weight, show projection info */}
                   {aiGoalRecommendation && aiGoalRecommendation.recommendedGoal === "lose_weight" && (() => {
                     const proj = getProjections();
                     return (
-                      <div className="border-t border-white/5 pt-3 space-y-3">
-                        <div className="space-y-2">
-                          <label className="block text-[9px] font-bold text-white/40 uppercase tracking-widest">
-                            Ritmo de Pérdida de Grasa
-                          </label>
-                          <div className="grid grid-cols-3 gap-2">
-                            {[
-                              { id: "conservative", label: "Conservador", desc: "Sostenible" },
-                              { id: "moderate", label: "Moderado", desc: "Clínico" },
-                              { id: "aggressive", label: "Agresivo", desc: "Rápido" }
-                            ].map((item) => (
-                              <button
-                                key={item.id}
-                                type="button"
-                                onClick={() => setDeficitPace(item.id as any)}
-                                className={`p-2.5 rounded-xl border text-center transition flex flex-col justify-between items-center h-[46px] cursor-pointer ${
-                                  deficitPace === item.id
-                                    ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
-                                    : "bg-white/5 border-white/10 text-white/40 text-xs"
-                                }`}
-                              >
-                                <span className="block text-[10px] font-bold leading-tight">{item.label}</span>
-                                <span className="text-[8px] opacity-60 font-normal block leading-tight mt-0.5">{item.desc}</span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
+                      <div className="border-t border-white/5 pt-3 space-y-2">
                         {/* Projection Info */}
                         <div className="bg-black/30 border border-white/5 rounded-2xl p-3 text-left space-y-1">
                           {!bodyFat ? (
@@ -2178,43 +2250,6 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                   ))}
                 </div>
 
-                {/* Dynamic Deficit Pace Selector */}
-                {goal === "lose_weight" && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    className="border-t border-white/5 pt-4 mt-2 space-y-3"
-                  >
-                    <label className="block text-[10px] font-bold text-white/40 mb-1 uppercase tracking-wider">
-                      ¿A qué ritmo deseas alcanzar este déficit?
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { id: "conservative", label: "Conservador", desc: "Sostenible" },
-                        { id: "moderate", label: "Moderado", desc: "Clínico" },
-                        { id: "aggressive", label: "Agresivo", desc: "Rápido" }
-                      ].map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => setDeficitPace(item.id as any)}
-                          className={`p-3 rounded-xl border text-center transition flex flex-col justify-between items-center h-[52px] cursor-pointer ${
-                            deficitPace === item.id
-                              ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
-                              : "bg-white/5 border-white/10 text-white/40 text-xs"
-                          }`}
-                        >
-                          <span className="block text-[11px] font-bold leading-tight">{item.label}</span>
-                          <span className="text-[8px] opacity-60 font-normal block leading-tight mt-0.5">{item.desc}</span>
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[9px] text-white/30 italic leading-normal">
-                      * Un ritmo agresivo es idóneo con porcentajes de grasa elevados. Si eres magro, un ritmo conservador mantendrá tu tejido muscular intacto.
-                    </p>
-                  </motion.div>
-                )}
-
                 {/* Proyección Científica de Resultados */}
                 {(() => {
                   const proj = getProjections();
@@ -2340,7 +2375,8 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                         { id: "vegan", label: "Vegana", desc: "100% vegetal" },
                         { id: "keto", label: "Keto", desc: "Baja en carbos" },
                         { id: "paleo", label: "Paleo", desc: "Comida evolutiva" },
-                        { id: "mediterranean", label: "Mediterránea", desc: "Grasas sanas" }
+                        { id: "mediterranean", label: "Mediterránea", desc: "Grasas sanas" },
+                        { id: "other", label: "Otra", desc: "Personalizada" }
                       ].map((item) => (
                         <button
                           key={item.id}
@@ -2357,6 +2393,22 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                         </button>
                       ))}
                     </div>
+
+                    {dietType === "other" && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        className="pt-2"
+                      >
+                        <Input
+                          type="text"
+                          value={customDiet}
+                          onChange={(e) => setCustomDiet(e.target.value)}
+                          placeholder="Describe tu tipo de alimentación..."
+                          size="md"
+                        />
+                      </motion.div>
+                    )}
                   </div>
 
                   {/* Comidas sólidas al día */}
@@ -2394,6 +2446,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                         { id: "nuts", label: "🥜 Sin Frutos Secos" },
                         { id: "seafood", label: "🍤 Sin Mariscos / Pescado" },
                         { id: "soy", label: "🫘 Sin Soya" },
+                        { id: "other", label: "✏️ Otra" },
                         { id: "none", label: "✅ Ninguna" }
                       ].map((item) => {
                         const isSelected = item.id === "none" 
@@ -2403,11 +2456,13 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                         const handleToggle = () => {
                           if (item.id === "none") {
                             setAllergies([]);
+                            setCustomAllergies("");
                           } else {
                             if (allergies.includes(item.id)) {
                               setAllergies(allergies.filter(a => a !== item.id));
+                              if (item.id === "other") setCustomAllergies("");
                             } else {
-                              setAllergies([...allergies, item.id]);
+                              setAllergies([...allergies.filter(a => a !== "none"), item.id]);
                             }
                           }
                         };
@@ -2428,6 +2483,22 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                         );
                       })}
                     </div>
+
+                    {allergies.includes("other") && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        className="pt-2"
+                      >
+                        <Input
+                          type="text"
+                          value={customAllergies}
+                          onChange={(e) => setCustomAllergies(e.target.value)}
+                          placeholder="Especifica tus alergias o intolerancias..."
+                          size="md"
+                        />
+                      </motion.div>
+                    )}
                   </div>
 
                   {/* Vegan / Vegetarian supplementation notice */}
@@ -2648,13 +2719,6 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                 </p>
               </div>
 
-              {pushError && (
-                <div className="bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl text-[10px] text-red-400 font-semibold flex items-center gap-2 max-w-sm mx-auto">
-                  <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
-                  <span>{pushError}</span>
-                </div>
-              )}
-
               {pushSupported === false ? (
                 <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl text-left space-y-1.5 max-w-sm mx-auto">
                   <span className="text-xs font-extrabold text-amber-400 flex items-center gap-1.5">
@@ -2690,7 +2754,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
 
                   {notificationPermission === "denied" && (
                     <p className="text-[10px] text-amber-400/80 leading-normal text-left">
-                      * El permiso fue denegado. Puedes cambiarlo luego desde la configuración de tu navegador.
+                      * El permiso fue denegado en tu navegador. Puedes continuar y activarlo después desde Configuración.
                     </p>
                   )}
                 </div>
@@ -2703,7 +2767,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
       {/* Navigation Buttons footer */}
       {!showEducationTutorial && (
         <div className="px-6 pt-4 pb-8 flex gap-3 border-t border-white/5 bg-[#050505] max-w-md mx-auto w-full z-20 flex-shrink-0 shadow-[0_-15px_30px_rgba(0,0,0,0.8)]">
-          {step > 1 && !(step === 4 && showStep2Results) && (
+          {((mode !== "recalibration" && step > 1) || (mode === "recalibration" && step > 4)) && !(step === 4 && showStep2Results) && (
             <Button
               variant="secondary"
               onClick={handlePrev}
@@ -2740,26 +2804,37 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
                   <Button
                     variant="primary"
                     onClick={() => {
-                      setGoal(aiGoalRecommendation.recommendedGoal);
-                      setSkipGoalStep(true);
-                      setShowStep2Results(false);
-                      setStep(6);
+                      if (mode === "recalibration") {
+                        handleSubmit();
+                      } else {
+                        setSkipGoalStep(true);
+                        setShowStep2Results(false);
+                        setStep(6);
+                      }
                     }}
+                    isLoading={isSubmitting}
                     rightIcon={ChevronRight}
                     className="flex-1 text-[11px] font-black cursor-pointer text-center"
                   >
-                    Aceptar sugerencia
+                    {mode === "recalibration" ? "Aceptar y Guardar" : "Aceptar sugerencia"}
                   </Button>
                 </div>
               ) : (
-                // AI Failed, allow skipping/continuing
                 <Button
                   variant="primary"
-                  onClick={handleNext}
+                  onClick={() => {
+                    if (mode === "recalibration") {
+                      handleSubmit();
+                    } else {
+                      setShowStep2Results(false);
+                      setStep(5);
+                    }
+                  }}
+                  isLoading={isSubmitting}
                   rightIcon={ChevronRight}
-                  className="flex-1 cursor-pointer"
+                  className="flex-1"
                 >
-                  Continuar (Sin Recomendación)
+                  {mode === "recalibration" ? "Guardar Recalibración" : "Siguiente"}
                 </Button>
               )
             ) : isCalculatingBF ? (
@@ -2774,16 +2849,16 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
               manualBodyFat !== "" && manualBodyFat !== undefined ? (
                 <Button
                   variant="primary"
-                  onClick={handleNext}
+                  onClick={handleCalculateBodyFat}
                   rightIcon={ChevronRight}
-                  className="flex-1"
+                  className="flex-1 font-black"
                 >
                   Continuar
                 </Button>
               ) : (
                 <Button
                   variant="secondary"
-                  onClick={handleNext}
+                  onClick={handleCalculateBodyFat}
                   rightIcon={ChevronRight}
                   className="flex-1"
                 >
@@ -2804,7 +2879,7 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
               ) : (
                 <Button
                   variant="secondary"
-                  onClick={handleNext}
+                  onClick={handleCalculateBodyFat}
                   rightIcon={ChevronRight}
                   className="flex-1"
                 >
@@ -2822,7 +2897,17 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
             >
               Siguiente
             </Button>
-          ) : step < 7 ? (
+          ) : (mode === "recalibration" && step === 5) || step >= 7 ? (
+            <Button
+              variant="primary"
+              onClick={handleSubmit}
+              isLoading={isSubmitting}
+              rightIcon={ChevronRight}
+              className="flex-1 font-black"
+            >
+              {mode === "recalibration" ? "Guardar Recalibración" : "Continuar"}
+            </Button>
+          ) : (
             <Button
               variant="primary"
               onClick={handleNext}
@@ -2830,15 +2915,6 @@ export default function Onboarding({ onComplete, userId, defaultName }: Onboardi
               className="flex-1"
             >
               Siguiente
-            </Button>
-          ) : (
-            <Button
-              variant="primary"
-              onClick={handleSubmit}
-              rightIcon={Check}
-              className="flex-1 font-black"
-            >
-              ¡Comenzar!
             </Button>
           )}
         </div>

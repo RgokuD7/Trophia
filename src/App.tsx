@@ -23,6 +23,7 @@ import {
   saveUserProfile, 
   getMeals, 
   addMeal, 
+  updateMeal,
   deleteMeal, 
   getWaterLogs, 
   addWaterLog, 
@@ -46,6 +47,7 @@ export default function App() {
   const [isRecipeAssistantOpen, setIsRecipeAssistantOpen] = useState(false);
   const [defaultMealTypeForLogger, setDefaultMealTypeForLogger] = useState<MealType>("lunch");
   const [isCheckingStorage, setIsCheckingStorage] = useState(true);
+  const [isRecalibrating, setIsRecalibrating] = useState(false);
 
   // Nutri-Coach state
   const [isCoachOpen, setIsCoachOpen] = useState(false);
@@ -114,6 +116,17 @@ export default function App() {
       setUser(currentUser);
       if (currentUser) {
         setIsCheckingStorage(true);
+        // Check local cache first for instant load
+        const cachedProfileStr = localStorage.getItem(`trophia_profile_${currentUser.uid}`);
+        if (cachedProfileStr) {
+          try {
+            const cachedProfile = JSON.parse(cachedProfileStr);
+            setProfile(cachedProfile);
+          } catch (e) {
+            console.warn("Could not parse cached profile:", e);
+          }
+        }
+
         try {
           // Fetch all data in parallel for efficiency
           const [profileData, mealsData, waterData, workoutsData] = await Promise.all([
@@ -125,10 +138,11 @@ export default function App() {
 
           if (profileData) {
             setProfile(profileData);
+            localStorage.setItem(`trophia_profile_${currentUser.uid}`, JSON.stringify(profileData));
             if (profileData.apiKey) {
               localStorage.setItem("trophia_api_key", profileData.apiKey);
             }
-          } else {
+          } else if (!cachedProfileStr) {
             // First time user, profile will be set after Onboarding
             setProfile(null);
           }
@@ -157,27 +171,29 @@ export default function App() {
   const handleOnboardingComplete = async (completedProfile: UserProfile) => {
     if (!user) return;
     try {
-      await saveUserProfile(user.uid, completedProfile);
       setProfile(completedProfile);
+      localStorage.setItem(`trophia_profile_${user.uid}`, JSON.stringify(completedProfile));
       if (completedProfile.apiKey) {
         localStorage.setItem("trophia_api_key", completedProfile.apiKey);
       }
       setActiveTab("dashboard");
+      await saveUserProfile(user.uid, completedProfile);
     } catch (e) {
-      console.error("Error saving onboarding profile:", e);
+      console.error("Error saving onboarding profile to Firestore:", e);
     }
   };
 
   const handleUpdateProfile = async (updatedProfile: UserProfile) => {
     if (!user) return;
     try {
-      await saveUserProfile(user.uid, updatedProfile);
       setProfile(updatedProfile);
+      localStorage.setItem(`trophia_profile_${user.uid}`, JSON.stringify(updatedProfile));
       if (updatedProfile.apiKey) {
         localStorage.setItem("trophia_api_key", updatedProfile.apiKey);
       } else {
         localStorage.removeItem("trophia_api_key");
       }
+      await saveUserProfile(user.uid, updatedProfile);
     } catch (e) {
       console.error("Error updating profile:", e);
     }
@@ -185,37 +201,71 @@ export default function App() {
 
   const handleAddMeal = async (mealData: Omit<LoggedMeal, "id" | "timestamp">) => {
     if (!user) return;
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const tempMeal: LoggedMeal = {
+      ...mealData,
+      id: tempId,
+      timestamp: new Date().toISOString()
+    };
+    // Optimistic UI update
+    setLoggedMeals(prev => [tempMeal, ...prev]);
+
     try {
-      const newMealInput: Omit<LoggedMeal, "id"> = {
-        ...mealData,
-        timestamp: new Date().toISOString()
-      };
-      const newMeal = await addMeal(user.uid, newMealInput);
-      setLoggedMeals([newMeal, ...loggedMeals]);
+      const newMeal = await addMeal(user.uid, {
+        name: mealData.name,
+        calories: mealData.calories,
+        protein: mealData.protein,
+        carbs: mealData.carbs,
+        fat: mealData.fat,
+        type: mealData.type,
+        servingSize: mealData.servingSize || "",
+        timestamp: tempMeal.timestamp
+      });
+      setLoggedMeals(prev => prev.map(m => m.id === tempId ? newMeal : m));
     } catch (e) {
-      console.error("Error adding meal:", e);
+      console.error("Error adding meal to Firestore:", e);
     }
   };
 
   const handleDeleteMeal = async (id: string) => {
     if (!user) return;
+    // Optimistic UI update
+    setLoggedMeals(prev => prev.filter(m => m.id !== id));
     try {
       await deleteMeal(user.uid, id);
-      setLoggedMeals(loggedMeals.filter(m => m.id !== id));
     } catch (e) {
       console.error("Error deleting meal:", e);
     }
   };
 
+  const handleUpdateMeal = async (updatedMeal: LoggedMeal) => {
+    if (!user) return;
+    // Optimistic UI update
+    setLoggedMeals(prev => prev.map(m => m.id === updatedMeal.id ? updatedMeal : m));
+    try {
+      await updateMeal(user.uid, updatedMeal);
+    } catch (e) {
+      console.error("Error updating meal in Firestore:", e);
+    }
+  };
+
   const handleAddWater = async (amount: number) => {
     if (!user) return;
+    const tempId = `temp_water_${Date.now()}`;
+    const tempLog: WaterLog = {
+      id: tempId,
+      amount,
+      timestamp: new Date().toISOString()
+    };
+    // Optimistic UI update
+    setWaterLogs(prev => [...prev, tempLog]);
+
     try {
-      const newWaterInput: Omit<WaterLog, "id"> = {
+      const newWater = await addWaterLog(user.uid, {
         amount,
-        timestamp: new Date().toISOString()
-      };
-      const newLog = await addWaterLog(user.uid, newWaterInput);
-      setWaterLogs([...waterLogs, newLog]);
+        timestamp: tempLog.timestamp
+      });
+      setWaterLogs(prev => prev.map(w => w.id === tempId ? newWater : w));
     } catch (e) {
       console.error("Error adding water log:", e);
     }
@@ -351,6 +401,7 @@ export default function App() {
                   userId={user.uid}
                   loggedMeals={loggedMeals}
                   onAddMeal={handleAddMeal}
+                  onUpdateMeal={handleUpdateMeal}
                   onDeleteMeal={handleDeleteMeal}
                   onOpenFoodLogger={handleOpenFoodLogger}
                   onOpenRecipeAssistant={() => setIsRecipeAssistantOpen(true)}
@@ -393,6 +444,7 @@ export default function App() {
                   userId={user.uid}
                   onUpdateProfile={handleUpdateProfile}
                   onResetApp={handleResetApp}
+                  onOpenRecalibration={() => setIsRecalibrating(true)}
                 />
               )}
             </>
@@ -557,6 +609,22 @@ export default function App() {
             </>
           )}
         </AnimatePresence>
+
+        {/* Full Recalibration with IA Flow */}
+        {isRecalibrating && user && profile && (
+          <div className="absolute inset-0 z-50 bg-[#050505] flex flex-col overflow-hidden">
+            <Onboarding
+              onComplete={async (updated) => {
+                await handleUpdateProfile(updated);
+                setIsRecalibrating(false);
+              }}
+              userId={user.uid}
+              existingProfile={profile}
+              mode="recalibration"
+              onCancel={() => setIsRecalibrating(false)}
+            />
+          </div>
+        )}
 
         {/* Bottom Tab Navigation Bar */}
         {user && profile && (

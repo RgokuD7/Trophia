@@ -12,8 +12,10 @@ interface HydrationProps {
 
 export default function Hydration({ waterLogs, onAddWater, onClearWater, dailyGoalMl = 2500 }: HydrationProps) {
   const [selectedQuickAdd, setSelectedQuickAdd] = useState<number>(250);
+  const todayStr = new Date().toISOString().split("T")[0];
 
-  const totalWater = waterLogs.reduce((acc, log) => acc + log.amount, 0);
+  const todayWaterLogs = waterLogs.filter(w => w.timestamp.startsWith(todayStr));
+  const totalWater = todayWaterLogs.reduce((acc, log) => acc + log.amount, 0);
   const percentage = Math.min(100, Math.round((totalWater / dailyGoalMl) * 100));
 
   return (

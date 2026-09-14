@@ -1,5 +1,9 @@
 {
+  "firestore": {
+    "rules": "firestore.rules"
+  },
   "hosting": {
+    "site": "trophia-5ed6c",
     "public": "dist",
     "ignore": [
       "firebase.json",

@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { WorkoutSession, WorkoutExercise, MuscleRecovery, UserProfile } from "../types";
 import { generateRoutineByIA, suggestAlternativeExercisesByIA } from "../services/geminiService";
-import { SPORTS_METS } from "./Dashboard";
+import { SPORTS_METS } from "../utils/fitnessUtils";
 
 interface WorkoutsProps {
   apiKey?: string;

@@ -3,7 +3,7 @@ export type FitnessGoal = "lose_weight" | "gain_muscle" | "aesthetics" | "mainte
 export type ExperienceLevel = "beginner" | "intermediate" | "advanced";
 export type TrainingEnvironment = "gym" | "home" | "outdoor";
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
-export type DietType = "standard" | "vegetarian" | "vegan" | "keto" | "paleo" | "mediterranean";
+export type DietType = "standard" | "vegetarian" | "vegan" | "keto" | "paleo" | "mediterranean" | "other";
 
 export interface UserProfile {
   name: string;
@@ -23,6 +23,7 @@ export interface UserProfile {
   equipment: string[];
   nutritionKnowledge: "low" | "medium" | "high";
   dietType?: DietType;
+  customDiet?: string;
   dailyCalorieTarget: number;
   proteinTarget: number; // in grams
   carbsTarget: number; // in grams
@@ -31,6 +32,7 @@ export interface UserProfile {
   usdaApiKey?: string;
   isOnboardingCompleted: boolean;
   allergies?: string[];
+  customAllergies?: string;
   pantry?: PantryItem[];
   theme: "light" | "dark";
   takesCreatine?: boolean;
@@ -76,6 +78,20 @@ export interface UserProfile {
     startDate: string;
     isActive: boolean;
   };
+
+  bodyMetricLogs?: BodyMetricLog[];
+}
+
+export interface BodyMetricLog {
+  id: string;
+  date: string; // YYYY-MM-DD
+  weight: number; // in kg
+  bodyFat?: number; // percentage
+  neck?: number;
+  waist?: number;
+  hip?: number;
+  method?: "manual" | "ai_scan" | "navy" | "caliper";
+  notes?: string;
 }
 
 export interface LoggedMeal {

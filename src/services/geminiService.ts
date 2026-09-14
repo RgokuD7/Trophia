@@ -58,7 +58,7 @@ async function callGeminiAPI(
   prompt: string,
   images?: GeminiImage[]
 ): Promise<any> {
-  const model = "gemini-2.5-flash";
+  const model = "gemini-2.0-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const parts: any[] = [{ text: prompt }];
@@ -426,31 +426,48 @@ export async function analyzeFoodByIA(
     prompt = `El análisis de comida previo del tipo ${mealType || "comida"} identificó los siguientes ingredientes:
 ${existingIngredients.map(ing => `- ${ing}`).join("\n")}
 
-El usuario indica la siguiente corrección o aclaración sobre los ingredientes o porciones:
+El usuario indica la siguiente corrección o aclaración sobre los ingredientes, producto o porciones:
 "${correction}"
 
-${image ? "Analiza la fotografía de comida adjunta junto con esta corrección." : "Re-evalúa el plato basándote en esta corrección."}
-Ajusta la lista de ingredientes identificados y recalcula con precisión y de forma muy conservadora las calorías totales, carbohidratos (g), proteínas (g) y grasas (g). Queremos evitar subestimar la ingesta calórica.`;
+${image ? "Analiza la fotografía de comida adjunta junto con esta corrección." : "Re-evalúa el plato o producto basándote en esta corrección."}
+Ajusta la lista de ingredientes identificados y recalcula con precisión las calorías totales, carbohidratos (g), proteínas (g) y grasas (g) para la porción o paquete correspondiente.`;
   } else {
     prompt = `Analiza esta fotografía de comida para un registro de nutrición del tipo: ${mealType || "comida"}.`;
     if (description) {
-      prompt += `\nEl usuario indica que el plato contiene o se describe como: "${description}". Utiliza esta descripción para guiar tu identificación de ingredientes.`;
+      prompt += `\nEl usuario indica que el plato contiene o se describe como: "${description}". Utiliza esta descripción para guiar tu identificación.`;
     }
-    prompt += `\nIdentifica el plato y sus componentes principales. Estima de forma muy conservadora las calorías totales, carbohidratos (g), proteínas (g) y grasas (g).
-Queremos un enfoque estricto y preciso para evitar subestimar la ingesta calórica.`;
+    prompt += `\nINSTRUCCIONES CLAVE DE ANÁLISIS:
+1. DETECCIÓN DE PRODUCTO ENVASADO / EMPAQUE vs PLATO PREPARADO:
+   - Si la foto muestra un PRODUCTO ENVASADO o con empaque comercial (por ejemplo: galleta, barra de proteína o cereal, snack, yogur, alfajor, bebida, bolsa o paquete individual):
+     * REVISA CON MÁXIMO DETALLE el empaque para detectar el PESO NETO en gramos (ej: "12g", "25g", "30g", "45g", "120g") o volumen (ml).
+     * CALCULA LAS CALORÍAS Y MACROS EXCLUSIVAMENTE PARA EL TAMAÑO / PESO REAL DE ESE PRODUCTO/PAQUETE COMPLETO (¡NUNCA pongas por defecto 100g si el paquete visible es de 12g, 30g o 45g!).
+     * Coloca en "estimatedGrams" el peso neto real detectado en gramos (ej: 12) y en "servingSize" describe la porción (ej: "1 paquete (12g)", "1 barra (45g)").
+     * En "name" incluye el nombre comercial con su gramaje (ej: "Barra de Cereal Choco (12g)").
+     * Marca "isPackagedProduct": true.
+   - Si la foto muestra un PLATO PREPARADO o comida casera/restaurante (ej: pechuga de pollo con arroz y ensalada):
+     * Estima el peso total aproximado de la porción servida en el plato (ej: 350g) y calcula las calorías y macronutrientes para esa porción total servida.
+     * En "servingSize" pon por ejemplo "1 plato (350g)" y en "estimatedGrams" el peso total estimado (ej: 350).
+     * Marca "isPackagedProduct": false.
+
+2. PRECISIÓN NUTRICIONAL:
+   - Identifica con precisión los componentes y macronutrientes.
+   - Las calorías, proteínas, carbohidratos y grasas deben corresponder EXACTAMENTE a la porción total calculada (estimatedGrams).`;
   }
 
   prompt += `
 
 Debes responder estrictamente en formato JSON con la siguiente estructura:
 {
-  "name": "Nombre estimado del plato (ej: Pechuga de pollo con arroz y ensalada)",
-  "calories": número (calorías totales estimadas, entero),
-  "protein": número (proteínas estimadas en gramos, entero),
-  "carbs": número (carbohidratos estimados en gramos, entero),
-  "fat": número (grasas estimadas en gramos, entero),
-  "ingredients": ["ingrediente 1", "ingrediente 2", "ingrediente 3", ...],
-  "analysis": "Análisis de los ingredientes identificados, calidad nutricional del plato y consejos para optimizarlo según metas fitness."
+  "name": "Nombre estimado del alimento o producto (ej: 'Galleta de Avena Quaker (12g)' o 'Pechuga de pollo con arroz')",
+  "calories": número (calorías totales estimadas para la porción o paquete completo, entero),
+  "protein": número (proteínas estimadas en gramos para la porción o paquete, entero o decimal con 1 dígito),
+  "carbs": número (carbohidratos estimados en gramos para la porción o paquete, entero o decimal con 1 dígito),
+  "fat": número (grasas estimadas en gramos para la porción o paquete, entero o decimal con 1 dígito),
+  "estimatedGrams": número (peso estimado en gramos del paquete o porción del plato, ej: 12, 30, 150, 350),
+  "servingSize": "Descripción clara de la porción (ej: '1 paquete (12g)', '1 unidad (35g)', '1 plato (350g)')",
+  "isPackagedProduct": boolean (true si es producto envasado/empaque, false si es comida servida),
+  "ingredients": ["ingrediente 1", "ingrediente 2", ...],
+  "analysis": "Análisis nutricional de los ingredientes o del producto y recomendaciones."
 }`;
 
   // No custom fallback, let the error bubble up so the UI displays it properly and prompts the user to save/retry.

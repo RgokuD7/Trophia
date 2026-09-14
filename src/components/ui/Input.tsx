@@ -49,10 +49,10 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         rounded: "rounded-2xl",
         textSize: "text-sm",
         py: "py-3",
-        pl: Icon ? "pl-13" : "px-4",
-        pr: isPassword ? "pr-13" : "px-4",
-        iconLeftClass: "left-4",
-        iconRightClass: "right-4"
+        pl: Icon ? "pl-11" : "px-4",
+        pr: isPassword ? "pr-11" : "px-4",
+        iconLeftClass: "left-3.5",
+        iconRightClass: "right-3.5"
       }
     }[size];
 

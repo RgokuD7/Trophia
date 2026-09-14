@@ -582,7 +582,36 @@ export default function FoodLogger({
 
     const reader = new FileReader();
     reader.onloadend = () => {
-      setFoodPhoto(reader.result as string);
+      const rawDataUrl = reader.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1024;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.82);
+          setFoodPhoto(compressedDataUrl);
+        } else {
+          setFoodPhoto(rawDataUrl);
+        }
+      };
+      img.onerror = () => setFoodPhoto(rawDataUrl);
+      img.src = rawDataUrl;
+
       setAiError(null);
       setDescription(""); // Reset description for a new photo
       setCorrection("");
@@ -602,23 +631,34 @@ export default function FoodLogger({
         description: description.trim() || undefined
       });
       if (data) {
+        const estimatedGrams = Math.max(1, Number(data.estimatedGrams) || (data.servingSize ? (parseFloat(data.servingSize.match(/(\d+(?:\.\d+)?)\s*(?:g|ml)/i)?.[1] || "100")) : 100));
+        const servingLabel = data.servingSize || (data.isPackagedProduct ? `1 paquete (${estimatedGrams}g)` : `1 porción (${estimatedGrams}g)`);
+
+        // Base food scaled to 100g so portion multiplier works accurately
+        const scaleTo100 = 100 / estimatedGrams;
         const foodItem: FoodItem = {
           name: data.name,
-          calories: data.calories,
-          protein: data.protein,
-          carbs: data.carbs,
-          fat: data.fat,
-          servingSize: "1 Plato",
+          calories: Math.round(data.calories * scaleTo100),
+          protein: Number((data.protein * scaleTo100).toFixed(1)),
+          carbs: Number((data.carbs * scaleTo100).toFixed(1)),
+          fat: Number((data.fat * scaleTo100).toFixed(1)),
+          servingSize: servingLabel,
           source: "local",
           ingredients: data.ingredients
         };
+
         setSelectedFood(foodItem);
-        setPortionGrams(100);
+        setPortionUnit("unit");
+        setUnitWeight(estimatedGrams);
+        setUnitLabel(data.isPackagedProduct ? "paquete/unidad" : "porción");
+        setPortionValue(1);
+        setPortionGrams(estimatedGrams);
+
         setCustomName(data.name);
         setCustomCalories(data.calories);
-        setCustomProtein(data.protein);
-        setCustomCarbs(data.carbs);
-        setCustomFat(data.fat);
+        setCustomProtein(Number(Number(data.protein).toFixed(1)));
+        setCustomCarbs(Number(Number(data.carbs).toFixed(1)));
+        setCustomFat(Number(Number(data.fat).toFixed(1)));
       } else {
         setAiError("La IA no pudo procesar la imagen de comida. Reintenta o ingresa los detalles manuales.");
       }
@@ -643,23 +683,33 @@ export default function FoodLogger({
       });
 
       if (data) {
+        const estimatedGrams = Math.max(1, Number(data.estimatedGrams) || (data.servingSize ? (parseFloat(data.servingSize.match(/(\d+(?:\.\d+)?)\s*(?:g|ml)/i)?.[1] || "100")) : 100));
+        const servingLabel = data.servingSize || (data.isPackagedProduct ? `1 paquete (${estimatedGrams}g)` : `1 porción (${estimatedGrams}g)`);
+
+        const scaleTo100 = 100 / estimatedGrams;
         const foodItem: FoodItem = {
           name: data.name,
-          calories: data.calories,
-          protein: data.protein,
-          carbs: data.carbs,
-          fat: data.fat,
-          servingSize: "1 Plato",
+          calories: Math.round(data.calories * scaleTo100),
+          protein: Number((data.protein * scaleTo100).toFixed(1)),
+          carbs: Number((data.carbs * scaleTo100).toFixed(1)),
+          fat: Number((data.fat * scaleTo100).toFixed(1)),
+          servingSize: servingLabel,
           source: "local",
           ingredients: data.ingredients
         };
+
         setSelectedFood(foodItem);
-        setPortionGrams(100);
+        setPortionUnit("unit");
+        setUnitWeight(estimatedGrams);
+        setUnitLabel(data.isPackagedProduct ? "paquete/unidad" : "porción");
+        setPortionValue(1);
+        setPortionGrams(estimatedGrams);
+
         setCustomName(data.name);
         setCustomCalories(data.calories);
-        setCustomProtein(data.protein);
-        setCustomCarbs(data.carbs);
-        setCustomFat(data.fat);
+        setCustomProtein(Number(Number(data.protein).toFixed(1)));
+        setCustomCarbs(Number(Number(data.carbs).toFixed(1)));
+        setCustomFat(Number(Number(data.fat).toFixed(1)));
         setCorrection(""); // Clear correction input
       } else {
         setAiError("No se pudo procesar la corrección por IA.");
@@ -928,27 +978,34 @@ export default function FoodLogger({
                     Sube una foto de tu plato. El modelo de IA identificará los ingredientes y calculará proteínas, carbohidratos, grasas y calorías de manera conservadora.
                   </p>
 
-                  <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 dark:border-white/10 hover:border-emerald-500/20 rounded-2xl p-4 bg-gray-50 dark:bg-black/30 min-h-32 text-center relative">
+                  <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 dark:border-white/10 hover:border-emerald-500/20 rounded-2xl p-3 bg-gray-50 dark:bg-black/30 text-center relative overflow-hidden">
                     {foodPhoto ? (
-                      <div className="text-center">
-                        <img 
-                          src={foodPhoto} 
-                          alt="Comida" 
-                          className="h-28 mx-auto rounded-xl object-contain border border-gray-200 dark:border-white/10 mb-2"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setFoodPhoto(null)}
-                          className="text-xs text-rose-500 dark:text-rose-400 hover:underline cursor-pointer font-bold"
-                        >
-                          Cambiar foto
-                        </button>
+                      <div className="w-full space-y-2.5">
+                        <div className="relative w-full h-56 sm:h-64 bg-black/40 rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 flex items-center justify-center shadow-inner">
+                          <img 
+                            src={foodPhoto} 
+                            alt="Comida para analizar" 
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between px-1">
+                          <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                            <Check className="h-3 w-3" /> Foto lista para análisis
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setFoodPhoto(null)}
+                            className="text-xs text-rose-500 dark:text-rose-400 hover:underline cursor-pointer font-bold bg-transparent border-none"
+                          >
+                            Cambiar / Retomar
+                          </button>
+                        </div>
                       </div>
                     ) : (
-                      <label className="cursor-pointer w-full py-4 flex flex-col items-center justify-center">
-                        <Camera className="h-7 w-7 text-gray-400 dark:text-white/30 mb-1.5" />
-                        <span className="text-xs font-bold text-gray-700 dark:text-white/70">Seleccionar Foto del Plato</span>
-                        <span className="text-[9px] text-gray-400 dark:text-white/30 mt-0.5">Soporta JPG, PNG</span>
+                      <label className="cursor-pointer w-full py-8 flex flex-col items-center justify-center">
+                        <Camera className="h-8 w-8 text-gray-400 dark:text-white/30 mb-2" />
+                        <span className="text-xs font-bold text-gray-700 dark:text-white/70">Tomar o Seleccionar Foto del Alimento</span>
+                        <span className="text-[9px] text-gray-400 dark:text-white/30 mt-0.5">Platos preparados o productos envasados con empaque</span>
                         <input
                           type="file"
                           accept="image/*"

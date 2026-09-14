@@ -24,7 +24,8 @@ body {
 }
 
 /* Make progress ring transitions smooth */
-circle {
+.progress-ring circle,
+circle.progress-ring-circle {
   transition: stroke-dashoffset 0.35s;
   transform: rotate(-90deg);
   transform-origin: 50% 50%;

@@ -30,17 +30,28 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
   }
 };
 
+const removeUndefinedRecursive = (obj: any): any => {
+  if (Array.isArray(obj)) {
+    return obj.map(removeUndefinedRecursive).filter(item => item !== undefined);
+  } else if (obj !== null && typeof obj === "object" && !(obj instanceof Date)) {
+    const newObj: any = {};
+    Object.keys(obj).forEach(key => {
+      const val = removeUndefinedRecursive(obj[key]);
+      if (val !== undefined) {
+        newObj[key] = val;
+      }
+    });
+    return newObj;
+  }
+  return obj;
+};
+
 export const saveUserProfile = async (userId: string, profile: UserProfile): Promise<void> => {
   try {
     const docRef = doc(db, "users", userId);
     
-    // Clean undefined values to prevent Firestore setDoc errors
-    const cleanedProfile = { ...profile };
-    (Object.keys(cleanedProfile) as Array<keyof UserProfile>).forEach((key) => {
-      if (cleanedProfile[key] === undefined) {
-        delete cleanedProfile[key];
-      }
-    });
+    // Clean undefined values recursively to prevent Firestore setDoc errors
+    const cleanedProfile = removeUndefinedRecursive(profile);
 
     await setDoc(docRef, {
       ...cleanedProfile,
@@ -78,7 +89,8 @@ export const addMeal = async (userId: string, meal: Omit<LoggedMeal, "id">): Pro
       ...meal,
       id: newDocRef.id,
     };
-    await setDoc(newDocRef, newMeal);
+    const cleanedMeal = removeUndefinedRecursive(newMeal);
+    await setDoc(newDocRef, cleanedMeal);
     return newMeal;
   } catch (error) {
     console.error("Error adding meal:", error);
@@ -92,6 +104,18 @@ export const deleteMeal = async (userId: string, mealId: string): Promise<void> 
     await deleteDoc(mealDocRef);
   } catch (error) {
     console.error("Error deleting meal:", error);
+    throw error;
+  }
+};
+
+export const updateMeal = async (userId: string, meal: LoggedMeal): Promise<LoggedMeal> => {
+  try {
+    const mealDocRef = doc(db, "users", userId, "meals", meal.id);
+    const cleanedMeal = removeUndefinedRecursive(meal);
+    await setDoc(mealDocRef, cleanedMeal, { merge: true });
+    return meal;
+  } catch (error) {
+    console.error("Error updating meal:", error);
     throw error;
   }
 };
@@ -121,7 +145,8 @@ export const addWaterLog = async (userId: string, waterLog: Omit<WaterLog, "id">
       ...waterLog,
       id: newDocRef.id,
     };
-    await setDoc(newDocRef, newLog);
+    const cleanedLog = removeUndefinedRecursive(newLog);
+    await setDoc(newDocRef, cleanedLog);
     return newLog;
   } catch (error) {
     console.error("Error adding water log:", error);
@@ -170,7 +195,8 @@ export const saveWorkoutSession = async (userId: string, workout: WorkoutSession
       id: workout.id || docRef.id,
       timestamp: serverTimestamp(),
     };
-    await setDoc(docRef, workoutData, { merge: true });
+    const cleanedWorkout = removeUndefinedRecursive(workoutData);
+    await setDoc(docRef, cleanedWorkout, { merge: true });
   } catch (error) {
     console.error("Error saving workout session:", error);
     throw error;
@@ -195,20 +221,21 @@ export const clearWorkoutHistory = async (userId: string): Promise<void> => {
 // PWA Push Notifications Operations
 export const savePushSubscription = async (userId: string, subscription: any): Promise<void> => {
   try {
-    // Generate a clean document ID from the endpoint URL by encoding it in base64
-    const subId = btoa(subscription.endpoint)
+    const endpointStr = String(subscription?.endpoint || Date.now());
+    const subId = btoa(unescape(encodeURIComponent(endpointStr)))
       .replace(/\//g, "_")
       .replace(/\+/g, "-")
-      .replace(/=/g, "");
+      .replace(/=/g, "")
+      .slice(-100);
     
     const subRef = doc(db, "users", userId, "push_subscriptions", subId);
+    const cleanedSub = removeUndefinedRecursive(subscription);
     await setDoc(subRef, {
-      ...subscription,
+      ...cleanedSub,
       updatedAt: serverTimestamp(),
     }, { merge: true });
   } catch (error) {
     console.error("Error saving push subscription:", error);
-    throw error;
   }
 };
 
@@ -315,7 +342,8 @@ export const addCustomFood = async (userId: string, food: Omit<CustomFood, "id">
     const foodsRef = collection(db, "users", userId, "customFoods");
     const newDocRef = doc(foodsRef);
     const newFood: CustomFood = { ...food, id: newDocRef.id };
-    await setDoc(newDocRef, newFood);
+    const cleanedFood = removeUndefinedRecursive(newFood);
+    await setDoc(newDocRef, cleanedFood);
     return newFood;
   } catch (error) {
     console.error("Error adding custom food:", error);
