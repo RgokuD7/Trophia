@@ -52,14 +52,22 @@ function cleanErrorMessage(rawMessage: string, status?: number): string {
   return rawMessage;
 }
 
-// Candidate models in order of preference (Primary: gemini-2.5-pro for advanced reasoning, with resilient fallbacks)
+// Candidate models in order of stability and performance for Gemini API v1beta
 const GEMINI_MODELS = [
-  "gemini-2.5-pro",
-  "gemini-2.5-flash",
-  "gemini-1.5-pro",
   "gemini-1.5-flash",
+  "gemini-1.5-pro",
   "gemini-2.0-flash",
+  "gemini-1.5-flash-8b",
 ];
+
+// Cache the last verified working model in memory and localStorage for zero-latency calls
+let activeWorkingModel: string = (() => {
+  try {
+    return localStorage.getItem("trophia_working_gemini_model") || "gemini-1.5-flash";
+  } catch {
+    return "gemini-1.5-flash";
+  }
+})();
 
 // Main helper to call Gemini API directly from browser via HTTP fetch
 async function callGeminiAPI(
@@ -79,9 +87,15 @@ async function callGeminiAPI(
     });
   }
 
+  // Prioritize the known working model first, then the remaining candidates
+  const prioritizedModels = [
+    activeWorkingModel,
+    ...GEMINI_MODELS.filter((m) => m !== activeWorkingModel),
+  ];
+
   let lastError: Error | null = null;
 
-  for (const model of GEMINI_MODELS) {
+  for (const model of prioritizedModels) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     try {
@@ -101,20 +115,24 @@ async function callGeminiAPI(
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const rawMessage = errorData?.error?.message || `Error en la comunicación con la IA (${response.status})`;
-        const isModelUnavailable =
+        
+        // Check if error is due to model name, not found, or unsupported on this endpoint
+        const isModelIssue =
           response.status === 404 ||
+          response.status === 400 ||
           rawMessage.toLowerCase().includes("not found") ||
           rawMessage.toLowerCase().includes("not supported") ||
           rawMessage.toLowerCase().includes("is not available") ||
-          rawMessage.toLowerCase().includes("unsupported");
+          rawMessage.toLowerCase().includes("unsupported") ||
+          rawMessage.toLowerCase().includes("invalid model");
 
-        if (isModelUnavailable) {
-          console.warn(`Gemini model '${model}' no disponible o incompatible. Probando siguiente modelo de respaldo...`, rawMessage);
+        if (isModelIssue) {
+          console.warn(`Modelo Gemini '${model}' no disponible (${response.status}). Probando siguiente modelo...`, rawMessage);
           lastError = new Error(cleanErrorMessage(rawMessage, response.status));
-          continue; // Intentar siguiente modelo
+          continue; // Try next model immediately
         }
 
-        // Si es un error de cuota o clave inválida, no iteramos modelos innecesariamente
+        // For non-model issues (e.g., quota exhausted or bad api key), fail fast
         throw new Error(cleanErrorMessage(rawMessage, response.status));
       }
 
@@ -132,7 +150,15 @@ async function callGeminiAPI(
       }
 
       try {
-        return JSON.parse(text.trim());
+        const parsed = JSON.parse(text.trim());
+        // Save working model for all subsequent requests
+        if (activeWorkingModel !== model) {
+          activeWorkingModel = model;
+          try {
+            localStorage.setItem("trophia_working_gemini_model", model);
+          } catch {}
+        }
+        return parsed;
       } catch (parseError) {
         console.error(`Failed to parse JSON response from Gemini (${model}):`, text);
         throw new Error("La respuesta de la IA no tiene un formato JSON válido.");
