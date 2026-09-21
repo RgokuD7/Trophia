@@ -8,7 +8,7 @@ import { UserProfile, LoggedMeal, MealType, CustomFood } from "../types";
 import { getCustomFoods, addCustomFood, deleteCustomFood } from "../services/dbService";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
-import { getSmartFoodSuggestionsByIA, askNutriCoachIA } from "../services/geminiService";
+import { getSmartFoodSuggestionsByIA, askNutriCoachIA, SmartFoodSuggestion } from "../services/geminiService";
 
 interface NutritionHubProps {
   profile: UserProfile;
@@ -136,8 +136,12 @@ export default function NutritionHub({
 
   // AI Suggestions state
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-  const [foodSuggestions, setFoodSuggestions] = useState<any[]>([]);
+  const [foodSuggestions, setFoodSuggestions] = useState<SmartFoodSuggestion[]>([]);
   const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
+  const [selectedSuggestionForDetail, setSelectedSuggestionForDetail] = useState<SmartFoodSuggestion | null>(null);
+  const [detailMealType, setDetailMealType] = useState<MealType>("snack");
+  const [isSavingCustomFood, setIsSavingCustomFood] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
 
   // Calorie bank state
@@ -280,16 +284,18 @@ export default function NutritionHub({
     setFoodSuggestions([]);
   }, [selectedDate, pRemaining, cRemaining, fRemaining, userId]);
 
-  const handleGetSuggestions = async () => {
+  const handleGetSuggestions = async (forceRefresh = false) => {
     const key = `trophia_suggestion_${userId}_${selectedDate}_${Math.round(pRemaining)}_${Math.round(cRemaining)}_${Math.round(fRemaining)}`;
-    const cached = localStorage.getItem(key);
-    if (cached) {
-      try {
-        setFoodSuggestions(JSON.parse(cached));
-        setSuggestionsError(null);
-        return;
-      } catch (err) {
-        console.error("Failed to parse cached suggestions", err);
+    if (!forceRefresh) {
+      const cached = localStorage.getItem(key);
+      if (cached) {
+        try {
+          setFoodSuggestions(JSON.parse(cached));
+          setSuggestionsError(null);
+          return;
+        } catch (err) {
+          console.error("Failed to parse cached suggestions", err);
+        }
       }
     }
 
@@ -312,6 +318,59 @@ export default function NutritionHub({
       setSuggestionsError(err.message || "No se pudieron obtener sugerencias.");
     } finally {
       setIsLoadingSuggestions(false);
+    }
+  };
+
+  const handleOpenSuggestionDetail = (item: SmartFoodSuggestion) => {
+    setSelectedSuggestionForDetail(item);
+    setActionFeedback(null);
+    // Suggest meal type according to current hour
+    const hour = new Date().getHours();
+    if (hour < 11) setDetailMealType("breakfast");
+    else if (hour < 16) setDetailMealType("lunch");
+    else if (hour < 20) setDetailMealType("snack");
+    else setDetailMealType("dinner");
+  };
+
+  const handleLogSuggestedMeal = (item: SmartFoodSuggestion) => {
+    onAddMeal({
+      name: item.name,
+      calories: Math.round(item.calories),
+      protein: Math.round(Number(item.protein) * 10) / 10,
+      carbs: Math.round(Number(item.carbs) * 10) / 10,
+      fat: Math.round(Number(item.fat) * 10) / 10,
+      type: detailMealType,
+      servingSize: item.servingSize,
+    });
+    setActionFeedback("¡Comida registrada en tu diario de hoy!");
+    setTimeout(() => {
+      setActionFeedback(null);
+      setSelectedSuggestionForDetail(null);
+    }, 1200);
+  };
+
+  const handleSaveSuggestedAsCustom = async (item: SmartFoodSuggestion) => {
+    setIsSavingCustomFood(true);
+    try {
+      const newFood = await addCustomFood(userId, {
+        name: item.name,
+        calories: Math.round(item.calories),
+        protein: Math.round(Number(item.protein) * 10) / 10,
+        carbs: Math.round(Number(item.carbs) * 10) / 10,
+        fat: Math.round(Number(item.fat) * 10) / 10,
+        servingSize: item.servingSize,
+        category: "dish",
+        createdAt: new Date().toISOString(),
+      });
+      setCustomFoods(prev => [newFood, ...prev]);
+      setActionFeedback("¡Guardado en Mis Comidas!");
+      setTimeout(() => {
+        setActionFeedback(null);
+      }, 1500);
+    } catch (err) {
+      console.error("Error saving custom food:", err);
+    } finally {
+      setIsSavingCustomFood(false);
     }
   };
   const getWeeklyCompliance = () => {
@@ -856,25 +915,44 @@ export default function NutritionHub({
             </div>
           ) : (
             <div className="space-y-3.5 animate-fadeIn">
-              <div className="space-y-2">
-                {foodSuggestions.map((item: any, idx: number) => (
-                  <div key={idx} className="bg-white/[0.02] border border-white/5 rounded-2xl p-3 flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+              <div className="space-y-2.5">
+                {foodSuggestions.map((item, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => handleOpenSuggestionDetail(item)}
+                    className="bg-white/[0.02] hover:bg-white/[0.05] border border-white/5 hover:border-emerald-500/30 rounded-2xl p-3.5 flex items-start gap-3 transition-all duration-200 cursor-pointer group active:scale-[0.99]"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5 group-hover:bg-emerald-500/20 transition-colors">
                       {idx + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-black text-white truncate uppercase tracking-tight">{item.name}</span>
-                        <span className="text-[9px] font-bold text-emerald-400 shrink-0 bg-emerald-500/10 px-1.5 py-0.5 rounded-full font-mono">{item.calories} kcal</span>
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-xs font-black text-white leading-snug tracking-tight group-hover:text-emerald-300 transition-colors">
+                          {item.name}
+                        </span>
+                        <span className="text-[9px] font-bold text-emerald-400 shrink-0 bg-emerald-500/10 px-1.5 py-0.5 rounded-full font-mono mt-0.5">
+                          {item.calories} kcal
+                        </span>
                       </div>
-                      <span className="block text-[9px] text-white/30 font-medium mt-0.5">Porción sugerida: {item.servingSize}</span>
-                      <p className="text-[10px] text-white/50 leading-snug mt-1.5 italic">"{item.reason}"</p>
                       
-                      {/* Macro values preview */}
-                      <div className="flex gap-2.5 mt-2 pt-2 border-t border-white/[0.03]">
-                        <span className="text-[8.5px] text-emerald-400 font-mono">P: <b>{item.protein}g</b></span>
-                        <span className="text-[8.5px] text-blue-400 font-mono">C: <b>{item.carbs}g</b></span>
-                        <span className="text-[8.5px] text-amber-400 font-mono">F: <b>{item.fat}g</b></span>
+                      <span className="block text-[9.5px] text-white/40 font-medium mt-1">
+                        Porción: <span className="text-white/70">{item.servingSize}</span>
+                      </span>
+                      
+                      <p className="text-[10px] text-white/55 leading-relaxed mt-1 italic">
+                        "{item.reason}"
+                      </p>
+                      
+                      {/* Macro values preview + Detail trigger */}
+                      <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-white/[0.04]">
+                        <div className="flex gap-2.5">
+                          <span className="text-[8.5px] text-emerald-400 font-mono">P: <b>{item.protein}g</b></span>
+                          <span className="text-[8.5px] text-blue-400 font-mono">C: <b>{item.carbs}g</b></span>
+                          <span className="text-[8.5px] text-amber-400 font-mono">F: <b>{item.fat}g</b></span>
+                        </div>
+                        <span className="text-[9px] font-bold text-emerald-400/80 group-hover:text-emerald-300 flex items-center gap-0.5 transition-colors">
+                          Ver detalle <ChevronRight className="h-3 w-3" />
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -890,15 +968,15 @@ export default function NutritionHub({
 
               <div className="flex gap-2">
                 <button
-                  onClick={handleGetSuggestions}
+                  onClick={() => handleGetSuggestions(true)}
                   disabled={isLoadingSuggestions}
-                  className="flex-1 py-2 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-40 text-white text-[10px] font-bold flex items-center justify-center gap-1 transition cursor-pointer border-0"
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-40 text-white text-[10px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer border-0"
                 >
-                  <Sparkles className="h-3 w-3" /> Re-generar
+                  <Sparkles className="h-3 w-3 text-emerald-400" /> Re-generar nuevas
                 </button>
                 <button
                   onClick={() => setFoodSuggestions([])}
-                  className="py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white/60 text-[10px] font-bold transition cursor-pointer border-0"
+                  className="py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white/60 text-[10px] font-bold transition cursor-pointer border-0"
                 >
                   Ocultar
                 </button>
@@ -1196,6 +1274,172 @@ export default function NutritionHub({
                   className="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black transition cursor-pointer border-none shadow-md shadow-emerald-500/20"
                 >
                   Guardar Cambios
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Suggested Food Detail Modal */}
+      <AnimatePresence>
+        {selectedSuggestionForDetail && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 40 }}
+              className="bg-[#121420] border border-white/10 w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
+            >
+              {/* Modal Header */}
+              <div className="p-5 border-b border-white/5 flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
+                      Sugerencia IA
+                    </span>
+                    {selectedSuggestionForDetail.category && (
+                      <span className="text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/5 text-white/60">
+                        {selectedSuggestionForDetail.category}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-base font-black text-white leading-snug">
+                    {selectedSuggestionForDetail.name}
+                  </h3>
+                  <p className="text-[11px] text-white/40 font-medium">
+                    Porción sugerida: <span className="text-white/80">{selectedSuggestionForDetail.servingSize}</span>
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedSuggestionForDetail(null);
+                    setActionFeedback(null);
+                  }}
+                  className="p-2 rounded-full bg-white/5 text-white/60 hover:text-white hover:bg-white/10 transition cursor-pointer border-0 shrink-0"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-5 space-y-4 overflow-y-auto max-h-[calc(90vh-180px)] no-scrollbar">
+                {/* Macro Badges Grid */}
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-2.5 text-center">
+                    <span className="block text-[8.5px] font-bold text-white/40 uppercase">Calorías</span>
+                    <span className="block text-sm font-black text-emerald-400 font-mono mt-0.5">{selectedSuggestionForDetail.calories}</span>
+                    <span className="block text-[7.5px] text-white/30">kcal</span>
+                  </div>
+                  <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-2.5 text-center">
+                    <span className="block text-[8.5px] font-bold text-emerald-400 uppercase">Proteína</span>
+                    <span className="block text-sm font-black text-emerald-300 font-mono mt-0.5">{selectedSuggestionForDetail.protein}g</span>
+                    <span className="block text-[7.5px] text-white/30">P</span>
+                  </div>
+                  <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-2.5 text-center">
+                    <span className="block text-[8.5px] font-bold text-blue-400 uppercase">Carbos</span>
+                    <span className="block text-sm font-black text-blue-300 font-mono mt-0.5">{selectedSuggestionForDetail.carbs}g</span>
+                    <span className="block text-[7.5px] text-white/30">C</span>
+                  </div>
+                  <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-2.5 text-center">
+                    <span className="block text-[8.5px] font-bold text-amber-400 uppercase">Grasas</span>
+                    <span className="block text-sm font-black text-amber-300 font-mono mt-0.5">{selectedSuggestionForDetail.fat}g</span>
+                    <span className="block text-[7.5px] text-white/30">G</span>
+                  </div>
+                </div>
+
+                {/* Why it fits reason */}
+                <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-2xl p-3.5 space-y-1">
+                  <span className="text-[9px] font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Lightbulb className="h-3.5 w-3.5" />
+                    ¿Por qué calza con tus macros restantes?
+                  </span>
+                  <p className="text-xs text-white/80 leading-relaxed font-medium">
+                    {selectedSuggestionForDetail.reason}
+                  </p>
+                </div>
+
+                {/* Ingredients if provided */}
+                {selectedSuggestionForDetail.ingredients && selectedSuggestionForDetail.ingredients.length > 0 && (
+                  <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-3.5 space-y-2">
+                    <span className="text-[9px] font-black text-white/50 uppercase tracking-wider flex items-center gap-1.5">
+                      <Utensils className="h-3.5 w-3.5 text-white/60" />
+                      Ingredientes recomendados
+                    </span>
+                    <ul className="space-y-1.5 pl-1">
+                      {selectedSuggestionForDetail.ingredients.map((ing, i) => (
+                        <li key={i} className="text-xs text-white/80 flex items-center gap-2 font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                          {ing}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Quick Prep Tip */}
+                {selectedSuggestionForDetail.prepTip && (
+                  <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-3.5 space-y-1.5">
+                    <span className="text-[9px] font-black text-white/50 uppercase tracking-wider flex items-center gap-1.5">
+                      <ChefHat className="h-3.5 w-3.5 text-amber-400" />
+                      Preparación rápida
+                    </span>
+                    <p className="text-xs text-white/70 leading-relaxed font-medium">
+                      {selectedSuggestionForDetail.prepTip}
+                    </p>
+                  </div>
+                )}
+
+                {/* Meal Type Selector */}
+                <div className="space-y-2 pt-1">
+                  <span className="text-[9px] font-bold text-white/40 uppercase tracking-wider block">
+                    Registrar en mi comida:
+                  </span>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {(["breakfast", "lunch", "snack", "dinner"] as MealType[]).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setDetailMealType(t)}
+                        className={`py-2 px-1 rounded-xl text-[10px] font-black border transition cursor-pointer flex flex-col items-center gap-1 ${
+                          detailMealType === t
+                            ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-sm"
+                            : "bg-white/[0.02] border-white/5 text-white/50 hover:text-white hover:bg-white/5"
+                        }`}
+                      >
+                        <span>{getMealEmoji(t)}</span>
+                        <span>{getMealLabel(t)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Action feedback message */}
+                {actionFeedback && (
+                  <div className="flex items-center justify-center gap-1.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold p-3 rounded-2xl animate-fadeIn">
+                    <Check className="h-4 w-4 shrink-0 text-emerald-400" />
+                    <span>{actionFeedback}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div className="p-4 border-t border-white/5 bg-[#121420] flex items-center gap-2">
+                <button
+                  onClick={() => handleSaveSuggestedAsCustom(selectedSuggestionForDetail)}
+                  disabled={isSavingCustomFood}
+                  className="py-3 px-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white/80 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer border-0 shrink-0"
+                >
+                  <Star className="h-3.5 w-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Guardar en</span> Mis Comidas
+                </button>
+
+                <button
+                  onClick={() => handleLogSuggestedMeal(selectedSuggestionForDetail)}
+                  className="flex-1 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black flex items-center justify-center gap-2 transition cursor-pointer border-0 shadow-lg shadow-emerald-500/10 active:scale-[0.98]"
+                >
+                  <Plus className="h-4 w-4 stroke-[3]" />
+                  <span>Registrar en Diario</span>
                 </button>
               </div>
             </motion.div>

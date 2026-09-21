@@ -52,24 +52,45 @@ function cleanErrorMessage(rawMessage: string, status?: number): string {
   return rawMessage;
 }
 
-// Candidate models matching official Google Gemini APIs (fastest first)
-const GEMINI_MODELS = [
+// Model tiers for task specialization (Pro for complex reasoning/vision, Flash for speed/chat)
+export type GeminiModelTier = "flash" | "pro";
+
+interface CallGeminiOptions {
+  tier?: GeminiModelTier;
+}
+
+const FLASH_MODELS = [
   "gemini-2.0-flash",
   "gemini-1.5-flash",
+];
+
+const PRO_MODELS = [
   "gemini-2.5-pro",
   "gemini-1.5-pro",
 ];
 
-// Cache the last verified working model in memory and localStorage for zero-latency calls
-let activeWorkingModel: string = (() => {
+// Memory & LocalStorage cache per tier for zero-lag instant dispatch
+let activeWorkingFlashModel: string = (() => {
   try {
-    const saved = localStorage.getItem("trophia_working_gemini_model");
-    if (saved && GEMINI_MODELS.includes(saved)) {
+    const saved = localStorage.getItem("trophia_working_gemini_flash_model");
+    if (saved && FLASH_MODELS.includes(saved)) {
       return saved;
     }
     return "gemini-2.0-flash";
   } catch {
     return "gemini-2.0-flash";
+  }
+})();
+
+let activeWorkingProModel: string = (() => {
+  try {
+    const saved = localStorage.getItem("trophia_working_gemini_pro_model");
+    if (saved && PRO_MODELS.includes(saved)) {
+      return saved;
+    }
+    return "gemini-2.5-pro";
+  } catch {
+    return "gemini-2.5-pro";
   }
 })();
 
@@ -92,12 +113,6 @@ async function getSupportedModelsForApiKey(apiKey: string): Promise<string[]> {
           .filter((name: string) => !name.includes("embedding") && !name.includes("aqa") && !name.includes("imagen"));
         
         if (models.length > 0) {
-          // Sort models: flash first, then pro
-          models.sort((a: string, b: string) => {
-            const aFlash = a.includes("flash") ? 0 : 1;
-            const bFlash = b.includes("flash") ? 0 : 1;
-            return aFlash - bFlash;
-          });
           cachedSupportedModels = { key: apiKey, models, timestamp: now };
           return models;
         }
@@ -107,14 +122,15 @@ async function getSupportedModelsForApiKey(apiKey: string): Promise<string[]> {
     console.warn("Could not fetch models dynamically, using fallback list:", err);
   }
 
-  return GEMINI_MODELS;
+  return [...FLASH_MODELS, ...PRO_MODELS];
 }
 
-// Main helper to call Gemini API directly from browser via HTTP fetch
+// Main helper to call Gemini API directly from browser via HTTP fetch with Tier specialization
 async function callGeminiAPI(
   apiKey: string,
   prompt: string,
-  images?: GeminiImage[]
+  images?: GeminiImage[],
+  options?: CallGeminiOptions
 ): Promise<any> {
   const resolvedApiKey = (
     (apiKey && apiKey.trim() !== "")
@@ -128,6 +144,7 @@ async function callGeminiAPI(
     throw new Error("No se ha configurado ninguna API Key de Gemini. Por favor agrégala en Ajustes o al iniciar la app.");
   }
 
+  const tier: GeminiModelTier = options?.tier || "flash";
   const parts: any[] = [{ text: prompt }];
   if (images && images.length > 0) {
     images.forEach((img) => {
@@ -140,13 +157,10 @@ async function callGeminiAPI(
     });
   }
 
-  // Prioritize active working model and standard fast models for zero network lag
-  const prioritizedModels = Array.from(
-    new Set([
-      activeWorkingModel,
-      ...GEMINI_MODELS,
-    ])
-  );
+  // Prioritize active working model for the specific tier
+  const prioritizedModels = tier === "pro"
+    ? Array.from(new Set([activeWorkingProModel, ...PRO_MODELS, ...FLASH_MODELS]))
+    : Array.from(new Set([activeWorkingFlashModel, ...FLASH_MODELS, ...PRO_MODELS]));
 
   let lastError: Error | null = null;
 
@@ -175,7 +189,7 @@ async function callGeminiAPI(
           throw new Error(cleanErrorMessage(rawMessage, response.status));
         }
 
-        console.warn(`Modelo Gemini '${model}' falló (${response.status}): ${rawMessage}. Probando siguiente modelo...`);
+        console.warn(`Modelo Gemini '${model}' (${tier}) falló (${response.status}): ${rawMessage}. Probando siguiente modelo...`);
         lastError = new Error(cleanErrorMessage(rawMessage, response.status));
         continue;
       }
@@ -195,11 +209,16 @@ async function callGeminiAPI(
 
       try {
         const parsed = JSON.parse(text.trim());
-        if (activeWorkingModel !== model) {
-          activeWorkingModel = model;
-          try {
-            localStorage.setItem("trophia_working_gemini_model", model);
-          } catch {}
+        if (tier === "pro") {
+          if (activeWorkingProModel !== model) {
+            activeWorkingProModel = model;
+            try { localStorage.setItem("trophia_working_gemini_pro_model", model); } catch {}
+          }
+        } else {
+          if (activeWorkingFlashModel !== model) {
+            activeWorkingFlashModel = model;
+            try { localStorage.setItem("trophia_working_gemini_flash_model", model); } catch {}
+          }
         }
         return parsed;
       } catch (parseError) {
@@ -241,8 +260,13 @@ async function callGeminiAPI(
           if (text) {
             text = text.trim().replace(/^```json\s*/, "").replace(/^```\s*/, "").replace(/\s*```$/, "");
             const parsed = JSON.parse(text.trim());
-            activeWorkingModel = model;
-            try { localStorage.setItem("trophia_working_gemini_model", model); } catch {}
+            if (tier === "pro") {
+              activeWorkingProModel = model;
+              try { localStorage.setItem("trophia_working_gemini_pro_model", model); } catch {}
+            } else {
+              activeWorkingFlashModel = model;
+              try { localStorage.setItem("trophia_working_gemini_flash_model", model); } catch {}
+            }
             return parsed;
           }
         }
@@ -349,7 +373,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   try {
-    return await callGeminiAPI(apiKey, prompt, images);
+    return await callGeminiAPI(apiKey, prompt, images, { tier: "pro" });
   } catch (apiError: any) {
     console.error("Gemini API error in analyzeFatByIA:", apiError);
     throw apiError;
@@ -396,7 +420,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   try {
-    return await callGeminiAPI(apiKey, prompt);
+    return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
   } catch (apiError: any) {
     console.error("Gemini API error in recommendGoalByIA:", apiError);
     throw apiError;
@@ -462,7 +486,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   try {
-    return await callGeminiAPI(apiKey, prompt);
+    return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
   } catch (apiError: any) {
     console.error("Gemini API error in generateRecommendationsByIA:", apiError);
     throw apiError;
@@ -535,7 +559,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   try {
-    return await callGeminiAPI(apiKey, prompt);
+    return await callGeminiAPI(apiKey, prompt, undefined, { tier: "pro" });
   } catch (apiError: any) {
     console.error("Gemini API error in generateRoutineByIA:", apiError);
     throw apiError;
@@ -611,8 +635,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   "analysis": "Análisis nutricional de los ingredientes o del producto y recomendaciones."
 }`;
 
-  // No custom fallback, let the error bubble up so the UI displays it properly and prompts the user to save/retry.
-  return await callGeminiAPI(apiKey, prompt, images);
+  return await callGeminiAPI(apiKey, prompt, images, { tier: "flash" });
 }
 
 export async function generateRecipeFromIngredientsByIA(
@@ -759,7 +782,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   try {
-    return await callGeminiAPI(apiKey, prompt);
+    return await callGeminiAPI(apiKey, prompt, undefined, { tier: "pro" });
   } catch (apiError: any) {
     console.error("Gemini API error in analyzeInjuryByIA:", apiError);
     throw apiError;
@@ -797,7 +820,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   try {
-    return await callGeminiAPI(apiKey, prompt);
+    return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
   } catch (apiError: any) {
     console.error("Gemini API error in generateGroceryListByIA:", apiError);
     throw apiError;
@@ -831,7 +854,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   try {
-    return await callGeminiAPI(apiKey, prompt);
+    return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
   } catch (apiError: any) {
     console.error("Gemini API error in suggestFoodSubstitutesByIA:", apiError);
     throw apiError;
@@ -860,7 +883,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   "ingredients": ["ingrediente 1", "ingrediente 2"]
 }`;
 
-  return await callGeminiAPI(apiKey, prompt);
+  return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
 }
 
 // 10. Estimate common visual serving sizes for a food item
@@ -880,7 +903,7 @@ Sé extremadamente conciso. Tu respuesta debe ser estrictamente en formato JSON 
   ]
 }`;
 
-  return await callGeminiAPI(apiKey, prompt);
+  return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
 }
 
 // 11. Extract macros and details from a physical nutrition label image using OCR
@@ -906,10 +929,23 @@ Requisitos:
   "servingSize": "Descripción corta de la porción original sugerida del empaque, ej: 30g o 1 rebanada"
 }`;
 
-  return await callGeminiAPI(apiKey, prompt, [cleanImg]);
+  return await callGeminiAPI(apiKey, prompt, [cleanImg], { tier: "flash" });
 }
 
 // 12. Generate smart food suggestions based on remaining macronutrients
+export interface SmartFoodSuggestion {
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  servingSize: string;
+  reason: string;
+  prepTip?: string;
+  ingredients?: string[];
+  category?: "desayuno" | "almuerzo" | "snack" | "cena" | "cualquiera";
+}
+
 export async function getSmartFoodSuggestionsByIA(
   apiKey: string,
   pRemaining: number,
@@ -917,30 +953,45 @@ export async function getSmartFoodSuggestionsByIA(
   fRemaining: number,
   kcalRemaining: number,
   goal: string
-): Promise<{ name: string; calories: number; protein: number; carbs: number; fat: number; servingSize: string; reason: string }[]> {
-  const prompt = `Actúas como un Nutriólogo Deportivo experto. El usuario tiene los siguientes macronutrientes y calorías restantes por consumir HOY:
+): Promise<SmartFoodSuggestion[]> {
+  const prompt = `Actúas como un Nutriólogo Deportivo experto de la aplicación Trophia. El usuario tiene los siguientes macronutrientes y calorías restantes por consumir HOY:
 - Calorías restantes: ${Math.round(kcalRemaining)} kcal
 - Proteína restante: ${Math.round(pRemaining)}g
 - Carbohidratos restantes: ${Math.round(cRemaining)}g
 - Grasas restantes: ${Math.round(fRemaining)}g
 - Meta fitness: ${goal === "lose_weight" ? "Definición / Pérdida de peso" : "Volumen / Ganancia de masa muscular"}
 
-Sugiere exactamente 3 opciones de alimentos o snacks reales y saludables (ej: "Yogur griego con nueces", "Pechuga de pavo", etc.) que se ajusten a estas necesidades. Explica brevemente por qué es una buena opción en 1 frase.
+Sugiere exactamente 3 opciones de alimentos o snacks reales, sabrosos y saludables que se ajusten de forma óptima a estos requerimientos pendientes de hoy.
+
+Para cada opción proporciona:
+1. "name": Nombre descriptivo y apetecible del plato o snack (sin cortar, ej: "Bowl de yogur griego con arándanos y nueces").
+2. "calories": Calorías totales estimadas en kcal (número entero).
+3. "protein": Gramos de proteína (número con 1 decimal o entero).
+4. "carbs": Gramos de carbohidratos (número con 1 decimal o entero).
+5. "fat": Gramos de grasa (número con 1 decimal o entero).
+6. "servingSize": Porción sugerida detallada (ej: "1 bowl (200g yogur + 40g arándanos)").
+7. "reason": Explicación corta y motivadora de por qué encaja con sus macros restantes.
+8. "prepTip": Consejo o método de preparación rápida en 1 o 2 frases.
+9. "ingredients": Lista de 2 a 4 ingredientes clave con sus cantidades estimadas (ej: ["200g yogur griego", "40g arándanos", "15g nueces"]).
+10. "category": "snack" | "desayuno" | "almuerzo" | "cena" | "cualquiera"
 
 Responde estrictamente en formato JSON con la siguiente estructura de array:
 [
   {
-    "name": "Nombre de la opción de comida o snack",
-    "calories": calorías en kcal (número entero),
-    "protein": gramos de proteína (número entero o decimal),
-    "carbs": gramos de carbohidratos (número entero o decimal),
-    "fat": gramos de grasa (número entero o decimal),
-    "servingSize": "Cantidad sugerida (ej: 150g o 2 rebanadas)",
-    "reason": "Explicación corta de por qué calza bien con sus macros"
+    "name": "Nombre completo del plato o snack",
+    "calories": 260,
+    "protein": 22,
+    "carbs": 18,
+    "fat": 5,
+    "servingSize": "1 bowl mediano (250g)",
+    "reason": "Excelente aporte proteico con carbohidratos de bajo índice glucémico y mínimas grasas.",
+    "prepTip": "Vierte el yogur en un recipiente, agrega los arándanos frescos y añade los frutos secos por encima.",
+    "ingredients": ["200g Yogur griego natural 0%", "40g Arándanos frescos", "15g Nueces picadas"],
+    "category": "snack"
   }
 ]`;
 
-  return await callGeminiAPI(apiKey, prompt);
+  return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
 }
 
 // 13. Nutritional consultation with Trophia IA Nutri-Coach
@@ -960,7 +1011,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   "answer": "Tu respuesta detallada y profesional aquí en español"
 }`;
 
-  return await callGeminiAPI(apiKey, prompt);
+  return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
 }
 
 // 14. Generate intelligent pre-workout meal or shake recommendation
@@ -1025,7 +1076,7 @@ Responde estrictamente en formato JSON con la siguiente estructura de datos (en 
   "scientificReason": "Explicación breve de por qué esta combinación es perfecta para el tipo de entrenamiento, tiempo restante, y notas del usuario"
 }`;
 
-  return await callGeminiAPI(apiKey, prompt);
+  return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
 }
 
 // 15. Adjust calories burned based on exercise description
@@ -1053,5 +1104,5 @@ Responde estrictamente en formato JSON con la siguiente estructura:
   "reason": "Explicación concisa en 1 o 2 frases del ajuste de intensidad realizado según su descripción (ej. 'Se reduce el MET de 7.8 a 5.5 porque el golpeo de saco es menos demandante que el combate competitivo')."
 }`;
 
-  return await callGeminiAPI(apiKey, prompt);
+  return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
 }
