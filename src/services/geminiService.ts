@@ -52,15 +52,12 @@ function cleanErrorMessage(rawMessage: string, status?: number): string {
   return rawMessage;
 }
 
-// Candidate models matching Google AI Studio
+// Candidate models matching official Google Gemini APIs (fastest first)
 const GEMINI_MODELS = [
-  "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
-  "gemini-3-flash",
   "gemini-2.0-flash",
   "gemini-1.5-flash",
-  "gemini-1.5-pro",
   "gemini-2.5-pro",
+  "gemini-1.5-pro",
 ];
 
 // Cache the last verified working model in memory and localStorage for zero-latency calls
@@ -70,9 +67,9 @@ let activeWorkingModel: string = (() => {
     if (saved && GEMINI_MODELS.includes(saved)) {
       return saved;
     }
-    return "gemini-2.5-flash";
+    return "gemini-2.0-flash";
   } catch {
-    return "gemini-2.5-flash";
+    return "gemini-2.0-flash";
   }
 })();
 
@@ -143,13 +140,13 @@ async function callGeminiAPI(
     });
   }
 
-  // Dynamically fetch supported models or fallback to GEMINI_MODELS
-  const availableModels = await getSupportedModelsForApiKey(resolvedApiKey);
-  const prioritizedModels = [
-    activeWorkingModel,
-    ...availableModels.filter((m) => m !== activeWorkingModel),
-    ...GEMINI_MODELS.filter((m) => !availableModels.includes(m) && m !== activeWorkingModel),
-  ];
+  // Prioritize active working model and standard fast models for zero network lag
+  const prioritizedModels = Array.from(
+    new Set([
+      activeWorkingModel,
+      ...GEMINI_MODELS,
+    ])
+  );
 
   let lastError: Error | null = null;
 
@@ -222,6 +219,36 @@ async function callGeminiAPI(
       console.warn(`Error llamando al modelo '${model}':`, netError);
     }
   }
+
+  // Dynamic discovery fallback only if all standard models fail
+  try {
+    const dynamicModels = await getSupportedModelsForApiKey(resolvedApiKey);
+    const remainingModels = dynamicModels.filter((m) => !prioritizedModels.includes(m));
+    for (const model of remainingModels) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${resolvedApiKey}`;
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts }],
+            generationConfig: { responseMimeType: "application/json" },
+          }),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          let text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) {
+            text = text.trim().replace(/^```json\s*/, "").replace(/^```\s*/, "").replace(/\s*```$/, "");
+            const parsed = JSON.parse(text.trim());
+            activeWorkingModel = model;
+            try { localStorage.setItem("trophia_working_gemini_model", model); } catch {}
+            return parsed;
+          }
+        }
+      } catch {}
+    }
+  } catch {}
 
   throw lastError || new Error("No fue posible comunicarse con ningún modelo de Inteligencia Artificial disponible.");
 }
