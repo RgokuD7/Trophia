@@ -125,8 +125,9 @@ export default function SettingsView({
   }, []);
 
   function urlBase64ToUint8Array(base64String: string) {
-    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding).replace(/\\-/g, "+").replace(/_/g, "/");
+    const cleanStr = base64String.trim().replace(/-/g, "+").replace(/_/g, "/");
+    const padding = "=".repeat((4 - (cleanStr.length % 4)) % 4);
+    const base64 = cleanStr + padding;
 
     const rawData = window.atob(base64);
     const outputArray = new Uint8Array(rawData.length);
@@ -763,7 +764,7 @@ export default function SettingsView({
           <div className="text-center pt-2 text-[10px] text-gray-400 font-mono tracking-wider">
             <span>Trophia • by Richard Bouryssieres</span>
             <span className="mx-1.5">•</span>
-            <span>v0.1.6</span>
+            <span>v0.1.7</span>
           </div>
         </div>
 

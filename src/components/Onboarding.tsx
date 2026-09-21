@@ -393,8 +393,9 @@ export default function Onboarding({
   }, [step]);
 
   function urlBase64ToUint8Array(base64String: string) {
-    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding).replace(/\-/g, "+").replace(/_/g, "/");
+    const cleanStr = base64String.trim().replace(/-/g, "+").replace(/_/g, "/");
+    const padding = "=".repeat((4 - (cleanStr.length % 4)) % 4);
+    const base64 = cleanStr + padding;
 
     const rawData = window.atob(base64);
     const outputArray = new Uint8Array(rawData.length);

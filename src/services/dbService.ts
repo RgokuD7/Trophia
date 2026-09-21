@@ -219,15 +219,18 @@ export const clearWorkoutHistory = async (userId: string): Promise<void> => {
 };
 
 // PWA Push Notifications Operations
+const getSubscriptionDocId = (endpoint: string): string => {
+  const endpointStr = String(endpoint || Date.now());
+  return btoa(unescape(encodeURIComponent(endpointStr)))
+    .replace(/\//g, "_")
+    .replace(/\+/g, "-")
+    .replace(/=/g, "")
+    .slice(-100);
+};
+
 export const savePushSubscription = async (userId: string, subscription: any): Promise<void> => {
   try {
-    const endpointStr = String(subscription?.endpoint || Date.now());
-    const subId = btoa(unescape(encodeURIComponent(endpointStr)))
-      .replace(/\//g, "_")
-      .replace(/\+/g, "-")
-      .replace(/=/g, "")
-      .slice(-100);
-    
+    const subId = getSubscriptionDocId(subscription?.endpoint);
     const subRef = doc(db, "users", userId, "push_subscriptions", subId);
     const cleanedSub = removeUndefinedRecursive(subscription);
     await setDoc(subRef, {
@@ -241,11 +244,7 @@ export const savePushSubscription = async (userId: string, subscription: any): P
 
 export const deletePushSubscription = async (userId: string, endpoint: string): Promise<void> => {
   try {
-    const subId = btoa(endpoint)
-      .replace(/\//g, "_")
-      .replace(/\+/g, "-")
-      .replace(/=/g, "");
-      
+    const subId = getSubscriptionDocId(endpoint);
     const subRef = doc(db, "users", userId, "push_subscriptions", subId);
     await deleteDoc(subRef);
   } catch (error) {
