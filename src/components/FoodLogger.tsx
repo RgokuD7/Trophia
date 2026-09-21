@@ -151,7 +151,7 @@ export default function FoodLogger({
   onCustomFoodAdded,
   mode = "log"
 }: FoodLoggerProps) {
-  const systemGeminiKey = import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || apiKey || "";
+  const effectiveApiKey = apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || (typeof localStorage !== "undefined" ? localStorage.getItem("trophia_api_key") : "") || "";
   const [activeTab, setActiveTab] = useState<"search" | "camera" | "personal">("search");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMealType, setSelectedMealType] = useState<MealType>(defaultMealType || "lunch");
@@ -393,7 +393,7 @@ export default function FoodLogger({
     setIaEstimationError(null);
 
     try {
-      const data = await estimateMacrosFromDescription(apiKey || "", iaDescription.trim());
+      const data = await estimateMacrosFromDescription(effectiveApiKey, iaDescription.trim());
       if (data) {
         setCustomName(data.name || "Alimento IA");
         setCustomCalories(data.calories || 0);
@@ -508,7 +508,7 @@ export default function FoodLogger({
     reader.onloadend = async () => {
       try {
         const base64Image = reader.result as string;
-        const data = await analyzeNutritionLabelByIA(systemGeminiKey, base64Image);
+        const data = await analyzeNutritionLabelByIA(effectiveApiKey, base64Image);
         
         if (data && data.calories !== undefined) {
           const scale = portionUnit === "unit" ? unitWeight / 100 : portionValue / 100;
@@ -539,7 +539,7 @@ export default function FoodLogger({
     setIsLoadingPortions(true);
     setPortionsError(null);
     try {
-      const data = await getVisualServingSizesByIA(systemGeminiKey, selectedFood.name);
+      const data = await getVisualServingSizesByIA(effectiveApiKey, selectedFood.name);
       if (data && Array.isArray(data.suggestions)) {
         setVisualPortions(data.suggestions);
         setShowPortionsInfo(true);
@@ -650,7 +650,7 @@ export default function FoodLogger({
     setAiError(null);
 
     try {
-      const data = await analyzeFoodByIA(apiKey || "", {
+      const data = await analyzeFoodByIA(effectiveApiKey, {
         image: foodPhoto,
         mealType: selectedMealType,
         description: description.trim() || undefined
@@ -700,7 +700,7 @@ export default function FoodLogger({
     setAiError(null);
 
     try {
-      const data = await analyzeFoodByIA(apiKey || "", {
+      const data = await analyzeFoodByIA(effectiveApiKey, {
         image: foodPhoto,
         mealType: selectedMealType,
         existingIngredients: selectedFood.ingredients || [],

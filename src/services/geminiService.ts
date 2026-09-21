@@ -52,14 +52,15 @@ function cleanErrorMessage(rawMessage: string, status?: number): string {
   return rawMessage;
 }
 
-// Candidate models matching active Google AI Studio quotas (Gemini 2.5 Flash, 2.5 Flash Lite, Gemini 3 Flash, etc.)
+// Candidate models matching Google AI Studio
 const GEMINI_MODELS = [
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
   "gemini-3-flash",
-  "gemini-2.5-pro",
+  "gemini-2.0-flash",
   "gemini-1.5-flash",
   "gemini-1.5-pro",
+  "gemini-2.5-pro",
 ];
 
 // Cache the last verified working model in memory and localStorage for zero-latency calls
@@ -75,12 +76,61 @@ let activeWorkingModel: string = (() => {
   }
 })();
 
+let cachedSupportedModels: { key: string; models: string[]; timestamp: number } | null = null;
+
+async function getSupportedModelsForApiKey(apiKey: string): Promise<string[]> {
+  const now = Date.now();
+  if (cachedSupportedModels && cachedSupportedModels.key === apiKey && (now - cachedSupportedModels.timestamp < 1800000)) {
+    return cachedSupportedModels.models;
+  }
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.models && Array.isArray(data.models)) {
+        const models: string[] = data.models
+          .filter((m: any) => m.supportedGenerationMethods?.includes("generateContent"))
+          .map((m: any) => m.name.replace(/^models\//, ""))
+          .filter((name: string) => !name.includes("embedding") && !name.includes("aqa") && !name.includes("imagen"));
+        
+        if (models.length > 0) {
+          // Sort models: flash first, then pro
+          models.sort((a: string, b: string) => {
+            const aFlash = a.includes("flash") ? 0 : 1;
+            const bFlash = b.includes("flash") ? 0 : 1;
+            return aFlash - bFlash;
+          });
+          cachedSupportedModels = { key: apiKey, models, timestamp: now };
+          return models;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Could not fetch models dynamically, using fallback list:", err);
+  }
+
+  return GEMINI_MODELS;
+}
+
 // Main helper to call Gemini API directly from browser via HTTP fetch
 async function callGeminiAPI(
   apiKey: string,
   prompt: string,
   images?: GeminiImage[]
 ): Promise<any> {
+  const resolvedApiKey = (
+    (apiKey && apiKey.trim() !== "")
+      ? apiKey.trim()
+      : (typeof localStorage !== "undefined" ? localStorage.getItem("trophia_api_key") : "") ||
+        import.meta.env.VITE_SYSTEM_GEMINI_API_KEY ||
+        ""
+  );
+
+  if (!resolvedApiKey) {
+    throw new Error("No se ha configurado ninguna API Key de Gemini. Por favor agrégala en Ajustes o al iniciar la app.");
+  }
+
   const parts: any[] = [{ text: prompt }];
   if (images && images.length > 0) {
     images.forEach((img) => {
@@ -93,16 +143,18 @@ async function callGeminiAPI(
     });
   }
 
-  // Prioritize the known working model first, then the remaining candidates
+  // Dynamically fetch supported models or fallback to GEMINI_MODELS
+  const availableModels = await getSupportedModelsForApiKey(resolvedApiKey);
   const prioritizedModels = [
     activeWorkingModel,
-    ...GEMINI_MODELS.filter((m) => m !== activeWorkingModel),
+    ...availableModels.filter((m) => m !== activeWorkingModel),
+    ...GEMINI_MODELS.filter((m) => !availableModels.includes(m) && m !== activeWorkingModel),
   ];
 
   let lastError: Error | null = null;
 
   for (const model of prioritizedModels) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${resolvedApiKey}`;
 
     try {
       const response = await fetch(url, {
@@ -121,33 +173,14 @@ async function callGeminiAPI(
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const rawMessage = errorData?.error?.message || `Error en la comunicación con la IA (${response.status})`;
-        
-        // If API key is invalid or not found, fail immediately
+
         if (rawMessage.toLowerCase().includes("api key") || rawMessage.toLowerCase().includes("invalid key")) {
           throw new Error(cleanErrorMessage(rawMessage, response.status));
         }
 
-        // Check if error is due to model name, not supported, or quota exceeded on this specific model (e.g. 0/0 RPM or 5/5 RPM)
-        const isModelIssueOrQuota =
-          response.status === 404 ||
-          response.status === 400 ||
-          response.status === 429 ||
-          rawMessage.toLowerCase().includes("not found") ||
-          rawMessage.toLowerCase().includes("not supported") ||
-          rawMessage.toLowerCase().includes("is not available") ||
-          rawMessage.toLowerCase().includes("unsupported") ||
-          rawMessage.toLowerCase().includes("invalid model") ||
-          rawMessage.toLowerCase().includes("resource_exhausted") ||
-          rawMessage.toLowerCase().includes("quota") ||
-          rawMessage.toLowerCase().includes("rate limit");
-
-        if (isModelIssueOrQuota) {
-          console.warn(`Modelo Gemini '${model}' no disponible o sin cuota (${response.status}). Probando siguiente modelo...`, rawMessage);
-          lastError = new Error(cleanErrorMessage(rawMessage, response.status));
-          continue; // Try next model immediately
-        }
-
-        throw new Error(cleanErrorMessage(rawMessage, response.status));
+        console.warn(`Modelo Gemini '${model}' falló (${response.status}): ${rawMessage}. Probando siguiente modelo...`);
+        lastError = new Error(cleanErrorMessage(rawMessage, response.status));
+        continue;
       }
 
       const data = await response.json();
@@ -165,7 +198,6 @@ async function callGeminiAPI(
 
       try {
         const parsed = JSON.parse(text.trim());
-        // Save working model for all subsequent requests
         if (activeWorkingModel !== model) {
           activeWorkingModel = model;
           try {
