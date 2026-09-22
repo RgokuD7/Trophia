@@ -6,7 +6,7 @@ import {
   Flame, Dumbbell, Zap, UserRound, Smartphone, Download, Share, X
 } from "lucide-react";
 import { UserProfile, BiologicalSex, FitnessGoal, ExperienceLevel, TrainingEnvironment, DietType, BodyMetricLog } from "../types";
-import { calculateBMI, getBMICategory, calculateNavyBodyFat, calculateCaliperBodyFat, calculateRequirements } from "../utils/fitnessUtils";
+import { calculateBMI, getBMICategory, calculateNavyBodyFat, calculateCaliperBodyFat, calculateRequirements, getLocalDateString } from "../utils/fitnessUtils";
 import { analyzeFatByIA, recommendGoalByIA } from "../services/geminiService";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
@@ -919,7 +919,7 @@ export default function Onboarding({
         dietType
       });
       
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = getLocalDateString();
       const newMetricLog: BodyMetricLog = {
         id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9),
         date: todayStr,

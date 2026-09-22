@@ -8,7 +8,7 @@ import {
 import { UserProfile, BodyMetricLog } from "../types";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
-import { calculateRequirements, calculateBMI } from "../utils/fitnessUtils";
+import { calculateRequirements, calculateBMI, getLocalDateString } from "../utils/fitnessUtils";
 
 interface BodyEvolutionTrackerProps {
   profile: UserProfile;
@@ -21,7 +21,7 @@ export default function BodyEvolutionTracker({
   onUpdateProfile,
   onOpenRecalibration
 }: BodyEvolutionTrackerProps) {
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = getLocalDateString();
 
   const [inputWeight, setInputWeight] = useState<string>(profile.weight ? profile.weight.toString() : "");
   const [inputBodyFat, setInputBodyFat] = useState<string>(profile.bodyFat ? profile.bodyFat.toString() : "");

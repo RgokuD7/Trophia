@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { WorkoutSession, WorkoutExercise, MuscleRecovery, UserProfile } from "../types";
 import { generateRoutineByIA, suggestAlternativeExercisesByIA } from "../services/geminiService";
-import { SPORTS_METS } from "../utils/fitnessUtils";
+import { SPORTS_METS, getLocalDateString } from "../utils/fitnessUtils";
 
 interface WorkoutsProps {
   apiKey?: string;
@@ -18,10 +18,10 @@ interface WorkoutsProps {
 
 export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWorkout, onClearWorkouts, onUpdateProfile }: WorkoutsProps) {
   const [activeTab, setActiveTab] = useState<"routine" | "recovery" | "timer">("routine");
-  const [selectedDay, setSelectedDay] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [selectedDay, setSelectedDay] = useState<string>(getLocalDateString());
   const [activeSession, setActiveSession] = useState<WorkoutSession | null>(null);
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = getLocalDateString();
 
   // Sports logging states
   const [isSportModalOpen, setIsSportModalOpen] = useState(false);
@@ -418,7 +418,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
       d.setDate(today.getDate() + i);
       dates.push({
         dayName: d.toLocaleDateString("es-ES", { weekday: "short" }).substring(0, 2),
-        dateStr: d.toISOString().split("T")[0],
+        dateStr: getLocalDateString(d),
         dayNum: d.getDate(),
         isToday: d.toDateString() === today.toDateString()
       });
@@ -460,7 +460,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
       }
 
       dates.push({
-        dateStr: d.toISOString().split("T")[0],
+        dateStr: getLocalDateString(d),
         dayNum: d.getDate(),
         isToday: d.toDateString() === today.toDateString(),
         isCurrentMonth

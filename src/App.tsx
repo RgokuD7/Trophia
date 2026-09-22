@@ -34,6 +34,8 @@ import {
   deleteUserAllData
 } from "./services/dbService";
 
+import { getLocalDateString, isSameDay } from "./utils/fitnessUtils";
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -67,8 +69,8 @@ export default function App() {
     try {
       const apiKey = profile.apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || "";
       
-      const todayStr = new Date().toISOString().split("T")[0];
-      const todayMeals = loggedMeals.filter(m => m.timestamp.startsWith(todayStr));
+      const todayStr = getLocalDateString();
+      const todayMeals = loggedMeals.filter(m => isSameDay(m.timestamp, todayStr));
       const totalCal = todayMeals.reduce((s, m) => s + m.calories, 0);
       const totalP = todayMeals.reduce((s, m) => s + m.protein, 0);
       const totalC = todayMeals.reduce((s, m) => s + m.carbs, 0);
@@ -407,7 +409,7 @@ export default function App() {
                   onOpenRecipeAssistant={() => setIsRecipeAssistantOpen(true)}
                   onUpdateProfile={handleUpdateProfile}
                   onOpenCoach={() => setIsCoachOpen(true)}
-                  userCreationDateStr={user?.metadata.creationTime ? new Date(user.metadata.creationTime).toISOString().split("T")[0] : undefined}
+                  userCreationDateStr={user?.metadata.creationTime ? getLocalDateString(user.metadata.creationTime) : undefined}
                 />
               )}
 

@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { UserProfile, LoggedMeal, MealType, CustomFood } from "../types";
 import { getCustomFoods, addCustomFood, deleteCustomFood } from "../services/dbService";
+import { getLocalDateString, isSameDay } from "../utils/fitnessUtils";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { getSmartFoodSuggestionsByIA, askNutriCoachIA, SmartFoodSuggestion } from "../services/geminiService";
@@ -59,8 +60,8 @@ function getWeekDates(referenceDate: Date): Date[] {
   return dates;
 }
 
-function toDateStr(d: Date): string {
-  return d.toISOString().split("T")[0];
+function toDateStr(d: Date | string): string {
+  return getLocalDateString(d);
 }
 
 export default function NutritionHub({
@@ -76,11 +77,10 @@ export default function NutritionHub({
   onOpenCoach,
   userCreationDateStr,
 }: NutritionHubProps) {
-  const today = new Date();
-  const todayStr = toDateStr(today);
+  const todayStr = getLocalDateString();
   
   const [selectedDate, setSelectedDate] = useState(todayStr);
-  const [weekDates, setWeekDates] = useState(() => getWeekDates(today));
+  const [weekDates, setWeekDates] = useState(() => getWeekDates(new Date()));
   const [activeSection, setActiveSection] = useState<"custom_foods" | "calorie_bank" | "pantry" | null>(null);
   
   // Custom foods state
@@ -151,7 +151,7 @@ export default function NutritionHub({
   const [isBankSaving, setIsBankSaving] = useState(false);
 
   // Filter meals for selected date
-  const selectedDayMeals = loggedMeals.filter(m => m.timestamp.startsWith(selectedDate));
+  const selectedDayMeals = loggedMeals.filter(m => isSameDay(m.timestamp, selectedDate));
   const isToday = selectedDate === todayStr;
   const isPast = selectedDate < todayStr;
 
@@ -391,7 +391,7 @@ export default function NutritionHub({
         }
       }
       
-      const dayMeals = loggedMeals.filter(m => m.timestamp.startsWith(ds));
+      const dayMeals = loggedMeals.filter(m => isSameDay(m.timestamp, ds));
       const dayConsumed = dayMeals.reduce((s, m) => s + m.calories, 0);
       const diff = dayTarget - dayConsumed;
       
@@ -685,7 +685,7 @@ export default function NutritionHub({
           dayTarget = baseCal - bankPlan.dailyAdjustment;
         }
       }
-      const dayConsumed = loggedMeals.filter(m => m.timestamp.startsWith(ds)).reduce((s, m) => s + m.calories, 0);
+      const dayConsumed = loggedMeals.filter(m => isSameDay(m.timestamp, ds)).reduce((s, m) => s + m.calories, 0);
       weeklySavedCal += (dayTarget - dayConsumed);
     }
   });
@@ -758,7 +758,7 @@ export default function NutritionHub({
                   dayTarget = baseCal - bankPlan.dailyAdjustment;
                 }
               }
-              const dayConsumed = loggedMeals.filter(m => m.timestamp.startsWith(ds)).reduce((s, m) => s + m.calories, 0);
+              const dayConsumed = loggedMeals.filter(m => isSameDay(m.timestamp, ds)).reduce((s, m) => s + m.calories, 0);
               const status = getDayComplianceStatus(ds, dayConsumed, dayTarget);
 
               return (

@@ -415,3 +415,32 @@ export function getPrePostWorkoutAdvice(diet: DietType, goal: FitnessGoal, isPos
   }
 }
 
+/**
+ * Returns a YYYY-MM-DD date string according to the user's LOCAL timezone.
+ * Avoids UTC rollover bugs where dates change in the evening (e.g., 8-9 PM in UTC-3/4).
+ */
+export function getLocalDateString(dateInput?: Date | string | number): string {
+  const date = dateInput ? new Date(dateInput) : new Date();
+  if (isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function getTodayLocalDateString(): string {
+  return getLocalDateString(new Date());
+}
+
+/**
+ * Checks if a timestamp (ISO string, date string, or Date) belongs to the target local date (YYYY-MM-DD).
+ */
+export function isSameDay(timestampOrDate: string | Date | undefined | null, targetDateStr: string): boolean {
+  if (!timestampOrDate || !targetDateStr) return false;
+  // If exact 10-char match (e.g. YYYY-MM-DD)
+  if (typeof timestampOrDate === "string" && timestampOrDate.length === 10 && timestampOrDate === targetDateStr) {
+    return true;
+  }
+  return getLocalDateString(timestampOrDate) === targetDateStr;
+}
+

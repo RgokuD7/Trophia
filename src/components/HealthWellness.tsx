@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { UserProfile } from "../types";
 import { analyzeInjuryByIA } from "../services/geminiService";
+import { getLocalDateString } from "../utils/fitnessUtils";
 import scientificTips from "../data/scientificTips.json";
 
 interface HealthWellnessProps {
@@ -43,7 +44,7 @@ export default function HealthWellness({ apiKey, userProfile, onUpdateProfile }:
   const [photos, setPhotos] = useState<LocalProgressPhoto[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<LocalProgressPhoto | null>(null);
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = getLocalDateString();
 
   // Load progress photos and check today's logs on mount
   useEffect(() => {

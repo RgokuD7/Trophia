@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { UserProfile, LoggedMeal, WaterLog, MealType, WorkoutSession } from "../types";
 import { generateRecommendationsByIA } from "../services/geminiService";
-import { getSuggestedMealTypeByTime, getPrePostWorkoutAdvice } from "../utils/fitnessUtils";
+import { getSuggestedMealTypeByTime, getPrePostWorkoutAdvice, getLocalDateString, isSameDay } from "../utils/fitnessUtils";
 import scientificTips from "../data/scientificTips.json";
 
 interface DashboardProps {
@@ -45,8 +45,8 @@ export default function Dashboard({
   };
   const suggestedMeal = getSuggestedMealTypeByTime();
   
-  const todayStr = new Date().toISOString().split("T")[0];
-  const todaySession = workoutHistory.find(w => w.date === todayStr);
+  const todayStr = getLocalDateString();
+  const todaySession = workoutHistory.find(w => isSameDay(w.date, todayStr));
   const isWorkoutCompletedToday = todaySession ? todaySession.completed : false;
   const diet = profile.dietType || "standard";
   const goal = profile.goal;
@@ -56,11 +56,11 @@ export default function Dashboard({
 
   const handleToggleRoute = (routeId: string) => {
     const activeRoutes = profile.activeRoutesToday || [];
-    const isAlreadyActive = activeRoutes.some(r => r.routeId === routeId && r.date === todayStr);
+    const isAlreadyActive = activeRoutes.some(r => r.routeId === routeId && isSameDay(r.date, todayStr));
     
     let updatedActiveRoutes;
     if (isAlreadyActive) {
-      updatedActiveRoutes = activeRoutes.filter(r => !(r.routeId === routeId && r.date === todayStr));
+      updatedActiveRoutes = activeRoutes.filter(r => !(r.routeId === routeId && isSameDay(r.date, todayStr)));
     } else {
       updatedActiveRoutes = [...activeRoutes, { routeId, date: todayStr }];
     }
@@ -97,9 +97,9 @@ export default function Dashboard({
     }
   };
   
-  // Filter meals & water for today to ensure daily reset
-  const todayMeals = loggedMeals.filter(m => m.timestamp.startsWith(todayStr));
-  const todayWaterLogs = waterLogs.filter(w => w.timestamp.startsWith(todayStr));
+  // Filter meals & water for today using local timezone
+  const todayMeals = loggedMeals.filter(m => isSameDay(m.timestamp, todayStr));
+  const todayWaterLogs = waterLogs.filter(w => isSameDay(w.timestamp, todayStr));
 
   // Calculate daily progress sums for today (rounded to 1 decimal)
   const totalCalories = Math.round(todayMeals.reduce((acc, meal) => acc + (meal.calories || 0), 0));
@@ -110,7 +110,7 @@ export default function Dashboard({
 
   // Calculate calories burned from active routes today
   const activeRoutesToday = profile.activeRoutesToday || [];
-  const todayActiveRoutes = activeRoutesToday.filter(r => r.date === todayStr);
+  const todayActiveRoutes = activeRoutesToday.filter(r => isSameDay(r.date, todayStr));
   const routeCaloriesBurned = todayActiveRoutes.reduce((sum, activeRoute) => {
     const routeObj = (profile.frequentRoutes || []).find(r => r.id === activeRoute.routeId);
     return sum + (routeObj ? routeObj.caloriesBurned : 0);
@@ -126,7 +126,7 @@ export default function Dashboard({
 
   // Calculate calories burned from logged sports today
   const loggedSportsToday = profile.loggedSportsToday || [];
-  const todaySports = loggedSportsToday.filter(s => s.date === todayStr);
+  const todaySports = loggedSportsToday.filter(s => isSameDay(s.date, todayStr));
   const sportsCaloriesBurned = todaySports.reduce((sum, sport) => sum + sport.caloriesBurned, 0);
 
   const totalBurnedCalories = routeCaloriesBurned + workoutCaloriesBurned + sportsCaloriesBurned;
@@ -240,7 +240,7 @@ export default function Dashboard({
             </div>
             <button
               onClick={() => {
-                const todayStr = new Date().toLocaleDateString("sv-SE");
+                const todayStr = getLocalDateString();
                 onUpdateProfile({
                   ...profile,
                   lastCreatineIntake: todayStr

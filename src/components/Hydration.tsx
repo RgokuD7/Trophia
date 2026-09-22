@@ -2,9 +2,11 @@ import React, { useState } from "react";
 import { motion } from "motion/react";
 import { GlassWater, Droplets, Flame, RefreshCw, Plus, Check, Trash } from "lucide-react";
 import { WaterLog } from "../types";
+import { getLocalDateString, isSameDay } from "../utils/fitnessUtils";
 
 interface HydrationProps {
   waterLogs: WaterLog[];
+  onAddMeal?: (amount: number) => void;
   onAddWater: (amount: number) => void;
   onClearWater: () => void;
   dailyGoalMl?: number;
@@ -12,9 +14,9 @@ interface HydrationProps {
 
 export default function Hydration({ waterLogs, onAddWater, onClearWater, dailyGoalMl = 2500 }: HydrationProps) {
   const [selectedQuickAdd, setSelectedQuickAdd] = useState<number>(250);
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = getLocalDateString();
 
-  const todayWaterLogs = waterLogs.filter(w => w.timestamp.startsWith(todayStr));
+  const todayWaterLogs = waterLogs.filter(w => isSameDay(w.timestamp, todayStr));
   const totalWater = todayWaterLogs.reduce((acc, log) => acc + log.amount, 0);
   const percentage = Math.min(100, Math.round((totalWater / dailyGoalMl) * 100));
 
