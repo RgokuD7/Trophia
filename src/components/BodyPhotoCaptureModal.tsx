@@ -93,8 +93,20 @@ export default function BodyPhotoCaptureModal({
     const canvas = canvasRef.current;
     
     // Draw frame to canvas
-    canvas.width = video.videoWidth || 1080;
-    canvas.height = video.videoHeight || 1440;
+    let width = video.videoWidth || 1080;
+    let height = video.videoHeight || 1440;
+    const maxDim = 1200;
+    if (width > maxDim || height > maxDim) {
+      if (width > height) {
+        height = Math.round((height * maxDim) / width);
+        width = maxDim;
+      } else {
+        width = Math.round((width * maxDim) / height);
+        height = maxDim;
+      }
+    }
+    canvas.width = width;
+    canvas.height = height;
     const ctx = canvas.getContext("2d");
     if (ctx) {
       // Mirror image if using front camera
@@ -103,7 +115,7 @@ export default function BodyPhotoCaptureModal({
         ctx.scale(-1, 1);
       }
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const base64Image = canvas.toDataURL("image/jpeg", 0.85);
+      const base64Image = canvas.toDataURL("image/jpeg", 0.82);
       onCapture(base64Image);
       handleClose();
     }

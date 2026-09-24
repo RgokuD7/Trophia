@@ -516,7 +516,7 @@ export default function Onboarding({
   const [showEducationTutorial, setShowEducationTutorial] = useState(false);
 
   // Step 6 variables (API Key)
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem("trophia_api_key") || "");
+  const [apiKey, setApiKey] = useState(() => existingProfile?.apiKey || localStorage.getItem("trophia_api_key") || "");
   const [showKey, setShowKey] = useState(false);
 
   // Sync apiKey to localStorage when it changes
@@ -722,10 +722,43 @@ export default function Onboarding({
 
     const reader = new FileReader();
     reader.onloadend = () => {
-      const dataUrl = reader.result as string;
-      if (slot === "front") setFrontPhoto(dataUrl);
-      else if (slot === "side") setSidePhoto(dataUrl);
-      else if (slot === "back") setBackPhoto(dataUrl);
+      const rawDataUrl = reader.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1200;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.82);
+          if (slot === "front") setFrontPhoto(compressedDataUrl);
+          else if (slot === "side") setSidePhoto(compressedDataUrl);
+          else if (slot === "back") setBackPhoto(compressedDataUrl);
+        } else {
+          if (slot === "front") setFrontPhoto(rawDataUrl);
+          else if (slot === "side") setSidePhoto(rawDataUrl);
+          else if (slot === "back") setBackPhoto(rawDataUrl);
+        }
+      };
+      img.onerror = () => {
+        if (slot === "front") setFrontPhoto(rawDataUrl);
+        else if (slot === "side") setSidePhoto(rawDataUrl);
+        else if (slot === "back") setBackPhoto(rawDataUrl);
+      };
+      img.src = rawDataUrl;
     };
     reader.readAsDataURL(file);
   };

@@ -65,17 +65,19 @@ const FLASH_MODELS = [
 ];
 
 const PRO_MODELS = [
-  "gemini-2.5-pro",
+  "gemini-2.0-flash",
   "gemini-1.5-pro",
+  "gemini-1.5-flash",
 ];
 
 // Memory & LocalStorage cache per tier for zero-lag instant dispatch
 let activeWorkingFlashModel: string = (() => {
   try {
     const saved = localStorage.getItem("trophia_working_gemini_flash_model");
-    if (saved && FLASH_MODELS.includes(saved)) {
+    if (saved && FLASH_MODELS.includes(saved) && !saved.includes("2.5")) {
       return saved;
     }
+    localStorage.removeItem("trophia_working_gemini_flash_model");
     return "gemini-2.0-flash";
   } catch {
     return "gemini-2.0-flash";
@@ -85,12 +87,13 @@ let activeWorkingFlashModel: string = (() => {
 let activeWorkingProModel: string = (() => {
   try {
     const saved = localStorage.getItem("trophia_working_gemini_pro_model");
-    if (saved && PRO_MODELS.includes(saved)) {
+    if (saved && PRO_MODELS.includes(saved) && !saved.includes("2.5")) {
       return saved;
     }
-    return "gemini-2.5-pro";
+    localStorage.removeItem("trophia_working_gemini_pro_model");
+    return "gemini-2.0-flash";
   } catch {
-    return "gemini-2.5-pro";
+    return "gemini-2.0-flash";
   }
 })();
 
