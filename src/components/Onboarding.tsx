@@ -884,9 +884,9 @@ export default function Onboarding({
     }
 
     if (mode !== "recalibration") {
-      // Enforce 5-second minimum loading duration to let tips be read in onboarding
+      // Smooth loading transition duration in onboarding
       const elapsedTime = Date.now() - startTime;
-      const minDelay = 5000;
+      const minDelay = 1000;
       if (elapsedTime < minDelay) {
         await new Promise(resolve => setTimeout(resolve, minDelay - elapsedTime));
       }

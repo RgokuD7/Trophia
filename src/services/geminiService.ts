@@ -169,6 +169,9 @@ async function callGeminiAPI(
 
   for (const model of prioritizedModels) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${resolvedApiKey}`;
+    const controller = new AbortController();
+    const timeoutMs = images && images.length > 0 ? 14000 : 8500;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const response = await fetch(url, {
@@ -182,7 +185,9 @@ async function callGeminiAPI(
             responseMimeType: "application/json",
           },
         }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -229,6 +234,12 @@ async function callGeminiAPI(
         throw new Error("La respuesta de la IA no tiene un formato JSON válido.");
       }
     } catch (netError: any) {
+      clearTimeout(timeoutId);
+      if (netError.name === "AbortError") {
+        console.warn(`Modelo Gemini '${model}' excedió el tiempo de espera (${timeoutMs}ms). Pasando al siguiente modelo...`);
+        lastError = new Error("El modelo de IA tardó en responder. Conectando con servidor de respaldo...");
+        continue;
+      }
       if (
         netError.message &&
         (netError.message.includes("No hay conexión") ||
