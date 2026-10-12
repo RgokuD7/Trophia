@@ -52,48 +52,71 @@ function cleanErrorMessage(rawMessage: string, status?: number): string {
   return rawMessage;
 }
 
-// Model tiers for task specialization (Pro for complex reasoning/vision, Flash for speed/chat)
-export type GeminiModelTier = "flash" | "pro";
+// 3 Dedicated Model Tiers matching user configuration in modelos_app_fitness.md
+export type GeminiModelTier = "flash-lite" | "flash" | "pro";
 
 interface CallGeminiOptions {
+  model?: string;
   tier?: GeminiModelTier;
 }
 
-const FLASH_MODELS = [
-  "gemini-2.0-flash",
-  "gemini-1.5-flash",
-];
-
+// 1. Pro / Heavy Vision & Deep Clinical Reasoning (User: Gemini 3.8 Flash)
 const PRO_MODELS = [
+  "gemini-3.8-flash",
+  "gemini-3.5-flash",
   "gemini-2.0-flash",
   "gemini-1.5-pro",
   "gemini-1.5-flash",
 ];
 
-// Memory & LocalStorage cache per tier for zero-lag instant dispatch
-let activeWorkingFlashModel: string = (() => {
-  try {
-    const saved = localStorage.getItem("trophia_working_gemini_flash_model");
-    if (saved && FLASH_MODELS.includes(saved) && !saved.includes("2.5")) {
-      return saved;
-    }
-    localStorage.removeItem("trophia_working_gemini_flash_model");
-    return "gemini-2.0-flash";
-  } catch {
-    return "gemini-2.0-flash";
-  }
-})();
+// 2. Standard Flash / Structured Reasoning & OCR (User: Gemini 3.5 Flash)
+const FLASH_MODELS = [
+  "gemini-3.5-flash",
+  "gemini-3.8-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+];
 
+// 3. Flash-Lite / High-Speed & Low Latency (User: Gemini 3.5 Flash-Lite)
+const FLASH_LITE_MODELS = [
+  "gemini-3.5-flash-lite",
+  "gemini-3.5-flash",
+  "gemini-2.0-flash-lite",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+];
+
+// Memory & LocalStorage cache per tier for zero-lag instant dispatch
 let activeWorkingProModel: string = (() => {
   try {
     const saved = localStorage.getItem("trophia_working_gemini_pro_model");
-    if (saved && PRO_MODELS.includes(saved) && !saved.includes("2.5")) {
-      return saved;
-    }
+    if (saved && PRO_MODELS.includes(saved) && !saved.includes("2.5")) return saved;
     localStorage.removeItem("trophia_working_gemini_pro_model");
-    return "gemini-2.0-flash";
+    return "gemini-3.8-flash";
   } catch {
-    return "gemini-2.0-flash";
+    return "gemini-3.8-flash";
+  }
+})();
+
+let activeWorkingFlashModel: string = (() => {
+  try {
+    const saved = localStorage.getItem("trophia_working_gemini_flash_model");
+    if (saved && FLASH_MODELS.includes(saved) && !saved.includes("2.5")) return saved;
+    localStorage.removeItem("trophia_working_gemini_flash_model");
+    return "gemini-3.5-flash";
+  } catch {
+    return "gemini-3.5-flash";
+  }
+})();
+
+let activeWorkingLiteModel: string = (() => {
+  try {
+    const saved = localStorage.getItem("trophia_working_gemini_lite_model");
+    if (saved && FLASH_LITE_MODELS.includes(saved) && !saved.includes("2.5")) return saved;
+    localStorage.removeItem("trophia_working_gemini_lite_model");
+    return "gemini-3.5-flash-lite";
+  } catch {
+    return "gemini-3.5-flash-lite";
   }
 })();
 
@@ -148,6 +171,7 @@ async function callGeminiAPI(
   }
 
   const tier: GeminiModelTier = options?.tier || "flash";
+  const requestedModel = options?.model;
   const parts: any[] = [{ text: prompt }];
   if (images && images.length > 0) {
     images.forEach((img) => {
@@ -160,17 +184,29 @@ async function callGeminiAPI(
     });
   }
 
-  // Prioritize active working model for the specific tier
-  const prioritizedModels = tier === "pro"
-    ? Array.from(new Set([activeWorkingProModel, ...PRO_MODELS, ...FLASH_MODELS]))
-    : Array.from(new Set([activeWorkingFlashModel, ...FLASH_MODELS, ...PRO_MODELS]));
+  // Prioritize model according to specific user assignment and tier
+  let prioritizedModels: string[];
+  if (requestedModel) {
+    const fallbackList = tier === "pro"
+      ? PRO_MODELS
+      : tier === "flash-lite"
+      ? FLASH_LITE_MODELS
+      : FLASH_MODELS;
+    prioritizedModels = Array.from(new Set([requestedModel, ...fallbackList]));
+  } else if (tier === "pro") {
+    prioritizedModels = Array.from(new Set([activeWorkingProModel, ...PRO_MODELS]));
+  } else if (tier === "flash-lite") {
+    prioritizedModels = Array.from(new Set([activeWorkingLiteModel, ...FLASH_LITE_MODELS]));
+  } else {
+    prioritizedModels = Array.from(new Set([activeWorkingFlashModel, ...FLASH_MODELS]));
+  }
 
   let lastError: Error | null = null;
 
   for (const model of prioritizedModels) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${resolvedApiKey}`;
     const controller = new AbortController();
-    const timeoutMs = images && images.length > 0 ? 14000 : 8500;
+    const timeoutMs = images && images.length > 0 ? 14000 : tier === "flash-lite" ? 5000 : 8500;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
@@ -221,6 +257,11 @@ async function callGeminiAPI(
           if (activeWorkingProModel !== model) {
             activeWorkingProModel = model;
             try { localStorage.setItem("trophia_working_gemini_pro_model", model); } catch {}
+          }
+        } else if (tier === "flash-lite") {
+          if (activeWorkingLiteModel !== model) {
+            activeWorkingLiteModel = model;
+            try { localStorage.setItem("trophia_working_gemini_lite_model", model); } catch {}
           }
         } else {
           if (activeWorkingFlashModel !== model) {
@@ -277,6 +318,9 @@ async function callGeminiAPI(
             if (tier === "pro") {
               activeWorkingProModel = model;
               try { localStorage.setItem("trophia_working_gemini_pro_model", model); } catch {}
+            } else if (tier === "flash-lite") {
+              activeWorkingLiteModel = model;
+              try { localStorage.setItem("trophia_working_gemini_lite_model", model); } catch {}
             } else {
               activeWorkingFlashModel = model;
               try { localStorage.setItem("trophia_working_gemini_flash_model", model); } catch {}
@@ -387,7 +431,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   try {
-    return await callGeminiAPI(apiKey, prompt, images, { tier: "pro" });
+    return await callGeminiAPI(apiKey, prompt, images, { model: "gemini-3.8-flash", tier: "pro" });
   } catch (apiError: any) {
     console.error("Gemini API error in analyzeFatByIA:", apiError);
     throw apiError;
@@ -434,7 +478,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   try {
-    return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
+    return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.8-flash", tier: "pro" });
   } catch (apiError: any) {
     console.error("Gemini API error in recommendGoalByIA:", apiError);
     throw apiError;
@@ -500,7 +544,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   try {
-    return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
+    return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.5-flash", tier: "flash" });
   } catch (apiError: any) {
     console.error("Gemini API error in generateRecommendationsByIA:", apiError);
     throw apiError;
@@ -573,7 +617,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   try {
-    return await callGeminiAPI(apiKey, prompt, undefined, { tier: "pro" });
+    return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.8-flash", tier: "pro" });
   } catch (apiError: any) {
     console.error("Gemini API error in generateRoutineByIA:", apiError);
     throw apiError;
@@ -649,7 +693,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   "analysis": "Análisis nutricional de los ingredientes o del producto y recomendaciones."
 }`;
 
-  return await callGeminiAPI(apiKey, prompt, images, { tier: "flash" });
+  return await callGeminiAPI(apiKey, prompt, images, { model: "gemini-3.8-flash", tier: "pro" });
 }
 
 export async function generateRecipeFromIngredientsByIA(
@@ -682,7 +726,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   try {
-    return await callGeminiAPI(apiKey, prompt);
+    return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.5-flash", tier: "flash" });
   } catch (apiError: any) {
     console.error("Gemini API error in generateRecipeFromIngredientsByIA:", apiError);
     throw apiError;
@@ -724,7 +768,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   try {
-    return await callGeminiAPI(apiKey, prompt);
+    return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.8-flash", tier: "pro" });
   } catch (apiError: any) {
     console.error("Gemini API error in adjustLoggedMealByChatByIA:", apiError);
     throw apiError;
@@ -764,7 +808,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   try {
-    return await callGeminiAPI(apiKey, prompt);
+    return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.5-flash", tier: "flash" });
   } catch (apiError: any) {
     console.error("Gemini API error in suggestAlternativeExercisesByIA:", apiError);
     throw apiError;
@@ -796,7 +840,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   try {
-    return await callGeminiAPI(apiKey, prompt, undefined, { tier: "pro" });
+    return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.8-flash", tier: "pro" });
   } catch (apiError: any) {
     console.error("Gemini API error in analyzeInjuryByIA:", apiError);
     throw apiError;
@@ -834,7 +878,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   try {
-    return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
+    return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.5-flash-lite", tier: "flash-lite" });
   } catch (apiError: any) {
     console.error("Gemini API error in generateGroceryListByIA:", apiError);
     throw apiError;
@@ -868,7 +912,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   try {
-    return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
+    return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.5-flash", tier: "flash" });
   } catch (apiError: any) {
     console.error("Gemini API error in suggestFoodSubstitutesByIA:", apiError);
     throw apiError;
@@ -897,7 +941,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   "ingredients": ["ingrediente 1", "ingrediente 2"]
 }`;
 
-  return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
+  return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.5-flash-lite", tier: "flash-lite" });
 }
 
 // 10. Estimate common visual serving sizes for a food item
@@ -917,7 +961,7 @@ Sé extremadamente conciso. Tu respuesta debe ser estrictamente en formato JSON 
   ]
 }`;
 
-  return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
+  return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.5-flash-lite", tier: "flash-lite" });
 }
 
 // 11. Extract macros and details from a physical nutrition label image using OCR
@@ -943,7 +987,7 @@ Requisitos:
   "servingSize": "Descripción corta de la porción original sugerida del empaque, ej: 30g o 1 rebanada"
 }`;
 
-  return await callGeminiAPI(apiKey, prompt, [cleanImg], { tier: "flash" });
+  return await callGeminiAPI(apiKey, prompt, [cleanImg], { model: "gemini-3.5-flash", tier: "flash" });
 }
 
 // 12. Generate smart food suggestions based on remaining macronutrients
@@ -1005,7 +1049,7 @@ Responde estrictamente en formato JSON con la siguiente estructura de array:
   }
 ]`;
 
-  return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
+  return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.5-flash", tier: "flash" });
 }
 
 // 13. Nutritional consultation with Trophia IA Nutri-Coach
@@ -1025,7 +1069,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   "answer": "Tu respuesta detallada y profesional aquí en español"
 }`;
 
-  return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
+  return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.8-flash", tier: "pro" });
 }
 
 // 14. Generate intelligent pre-workout meal or shake recommendation
@@ -1090,7 +1134,7 @@ Responde estrictamente en formato JSON con la siguiente estructura de datos (en 
   "scientificReason": "Explicación breve de por qué esta combinación es perfecta para el tipo de entrenamiento, tiempo restante, y notas del usuario"
 }`;
 
-  return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
+  return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.5-flash-lite", tier: "flash-lite" });
 }
 
 // 15. Adjust calories burned based on exercise description
@@ -1118,5 +1162,5 @@ Responde estrictamente en formato JSON con la siguiente estructura:
   "reason": "Explicación concisa en 1 o 2 frases del ajuste de intensidad realizado según su descripción (ej. 'Se reduce el MET de 7.8 a 5.5 porque el golpeo de saco es menos demandante que el combate competitivo')."
 }`;
 
-  return await callGeminiAPI(apiKey, prompt, undefined, { tier: "flash" });
+  return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.5-flash-lite", tier: "flash-lite" });
 }
