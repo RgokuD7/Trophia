@@ -206,8 +206,12 @@ export async function getExerciseGuide(
     gender?: "male" | "female";
   }
 ): Promise<MuscleWikiExercise> {
-  const gender = options?.gender || "male";
-  const rawKey = options?.apiKey || (typeof localStorage !== "undefined" ? localStorage.getItem("trophia_musclewiki_api_key") : null);
+  const rawKey = (
+    options?.apiKey || 
+    (typeof localStorage !== "undefined" ? localStorage.getItem("trophia_musclewiki_api_key") : null) ||
+    import.meta.env.VITE_SYSTEM_MUSCLEWIKI_API_KEY ||
+    ""
+  );
 
   // Check cache first
   const cacheKey = `trophia_mw_${exerciseName.toLowerCase().replace(/\s+/g, "_")}_${gender}`;
