@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Search, Camera, Plus, History, Trash, AlertCircle, Check, X, RefreshCw, Star, Barcode, Sparkles, HelpCircle } from "lucide-react";
 import { LoggedMeal, FoodItem, MealType, BarcodeCorrection, CustomFood } from "../types";
-import { GLOBAL_FOODS_DB } from "../utils/fitnessUtils";
+import { GLOBAL_FOODS_DB, getLocalDateString, formatFriendlyDate, createTimestampForDate } from "../utils/fitnessUtils";
 import { analyzeFoodByIA, estimateMacrosFromDescription, getVisualServingSizesByIA, analyzeNutritionLabelByIA } from "../services/geminiService";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
@@ -12,7 +12,7 @@ import { getBarcodeCorrection, saveBarcodeCorrection, voteBarcodeCorrection, add
 interface FoodLoggerProps {
   apiKey?: string;
   usdaApiKey?: string;
-  onAddMeal: (meal: Omit<LoggedMeal, "id" | "timestamp">) => void;
+  onAddMeal: (meal: Omit<LoggedMeal, "id" | "timestamp"> & { timestamp?: string }) => void;
   loggedMeals: LoggedMeal[];
   onClose: () => void;
   defaultMealType?: MealType;
@@ -20,6 +20,7 @@ interface FoodLoggerProps {
   isCustomFoodOnlyMode?: boolean;
   onCustomFoodAdded?: () => void;
   mode?: "log" | "pantry";
+  targetDate?: string;
 }
 
 export function getDefaultServingInfo(name: string, servingSizeStr: string): {
@@ -149,7 +150,8 @@ export default function FoodLogger({
   userId,
   isCustomFoodOnlyMode = false,
   onCustomFoodAdded,
-  mode = "log"
+  mode = "log",
+  targetDate
 }: FoodLoggerProps) {
   const effectiveApiKey = apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || (typeof localStorage !== "undefined" ? localStorage.getItem("trophia_api_key") : "") || "";
   const [activeTab, setActiveTab] = useState<"search" | "camera" | "personal">("search");
@@ -782,7 +784,8 @@ export default function FoodLogger({
           carbs: carbVal,
           fat: fatVal,
           type: selectedMealType,
-          servingSize: servVal
+          servingSize: servVal,
+          timestamp: targetDate ? createTimestampForDate(targetDate) : undefined
         });
 
         // Also save to template collection
@@ -830,9 +833,16 @@ export default function FoodLogger({
             <h3 className="text-base font-black text-gray-900 dark:text-white italic tracking-tight font-sans">
               {mode === "pantry" ? "Agregar a Mi Despensa" : isCustomFoodOnlyMode ? "Guardar en Mis Comidas" : "Registrar Alimento"}
             </h3>
-            <span className="text-[10px] text-gray-400 dark:text-white/40 uppercase tracking-widest font-mono">
-              {mode === "pantry" ? "Inventario de Ingredientes" : isCustomFoodOnlyMode ? "Platos y Productos Frecuentes" : "Control Diario de Ingesta"}
-            </span>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[10px] text-gray-400 dark:text-white/40 uppercase tracking-widest font-mono">
+                {mode === "pantry" ? "Inventario de Ingredientes" : isCustomFoodOnlyMode ? "Platos y Productos Frecuentes" : "Control Diario de Ingesta"}
+              </span>
+              {targetDate && targetDate !== getLocalDateString() && (
+                <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  📅 {formatFriendlyDate(targetDate)}
+                </span>
+              )}
+            </div>
           </div>
           <button 
             onClick={onClose}

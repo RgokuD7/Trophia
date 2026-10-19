@@ -15,7 +15,7 @@ import Auth from "./components/Auth";
 import RecipeAssistantModal from "./components/RecipeAssistantModal";
 import NutritionHub from "./components/NutritionHub";
 import Workouts from "./components/Workouts";
-import { getSuggestedMealTypeByTime } from "./utils/fitnessUtils";
+import { getSuggestedMealTypeByTime, createTimestampForDate } from "./utils/fitnessUtils";
 
 // Import Firebase services
 import { subscribeToAuthChanges, logout } from "./services/authService";
@@ -94,10 +94,13 @@ export default function App() {
     }
   };
 
-  const handleOpenFoodLogger = (suggestedType?: MealType, isCustomOnly?: boolean, isPantry?: boolean) => {
+  const [foodLoggerTargetDate, setFoodLoggerTargetDate] = useState<string | null>(null);
+
+  const handleOpenFoodLogger = (suggestedType?: MealType, isCustomOnly?: boolean, isPantry?: boolean, targetDate?: string) => {
     setDefaultMealTypeForLogger(suggestedType || getSuggestedMealTypeByTime().type);
     setFoodLoggerCustomOnly(!!isCustomOnly);
     setFoodLoggerMode(isPantry ? "pantry" : "log");
+    setFoodLoggerTargetDate(targetDate || null);
     setIsFoodLoggerOpen(true);
   };
 
@@ -202,13 +205,13 @@ export default function App() {
     }
   };
 
-  const handleAddMeal = async (mealData: Omit<LoggedMeal, "id" | "timestamp">) => {
+  const handleAddMeal = async (mealData: Omit<LoggedMeal, "id" | "timestamp"> & { timestamp?: string }) => {
     if (!user) return;
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const tempMeal: LoggedMeal = {
       ...mealData,
       id: tempId,
-      timestamp: new Date().toISOString()
+      timestamp: mealData.timestamp || (foodLoggerTargetDate ? createTimestampForDate(foodLoggerTargetDate) : new Date().toISOString())
     };
     // Optimistic UI update
     setLoggedMeals(prev => [tempMeal, ...prev]);
@@ -492,10 +495,14 @@ export default function App() {
                 handleAddMeal(meal);
               }
             }}
-            onClose={() => setIsFoodLoggerOpen(false)}
+            onClose={() => {
+              setIsFoodLoggerOpen(false);
+              setFoodLoggerTargetDate(null);
+            }}
             defaultMealType={defaultMealTypeForLogger}
             userId={user?.uid}
             isCustomFoodOnlyMode={foodLoggerCustomOnly}
+            targetDate={foodLoggerTargetDate || undefined}
             onCustomFoodAdded={() => {
               window.dispatchEvent(new CustomEvent("trophia_refresh_custom_foods"));
             }}

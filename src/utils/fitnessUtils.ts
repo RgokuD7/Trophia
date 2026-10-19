@@ -446,3 +446,44 @@ export function isSameDay(timestampOrDate: string | Date | undefined | null, tar
   return getLocalDateString(timestampOrDate) === targetDateStr;
 }
 
+/**
+ * Creates an ISO timestamp for a specified local date string (YYYY-MM-DD),
+ * matching the user's current local time of day, ensuring isSameDay returns true.
+ */
+export function createTimestampForDate(targetDateStr: string): string {
+  if (!targetDateStr) return new Date().toISOString();
+  const now = new Date();
+  if (targetDateStr === getLocalDateString(now)) {
+    return now.toISOString();
+  }
+  const parts = targetDateStr.split("-").map(Number);
+  if (parts.length === 3) {
+    const [year, month, day] = parts;
+    const targetDate = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+    return targetDate.toISOString();
+  }
+  return new Date().toISOString();
+}
+
+/**
+ * Returns a human-friendly Spanish string for a YYYY-MM-DD date (e.g. "Hoy", "Ayer", "Lun, 18 oct").
+ */
+export function formatFriendlyDate(dateStr: string): string {
+  if (!dateStr) return "";
+  const today = getLocalDateString();
+  if (dateStr === today) return "Hoy";
+
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (dateStr === getLocalDateString(yesterday)) return "Ayer";
+
+  const parts = dateStr.split("-").map(Number);
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    const dateObj = new Date(y, m - 1, d, 12, 0, 0);
+    return dateObj.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+  }
+  return dateStr;
+}
+
+

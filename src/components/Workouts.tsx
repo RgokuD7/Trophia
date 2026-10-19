@@ -22,7 +22,7 @@ import {
 import { 
   getCustomExercises, addCustomExercise, deleteCustomExercise, updateCustomExercise 
 } from "../services/dbService";
-import { SPORTS_METS, getLocalDateString } from "../utils/fitnessUtils";
+import { SPORTS_METS, getLocalDateString, formatFriendlyDate, isSameDay } from "../utils/fitnessUtils";
 import WorkoutsOnboarding from "./WorkoutsOnboarding";
 import WorkoutsRoutineManager, { DAY_KEYS, DAY_LABEL_MAP } from "./WorkoutsRoutineManager";
 
@@ -51,6 +51,12 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
   const [activeTab, setActiveTab] = useState<"routine" | "routines" | "recovery">("routine");
   const [selectedDay, setSelectedDay] = useState<string>(getLocalDateString());
   const [activeSession, setActiveSession] = useState<WorkoutSession | null>(null);
+  const [completedWorkoutSummary, setCompletedWorkoutSummary] = useState<{
+    name: string;
+    durationMinutes: number;
+    totalCalories: number;
+    completedSetsCount: number;
+  } | null>(null);
 
   // Helper to convert date string "YYYY-MM-DD" to RoutineDayKey
   const getDayKeyFromDateStr = (dateStr: string): RoutineDayKey => {
@@ -73,7 +79,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
   };
 
   // Instantiate a routine template into active session for selectedDay
-  const startSessionFromTemplate = (routine: RoutineTemplate) => {
+  const startSessionFromTemplate = (routine: RoutineTemplate, markCompletedDirectly = false) => {
     const newSession: WorkoutSession = {
       id: Math.random().toString(36).substr(2, 9),
       date: selectedDay,
@@ -98,18 +104,65 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
           equipmentNeeded: ex.equipmentNeeded,
           completedSets: Array.from({ length: setsCount }).map((_, sIdx) => ({
             setIndex: sIdx,
-            completed: false,
+            completed: markCompletedDirectly,
             reps: repsCount,
             weight: weightVal
           }))
         };
       }),
-      completed: false,
+      completed: markCompletedDirectly,
+      startTime: markCompletedDirectly ? `${selectedDay}T10:00:00.000Z` : undefined,
+      endTime: markCompletedDirectly ? `${selectedDay}T10:45:00.000Z` : undefined,
       durationMinutes: 45
     };
     onAddWorkout(newSession);
     setActiveSession(newSession);
     setActiveTab("routine");
+
+    if (markCompletedDirectly) {
+      const totalCal = newSession.exercises.reduce((sum, ex) => {
+        return sum + (ex.completedSets.length * ex.caloriesBurnedPerSet);
+      }, 0);
+      const completedSetsCount = newSession.exercises.reduce((sum, ex) => sum + ex.completedSets.length, 0);
+      setCompletedWorkoutSummary({
+        name: newSession.name,
+        durationMinutes: 45,
+        totalCalories: totalCal,
+        completedSetsCount
+      });
+    }
+  };
+
+  const handleMarkSessionCompleteDirectly = (customMinutes = 45) => {
+    if (!activeSession) return;
+    const updatedExercises = activeSession.exercises.map(ex => ({
+      ...ex,
+      completedSets: ex.completedSets.map(s => ({ ...s, completed: true }))
+    }));
+
+    const totalCal = updatedExercises.reduce((sum, ex) => {
+      return sum + (ex.completedSets.length * ex.caloriesBurnedPerSet);
+    }, 0);
+
+    const completedSetsCount = updatedExercises.reduce((sum, ex) => sum + ex.completedSets.length, 0);
+
+    const updatedSession: WorkoutSession = {
+      ...activeSession,
+      exercises: updatedExercises,
+      completed: true,
+      startTime: activeSession.startTime || `${selectedDay}T10:00:00.000Z`,
+      endTime: activeSession.endTime || `${selectedDay}T10:45:00.000Z`,
+      durationMinutes: customMinutes
+    };
+
+    onAddWorkout(updatedSession);
+    setActiveSession(updatedSession);
+    setCompletedWorkoutSummary({
+      name: activeSession.name,
+      durationMinutes: customMinutes,
+      totalCalories: totalCal,
+      completedSetsCount
+    });
   };
 
   const todayStr = getLocalDateString();
@@ -140,7 +193,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
       sportKey: selectedSportKey,
       durationMinutes: duration,
       caloriesBurned,
-      date: todayStr,
+      date: selectedDay,
       intensity: sportIntensity,
       notes: sportNotes.trim() || undefined
     };
@@ -169,12 +222,6 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
 
   // Live workout elapsed timer state & Completion celebration
   const [workoutElapsedSeconds, setWorkoutElapsedSeconds] = useState(0);
-  const [completedWorkoutSummary, setCompletedWorkoutSummary] = useState<{
-    name: string;
-    durationMinutes: number;
-    totalCalories: number;
-    completedSetsCount: number;
-  } | null>(null);
 
   useEffect(() => {
     if (activeSession && activeSession.startTime && !activeSession.completed) {
@@ -1292,6 +1339,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                   const isSelected = selectedDay === day.dateStr;
                   const hasSession = workoutHistory.some(w => w.date === day.dateStr);
                   const completedSession = workoutHistory.some(w => w.date === day.dateStr && w.completed);
+                  const hasSports = (userProfile.loggedSportsToday || []).some(s => isSameDay(s.date, day.dateStr));
 
                   return (
                     <button
@@ -1307,9 +1355,12 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                       <span className="text-sm font-black mt-1">{day.dayNum}</span>
                       
                       {/* Completion indicators */}
-                      <div className="flex gap-1 mt-1.5">
+                      <div className="flex gap-1 mt-1.5 items-center">
                         {hasSession && (
-                          <div className={`w-1.5 h-1.5 rounded-full ${completedSession ? "bg-emerald-300" : "bg-amber-400"}`} />
+                          <div className={`w-1.5 h-1.5 rounded-full ${completedSession ? (isSelected ? "bg-white" : "bg-emerald-300") : (isSelected ? "bg-white" : "bg-amber-400")}`} />
+                        )}
+                        {hasSports && (
+                          <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-orange-200" : "bg-orange-500"}`} title="Deporte registrado" />
                         )}
                       </div>
                     </button>
@@ -1334,6 +1385,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                     const isSelected = selectedDay === day.dateStr;
                     const hasSession = workoutHistory.some(w => w.date === day.dateStr);
                     const completedSession = workoutHistory.some(w => w.date === day.dateStr && w.completed);
+                    const hasSports = (userProfile.loggedSportsToday || []).some(s => isSameDay(s.date, day.dateStr));
 
                     return (
                       <button
@@ -1352,13 +1404,20 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                         </span>
 
                         {/* Session indicators */}
-                        {day.isCurrentMonth && hasSession && (
+                        {day.isCurrentMonth && (hasSession || hasSports) && (
                           <div className="absolute bottom-1 flex gap-0.5 justify-center">
-                            <div className={`w-1.5 h-1.5 rounded-full ${
-                              completedSession 
-                                ? isSelected ? "bg-white" : "bg-emerald-500" 
-                                : isSelected ? "bg-white" : "bg-amber-500"
-                            }`} />
+                            {hasSession && (
+                              <div className={`w-1.5 h-1.5 rounded-full ${
+                                completedSession 
+                                  ? isSelected ? "bg-white" : "bg-emerald-500" 
+                                  : isSelected ? "bg-white" : "bg-amber-500"
+                              }`} />
+                            )}
+                            {hasSports && (
+                              <div className={`w-1.5 h-1.5 rounded-full ${
+                                isSelected ? "bg-orange-200" : "bg-orange-500"
+                              }`} />
+                            )}
                           </div>
                         )}
                       </button>
@@ -1368,11 +1427,11 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                 <div className="flex gap-4 justify-center text-[9px] font-bold text-gray-450 dark:text-gray-550 pt-1.5 border-t border-gray-100 dark:border-gray-800/20 font-mono">
                   <div className="flex items-center gap-1">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    <span>Sesión Completada</span>
+                    <span>Rutina</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                    <span>Sesión Pendiente / Creada</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                    <span>Deporte</span>
                   </div>
                 </div>
 
@@ -1423,92 +1482,101 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                 </button>
               </div>
             )}
-            {/* Widget de Deportes Registrados Hoy */}
-            <div className="bg-white dark:bg-[#161824] p-4 rounded-3xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-3 text-left">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-2xl bg-orange-500/15 border border-orange-500/25 text-orange-500 flex items-center justify-center shrink-0">
-                    <Activity className="h-4.5 w-4.5" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-mono font-bold text-orange-500 uppercase tracking-wider block">
-                      Actividad Deportiva
-                    </span>
-                    <h4 className="text-xs font-black text-gray-900 dark:text-white">
-                      {(userProfile.loggedSportsToday || []).length > 0 
-                        ? `${(userProfile.loggedSportsToday || []).length} ${(userProfile.loggedSportsToday || []).length === 1 ? "deporte registrado hoy" : "deportes registrados hoy"}`
-                        : "¿Practicaste algún deporte hoy?"}
-                    </h4>
-                  </div>
-                </div>
+            {/* Widget de Deportes Registrados */}
+            {(() => {
+              const isSelectedDayToday = selectedDay === todayStr;
+              const selectedDaySports = (userProfile.loggedSportsToday || []).filter(s => isSameDay(s.date, selectedDay));
 
-                <button
-                  type="button"
-                  onClick={() => setIsSportModalOpen(true)}
-                  className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-md shadow-orange-500/15 active:scale-95 cursor-pointer"
-                >
-                  <Plus className="h-3.5 w-3.5 stroke-[3]" />
-                  <span>{(userProfile.loggedSportsToday || []).length > 0 ? "Añadir Otro" : "Registrar Deporte"}</span>
-                </button>
-              </div>
-
-              {/* Si hay deportes registrados hoy */}
-              {(userProfile.loggedSportsToday || []).length > 0 ? (
-                <div className="space-y-2 pt-1 border-t border-gray-100 dark:border-gray-800/60">
-                  {(userProfile.loggedSportsToday || []).map((sport) => {
-                    const sportInfo = SPORTS_METS[sport.sportKey || ""] || SPORTS_METS.other;
-                    return (
-                      <div
-                        key={sport.id}
-                        className="p-3 rounded-2xl bg-gray-50 dark:bg-[#12131d] border border-gray-200/80 dark:border-gray-800/60 flex items-start justify-between gap-2.5"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-base leading-none">{sportInfo.emoji || "⚡"}</span>
-                            <span className="text-xs font-black text-gray-900 dark:text-white">
-                              {sport.name}
-                            </span>
-                            {sport.intensity && (
-                              <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
-                                sport.intensity === "high"
-                                  ? "bg-rose-500/15 text-rose-500 font-black"
-                                  : sport.intensity === "low"
-                                    ? "bg-blue-500/15 text-blue-500 font-bold"
-                                    : "bg-amber-500/15 text-amber-500 font-bold"
-                              }`}>
-                                {sport.intensity === "high" ? "Intenso" : sport.intensity === "low" ? "Suave" : "Moderado"}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-500 dark:text-gray-400">
-                            <span>⏱️ {sport.durationMinutes} min</span>
-                            <span>·</span>
-                            <span className="font-bold text-orange-500">🔥 ~{sport.caloriesBurned} kcal quemadas</span>
-                          </div>
-                          {sport.notes && (
-                            <p className="text-[10px] text-gray-600 dark:text-gray-300 italic mt-1.5 bg-white/70 dark:bg-black/30 p-2 rounded-xl border border-gray-200/50 dark:border-white/5 leading-relaxed">
-                              "{sport.notes}"
-                            </p>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteSport(sport.id)}
-                          className="p-1.5 text-gray-400 hover:text-rose-500 transition cursor-pointer shrink-0 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5"
-                          title="Eliminar este deporte"
-                        >
-                          <Trash className="h-3.5 w-3.5" />
-                        </button>
+              return (
+                <div className="bg-white dark:bg-[#161824] p-4 rounded-3xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-3 text-left">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-2xl bg-orange-500/15 border border-orange-500/25 text-orange-500 flex items-center justify-center shrink-0">
+                        <Activity className="h-4.5 w-4.5" />
                       </div>
-                    );
-                  })}
+                      <div>
+                        <span className="text-[10px] font-mono font-bold text-orange-500 uppercase tracking-wider block">
+                          {isSelectedDayToday ? "Actividad Deportiva" : `Actividad Deportiva · ${formatFriendlyDate(selectedDay)}`}
+                        </span>
+                        <h4 className="text-xs font-black text-gray-900 dark:text-white">
+                          {selectedDaySports.length > 0 
+                            ? `${selectedDaySports.length} ${selectedDaySports.length === 1 ? "deporte registrado" : "deportes registrados"}`
+                            : (isSelectedDayToday ? "¿Practicaste algún deporte hoy?" : "¿Practicaste algún deporte este día?")}
+                        </h4>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsSportModalOpen(true)}
+                      className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-md shadow-orange-500/15 active:scale-95 cursor-pointer"
+                    >
+                      <Plus className="h-3.5 w-3.5 stroke-[3]" />
+                      <span>{selectedDaySports.length > 0 ? "Añadir Otro" : "Registrar Deporte"}</span>
+                    </button>
+                  </div>
+
+                  {/* Si hay deportes registrados para este día */}
+                  {selectedDaySports.length > 0 ? (
+                    <div className="space-y-2 pt-1 border-t border-gray-100 dark:border-gray-800/60">
+                      {selectedDaySports.map((sport) => {
+                        const sportInfo = SPORTS_METS[sport.sportKey || ""] || SPORTS_METS.other;
+                        return (
+                          <div
+                            key={sport.id}
+                            className="p-3 rounded-2xl bg-gray-50 dark:bg-[#12131d] border border-gray-200/80 dark:border-gray-800/60 flex items-start justify-between gap-2.5"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-base leading-none">{sportInfo.emoji || "⚡"}</span>
+                                <span className="text-xs font-black text-gray-900 dark:text-white">
+                                  {sport.name}
+                                </span>
+                                {sport.intensity && (
+                                  <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
+                                    sport.intensity === "high"
+                                      ? "bg-rose-500/15 text-rose-500 font-black"
+                                      : sport.intensity === "low"
+                                        ? "bg-blue-500/15 text-blue-500 font-bold"
+                                        : "bg-amber-500/15 text-amber-500 font-bold"
+                                  }`}>
+                                    {sport.intensity === "high" ? "Intenso" : sport.intensity === "low" ? "Suave" : "Moderado"}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+                                <span>⏱️ {sport.durationMinutes} min</span>
+                                <span>·</span>
+                                <span className="font-bold text-orange-500">🔥 ~{sport.caloriesBurned} kcal quemadas</span>
+                              </div>
+                              {sport.notes && (
+                                <p className="text-[10px] text-gray-600 dark:text-gray-300 italic mt-1.5 bg-white/70 dark:bg-black/30 p-2 rounded-xl border border-gray-200/50 dark:border-white/5 leading-relaxed">
+                                  "{sport.notes}"
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSport(sport.id)}
+                              className="p-1.5 text-gray-400 hover:text-rose-500 transition cursor-pointer shrink-0 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5"
+                              title="Eliminar este deporte"
+                            >
+                              <Trash className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                      {isSelectedDayToday 
+                        ? "Registra tus partidos de pádel, fútbol, salidas en bicicleta o natación para sumar su gasto calórico a tu balance diario."
+                        : `Sin deportes registrados para el ${formatFriendlyDate(selectedDay)}. Puedes registrar cualquier actividad que hayas realizado este día.`}
+                    </p>
+                  )}
                 </div>
-              ) : (
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
-                  Registra tus partidos de pádel, fútbol, salidas en bicicleta o natación para sumar su gasto calórico a tu balance diario.
-                </p>
-              )}
-            </div>
+              );
+            })()}
 
             {!activeSession ? (() => {
               const selectedDayKey = getDayKeyFromDateStr(selectedDay);
@@ -1541,7 +1609,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
 
                       <div>
                         <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider block">
-                          Rutina Programada para Hoy
+                          {selectedDay === todayStr ? "Rutina Programada para Hoy" : `Rutina del ${DAY_LABEL_MAP[selectedDayKey]} (${formatFriendlyDate(selectedDay)})`}
                         </span>
                         <h3 className="text-base font-black text-gray-900 dark:text-white mt-0.5">
                           {assignedRoutine.name}
@@ -1602,8 +1670,18 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                           className="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-98 cursor-pointer"
                         >
                           <Play className="h-4 w-4 fill-current" />
-                          <span>Iniciar Entrenamiento de Hoy</span>
+                          <span>{selectedDay === todayStr ? "Iniciar Entrenamiento de Hoy" : "Cargar Rutina para este Día"}</span>
                         </button>
+                        {selectedDay < todayStr && (
+                          <button
+                            onClick={() => startSessionFromTemplate(assignedRoutine, true)}
+                            className="py-3 px-4 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer border border-emerald-500/25 shadow-sm active:scale-98"
+                            title="Registra esta rutina como completada en esta fecha"
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            <span>Registrar ya Realizada</span>
+                          </button>
+                        )}
                         <button
                           onClick={() => setActiveTab("routines")}
                           className="py-3 px-3.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border border-gray-200 dark:border-white/10"
@@ -1794,8 +1872,13 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                   <div>
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">
-                        Plan del día
+                        {selectedDay === todayStr ? "Plan del día" : `Plan · ${formatFriendlyDate(selectedDay)}`}
                       </span>
+                      {selectedDay !== todayStr && (
+                        <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500 font-bold">
+                          📅 {selectedDay}
+                        </span>
+                      )}
                       {activeSession.completed ? (
                         <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500 text-white font-black flex items-center gap-1">
                           <Check className="h-2.5 w-2.5 stroke-[3]" />
@@ -1834,15 +1917,25 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                       </button>
                     </div>
                   ) : !activeSession.startTime ? (
-                    /* BOTÓN INICIAR ENTRENAMIENTO */
-                    <div className="flex items-center gap-2 self-start sm:self-auto">
+                    /* BOTÓN INICIAR ENTRENAMIENTO / GUARDAR COMO REALIZADA */
+                    <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
                       <button
                         onClick={handleStartActiveWorkout}
-                        className="py-2.5 px-5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-xs rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/25 active:scale-95 cursor-pointer"
+                        className="py-2.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-xs rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/25 active:scale-95 cursor-pointer"
                       >
                         <Play className="h-4 w-4 fill-current" />
-                        <span>Iniciar Entrenamiento</span>
+                        <span>{selectedDay === todayStr ? "Iniciar Entrenamiento" : "Iniciar en Vivo"}</span>
                       </button>
+                      {selectedDay < todayStr && (
+                        <button
+                          onClick={() => handleMarkSessionCompleteDirectly()}
+                          className="py-2.5 px-3.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 font-bold text-xs rounded-xl transition flex items-center gap-1.5 border border-emerald-500/25 active:scale-95 cursor-pointer shadow-sm"
+                          title="Guardar esta sesión pasada como completada con todas sus series"
+                        >
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                          <span>Guardar como Realizada</span>
+                        </button>
+                      )}
                     </div>
                   ) : (
                     /* EN PROGRESO: TEMPORIZADOR Y TERMINAR SESIÓN */
@@ -2902,7 +2995,14 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
             <div className="p-5 border-b border-gray-100 dark:border-gray-800/60 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Activity className="h-5 w-5 text-orange-500" />
-                <h3 className="text-sm font-black tracking-tight uppercase">Registrar Actividad</h3>
+                <div>
+                  <h3 className="text-sm font-black tracking-tight uppercase">Registrar Actividad</h3>
+                  {selectedDay !== todayStr && (
+                    <span className="text-[10px] text-orange-500 font-bold block">
+                      📅 Para el: {formatFriendlyDate(selectedDay)} ({selectedDay})
+                    </span>
+                  )}
+                </div>
               </div>
               <button 
                 onClick={() => setIsSportModalOpen(false)}

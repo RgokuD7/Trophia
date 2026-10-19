@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { UserProfile, LoggedMeal, MealType, CustomFood } from "../types";
 import { getCustomFoods, addCustomFood, deleteCustomFood } from "../services/dbService";
-import { getLocalDateString, isSameDay } from "../utils/fitnessUtils";
+import { getLocalDateString, isSameDay, formatFriendlyDate, createTimestampForDate } from "../utils/fitnessUtils";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { getSmartFoodSuggestionsByIA, askNutriCoachIA, SmartFoodSuggestion } from "../services/geminiService";
@@ -18,7 +18,7 @@ interface NutritionHubProps {
   onAddMeal: (meal: Omit<LoggedMeal, "id" | "timestamp">) => void;
   onUpdateMeal?: (meal: LoggedMeal) => void;
   onDeleteMeal: (id: string) => void;
-  onOpenFoodLogger: (suggestedType?: MealType, isCustomOnly?: boolean, isPantry?: boolean) => void;
+  onOpenFoodLogger: (suggestedType?: MealType, isCustomOnly?: boolean, isPantry?: boolean, targetDate?: string) => void;
   onOpenRecipeAssistant: () => void;
   onUpdateProfile: (profile: UserProfile) => void;
   onOpenCoach: () => void;
@@ -706,16 +706,21 @@ export default function NutritionHub({
   return (
     <div className="flex flex-col h-full overflow-y-auto no-scrollbar pb-24 relative">
       {/* Floating Action Button for rapid comida add */}
-      {isToday && (
+      {(isToday || isPast) && (
         <div className="fixed bottom-20 right-6 z-40">
           <motion.button
-            onClick={() => onOpenFoodLogger()}
+            onClick={() => onOpenFoodLogger(undefined, false, false, selectedDate)}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="bg-emerald-500 hover:bg-emerald-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20 border border-emerald-400/20 cursor-pointer"
-            title="Registrar Alimento"
+            className="bg-emerald-500 hover:bg-emerald-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20 border border-emerald-400/20 cursor-pointer relative"
+            title={`Registrar Alimento (${isToday ? "Hoy" : formatFriendlyDate(selectedDate)})`}
           >
             <Utensils className="h-5 w-5" />
+            {!isToday && (
+              <span className="absolute -top-1 -right-1 bg-amber-500 text-black text-[8px] font-black px-1.5 py-0.2 rounded-full border border-black shadow">
+                {selectedDate.slice(8)}
+              </span>
+            )}
           </motion.button>
         </div>
       )}
@@ -840,8 +845,13 @@ export default function NutritionHub({
           {/* Right: Sleek linear progress bars for P, C, G */}
           <div className="flex-1 space-y-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
-                {isToday ? "Progreso de Hoy" : `${new Date(selectedDate + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "short" })}`}
+              <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest flex items-center gap-1.5">
+                {isToday ? "Progreso de Hoy" : `Progreso · ${formatFriendlyDate(selectedDate)}`}
+                {!isToday && (
+                  <span className="text-[8px] font-black text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full border border-amber-500/20">
+                    Historial
+                  </span>
+                )}
               </span>
               {isBankEventDay && (
                 <span className="text-[8px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full uppercase tracking-wider">🎉 Evento</span>
@@ -1068,10 +1078,10 @@ export default function NutritionHub({
                     <span className="text-[9px] text-white/25 font-mono">{meals.reduce((s, m) => s + m.calories, 0)} kcal</span>
                   )}
                 </div>
-                {isToday && (
+                {(isToday || isPast) && (
                   <button
-                    onClick={() => onOpenFoodLogger(type)}
-                    className="text-[9px] text-emerald-455 hover:text-emerald-300 font-bold flex items-center gap-0.5 cursor-pointer bg-transparent border-none transition"
+                    onClick={() => onOpenFoodLogger(type, false, false, selectedDate)}
+                    className="text-[9px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-0.5 cursor-pointer bg-transparent border-none transition"
                   >
                     <Plus className="h-3 w-3" /> Añadir
                   </button>
@@ -1112,12 +1122,15 @@ export default function NutritionHub({
                 </div>
               ) : (
                 <div className="px-3.5 py-3 text-center">
-                  {isToday ? (
-                    <button onClick={() => onOpenFoodLogger(type)} className="text-[10px] text-white/20 hover:text-emerald-400 transition cursor-pointer bg-transparent border-none">
-                      Pulsa para añadir {getMealLabel(type).toLowerCase()}
+                  {(isToday || isPast) ? (
+                    <button 
+                      onClick={() => onOpenFoodLogger(type, false, false, selectedDate)} 
+                      className="text-[10px] text-white/25 hover:text-emerald-400 transition cursor-pointer bg-transparent border-none flex items-center justify-center gap-1 mx-auto py-0.5"
+                    >
+                      <Plus className="h-3 w-3" /> Pulsa para añadir {getMealLabel(type).toLowerCase()}
                     </button>
                   ) : (
-                    <span className="text-[10px] text-white/15 italic">Sin registro</span>
+                    <span className="text-[10px] text-white/15 italic">Día futuro</span>
                   )}
                 </div>
               )}
