@@ -557,13 +557,26 @@ export async function generateRoutineByIA(
   input: {
     goal: FitnessGoal;
     level: ExperienceLevel;
-    environment: TrainingEnvironment;
+    environment?: TrainingEnvironment;
+    environments?: TrainingEnvironment[];
     equipment: string[];
     jointPainAreas?: ("knee" | "back" | "shoulder")[];
+    customJointPain?: string;
     requiresMedicalClearance?: boolean;
+    weeklyTrainingDays?: number;
   }
 ): Promise<any> {
-  const { goal, level, environment, equipment, jointPainAreas = [], requiresMedicalClearance } = input;
+  const { 
+    goal, 
+    level, 
+    environment = "gym", 
+    environments, 
+    equipment, 
+    jointPainAreas = [], 
+    customJointPain,
+    requiresMedicalClearance,
+    weeklyTrainingDays 
+  } = input;
 
   let safetyInstructions = "";
   if (requiresMedicalClearance) {
@@ -583,10 +596,19 @@ export async function generateRoutineByIA(
     }
   }
 
+  if (customJointPain && customJointPain.trim()) {
+    safetyInstructions += `\n- ¡MOLÉSTIAS O LESIONES ESPECÍFICAS DETALLADAS POR EL USUARIO!: "${customJointPain.trim()}". CRÍTICO: Diseña los ejercicios y rangos articulares garantizando protección absoluta para estas molestias particulares reportadas.`;
+  }
+
+  const envText = environments && environments.length > 0
+    ? environments.map(e => e === "gym" ? "Gimnasio" : e === "home" ? "Casa" : "Aire libre / Calistenia").join(" y ")
+    : (environment === "gym" ? "Gimnasio" : environment === "home" ? "Casa" : "Aire libre");
+
   const prompt = `Genera una rutina de entrenamiento única y de alta calidad basada en el perfil del usuario:
 - Objetivo: ${goal} (ej: bajar de peso, ganar masa muscular, objetivos estéticos, mantenimiento)
 - Nivel de experiencia (Edad de entrenamiento): ${level} (principiante, intermedio, avanzado)
-- Entorno de trabajo: ${environment} (gimnasio, casa, aire libre)
+- Entorno(s) de trabajo: ${envText}
+- Días planificados por semana: ${weeklyTrainingDays || 4} días
 - Equipamiento disponible: ${Array.isArray(equipment) ? equipment.join(", ") : "Peso corporal"}${safetyInstructions}
 
 Lógica de Volumen y Capacidad Física a respetar:
@@ -1272,3 +1294,76 @@ Responde estrictamente en formato JSON con un arreglo dentro del campo "exercise
   if (res && Array.isArray(res.exercises)) return res.exercises;
   return [];
 }
+
+export interface RejectedEquipmentItem {
+  input: string;
+  reason: string;
+  suggestion?: string | null;
+}
+
+export interface ValidatedEquipmentResult {
+  validEquipment: string[];
+  rejectedItems: RejectedEquipmentItem[];
+}
+
+// 18. Validate and parse custom exercise equipment or machines with AI
+export async function validateAndParseCustomEquipmentByIA(
+  apiKey: string,
+  userInput: string,
+  existingList: string[] = []
+): Promise<ValidatedEquipmentResult> {
+  const prompt = `Actúas como un perito deportivo e inspector de biomecánica y equipamiento de gimnasio, calistenia y entrenamiento físico para la aplicación Trophia.
+El usuario ha introducido texto para agregar nuevos elementos, accesorios o máquinas a su lista de equipamiento disponible:
+"""
+${userInput}
+"""
+
+Equipamiento que ya está disponible o seleccionado (para evitar duplicados redundantes):
+${existingList.length > 0 ? existingList.join(", ") : "Ninguno aún"}
+
+Tu misión:
+1. Divide y analiza cada elemento introducido (puede venir separado por comas, saltos de línea o texto continuo).
+2. Para CADA elemento:
+   - Determina con criterio estricto si es un OBJETO REAL Y LEGÍTIMO DE ENTRENAMIENTO FÍSICO (por ejemplo: máquinas de gimnasio, pesas rusas / kettlebells, mancuernas, barras olímpicas, poleas, bandas de resistencia, TRX, anillas, colchoneta, banco reclinable, comba / soga, chaleco lastrado, ab roller, parallettes, etc.).
+   - Si SÍ es un elemento válido de ejercicio:
+     * Normaliza y formatea su nombre con capitalización limpia y profesional en español (ej: "Kettlebell / Pesa rusa", "Sistema de Suspensión TRX", "Máquina de Prensa Hack").
+     * Si es idéntico o sinónimo exacto de algo que ya figura en la lista de equipamiento disponible, descártalo para no duplicar.
+     * Si es un elemento válido y no está repetido, agrégalo al arreglo "validEquipment".
+   - Si NO es un elemento de ejercicio físico (por ejemplo, si el usuario escribe cosas irrelevantes como "plátano", "teclado", "computadora", "auto", "pizza", "zapato", "televisor", "perro", "mesa", "cerveza", etc.):
+     * DESCÁRTALO absolutamente de "validEquipment".
+     * Agrégalo al arreglo "rejectedItems".
+     * En "reason", explica amablemente y con claridad por qué no es apto (ej: "'Plátano' es un alimento, no una máquina o implemento de ejercicio físico.").
+     * En "suggestion", si sospechas que pudo ser un error tipográfico o fonético de un accesorio deportivo real, sugiere el implemento adecuado (ej: si escribió "banco de pres" -> "Banco plano de press", si escribió "cuerda" -> "Cuerda para saltar / Comba"). Si no tiene ninguna relación con el fitness, deja null.
+
+Responde estrictamente en formato JSON con la siguiente estructura:
+{
+  "validEquipment": [
+    "Nombre normalizado 1"
+  ],
+  "rejectedItems": [
+    {
+      "input": "palabra o frase introducida",
+      "reason": "Explicación del rechazo",
+      "suggestion": "Implemento deportivo al que pudo referirse o null"
+    }
+  ]
+}`;
+
+  try {
+    const res = await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.5-flash-lite", tier: "flash-lite" });
+    return {
+      validEquipment: Array.isArray(res?.validEquipment) ? res.validEquipment : [],
+      rejectedItems: Array.isArray(res?.rejectedItems) ? res.rejectedItems : []
+    };
+  } catch (error) {
+    console.error("Error validating custom equipment by IA:", error);
+    // Graceful fallback: basic cleanup if offline
+    const rawTokens = userInput.split(/[,;\n]+/).map(s => s.trim()).filter(s => s.length >= 2);
+    const valid = rawTokens.filter(t => !existingList.some(e => e.toLowerCase() === t.toLowerCase()));
+    return {
+      validEquipment: valid,
+      rejectedItems: []
+    };
+  }
+}
+

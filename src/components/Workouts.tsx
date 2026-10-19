@@ -22,6 +22,7 @@ import {
   getCustomExercises, addCustomExercise, deleteCustomExercise, updateCustomExercise 
 } from "../services/dbService";
 import { SPORTS_METS, getLocalDateString } from "../utils/fitnessUtils";
+import WorkoutsOnboarding from "./WorkoutsOnboarding";
 
 export interface ExerciseGuideViewData {
   name: string;
@@ -134,22 +135,17 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
   const [selectedGuideExercise, setSelectedGuideExercise] = useState<ExerciseGuideViewData | null>(null);
   const [isLoadingGuide, setIsLoadingGuide] = useState(false);
 
-  // Initial / Reconfiguration Workout Questionnaire State
-  const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
-  const [setupEnvironment, setSetupEnvironment] = useState<TrainingEnvironment>(userProfile.environment || "gym");
-  const [setupEquipment, setSetupEquipment] = useState<string[]>(
-    userProfile.equipment && userProfile.equipment.length > 0 ? userProfile.equipment : ["Peso corporal"]
+  // Dedicated Workouts Onboarding & Preferences Flow State
+  const [isWorkoutsOnboardingOpen, setIsWorkoutsOnboardingOpen] = useState(
+    !userProfile.isWorkoutsOnboardingCompleted && (!userProfile.equipment || userProfile.equipment.length === 0)
   );
-  const [setupLevel, setSetupLevel] = useState<ExperienceLevel>(userProfile.level || "intermediate");
-  const [setupJointPain, setSetupJointPain] = useState<("knee" | "back" | "shoulder")[]>(userProfile.jointPainAreas || []);
-  const [setupDays, setSetupDays] = useState<number>(userProfile.weeklyTrainingDays || 4);
 
-  // Auto-prompt initial setup questionnaire if no equipment has ever been selected
+  // Auto-prompt initial workouts onboarding if not yet completed and no equipment selected
   useEffect(() => {
-    if (!userProfile.equipment || userProfile.equipment.length === 0) {
-      setIsSetupModalOpen(true);
+    if (!userProfile.isWorkoutsOnboardingCompleted && (!userProfile.equipment || userProfile.equipment.length === 0)) {
+      setIsWorkoutsOnboardingOpen(true);
     }
-  }, []);
+  }, [userProfile.isWorkoutsOnboardingCompleted, userProfile.equipment]);
 
   // Update suggestions whenever user types in new exercise input
   useEffect(() => {
@@ -266,41 +262,57 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     }
   };
 
-  const handleSavePreferencesAndGenerate = async () => {
+  const handleCompleteWorkoutsOnboarding = async (data: {
+    environment: TrainingEnvironment;
+    environments: TrainingEnvironment[];
+    equipment: string[];
+    customEquipment: string[];
+    level: ExperienceLevel;
+    jointPainAreas: ("knee" | "back" | "shoulder")[];
+    customJointPain: string;
+    weeklyTrainingDays: number;
+  }) => {
     const updatedProfile: UserProfile = {
       ...userProfile,
-      environment: setupEnvironment,
-      equipment: setupEquipment.length > 0 ? setupEquipment : ["Peso corporal"],
-      level: setupLevel,
-      jointPainAreas: setupJointPain,
-      weeklyTrainingDays: setupDays
+      environment: data.environment,
+      environments: data.environments,
+      equipment: data.equipment,
+      customEquipment: data.customEquipment,
+      level: data.level,
+      jointPainAreas: data.jointPainAreas,
+      customJointPain: data.customJointPain,
+      weeklyTrainingDays: data.weeklyTrainingDays,
+      isWorkoutsOnboardingCompleted: true
     };
 
     onUpdateProfile(updatedProfile);
-    setIsSetupModalOpen(false);
+    setIsWorkoutsOnboardingOpen(false);
 
     // Auto-generate routine with these updated preferences
     setIsGenerating(true);
     setGenerationError(null);
 
     try {
-      const data = await generateRoutineByIA(apiKey || "", {
+      const routineData = await generateRoutineByIA(apiKey || "", {
         goal: updatedProfile.goal,
         level: updatedProfile.level,
         environment: updatedProfile.environment,
+        environments: updatedProfile.environments,
         equipment: updatedProfile.equipment,
         jointPainAreas: updatedProfile.jointPainAreas,
-        requiresMedicalClearance: updatedProfile.requiresMedicalClearance
+        customJointPain: updatedProfile.customJointPain,
+        requiresMedicalClearance: updatedProfile.requiresMedicalClearance,
+        weeklyTrainingDays: updatedProfile.weeklyTrainingDays
       });
 
-      if (data) {
+      if (routineData) {
         const newSession: WorkoutSession = {
           id: Math.random().toString(36).substr(2, 9),
           date: selectedDay,
-          name: data.name || "Sesión de Entrenamiento",
-          warmup: data.warmup || ["Movilidad articular general - 5 min"],
-          cooldown: data.cooldown || ["Estiramiento general completo - 5 min"],
-          exercises: (data.exercises || []).map((ex: any, idx: number) => ({
+          name: routineData.name || "Sesión de Entrenamiento",
+          warmup: routineData.warmup || ["Movilidad articular general - 5 min"],
+          cooldown: routineData.cooldown || ["Estiramiento general completo - 5 min"],
+          exercises: (routineData.exercises || []).map((ex: any, idx: number) => ({
             id: `ex-${idx}`,
             name: ex.name,
             sets: ex.sets || 3,
@@ -472,9 +484,12 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
         goal: userProfile.goal,
         level: userProfile.level,
         environment: userProfile.environment,
+        environments: userProfile.environments,
         equipment: userProfile.equipment,
         jointPainAreas: userProfile.jointPainAreas,
-        requiresMedicalClearance: userProfile.requiresMedicalClearance
+        customJointPain: userProfile.customJointPain,
+        requiresMedicalClearance: userProfile.requiresMedicalClearance,
+        weeklyTrainingDays: userProfile.weeklyTrainingDays
       });
       if (data) {
         // Construct the local routine session
@@ -1136,7 +1151,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
           </h2>
           <div className="flex items-center gap-1.5">
             <button
-              onClick={() => setIsSetupModalOpen(true)}
+              onClick={() => setIsWorkoutsOnboardingOpen(true)}
               className="py-1.5 px-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-xl text-[10px] font-extrabold transition flex items-center gap-1 cursor-pointer border border-gray-200 dark:border-white/10"
               title="Configurar lugar, equipamiento y lesiones"
             >
@@ -1363,7 +1378,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                     <Dumbbell className="h-3 w-3 text-emerald-400" />
                     <span className="font-bold truncate max-w-[180px]">{userProfile.equipment && userProfile.equipment.length > 0 ? userProfile.equipment.join(", ") : "Peso corporal"}</span>
                     <button
-                      onClick={() => setIsSetupModalOpen(true)}
+                      onClick={() => setIsWorkoutsOnboardingOpen(true)}
                       className="ml-1 text-emerald-400 font-black hover:underline cursor-pointer bg-transparent border-none"
                     >
                       Cambiar
@@ -2656,247 +2671,14 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
         )}
       </AnimatePresence>
 
-      {/* 2. Setup / Reconfiguration Questionnaire Modal */}
-      <AnimatePresence>
-        {isSetupModalOpen && (
-          <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="w-full max-w-md bg-white dark:bg-[#0e101a] border border-gray-200 dark:border-gray-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-            >
-              {/* Header */}
-              <div className="p-4.5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0 bg-gray-50/50 dark:bg-white/[0.02]">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-400">
-                    <SlidersHorizontal className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <span className="text-[9px] font-mono font-bold text-emerald-400 uppercase tracking-wider block">Personalización</span>
-                    <h3 className="text-xs font-black text-gray-900 dark:text-white">
-                      Equipamiento y Preferencias de Rutina
-                    </h3>
-                  </div>
-                </div>
-                {userProfile.equipment && userProfile.equipment.length > 0 && (
-                  <button
-                    onClick={() => setIsSetupModalOpen(false)}
-                    className="w-7 h-7 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-white transition cursor-pointer border-none"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-
-              {/* Questions Body */}
-              <div className="p-5 overflow-y-auto space-y-5 no-scrollbar flex-1 text-left">
-                {/* 1. Entorno */}
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-gray-900 dark:text-white block">
-                    1. ¿Dónde entrenas principalmente?
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { id: "gym" as TrainingEnvironment, label: "Gimnasio", emoji: "🏢" },
-                      { id: "home" as TrainingEnvironment, label: "Casa", emoji: "🏠" },
-                      { id: "outdoor" as TrainingEnvironment, label: "Aire libre", emoji: "🌳" }
-                    ].map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setSetupEnvironment(item.id)}
-                        className={`p-3 rounded-2xl border text-center transition cursor-pointer ${
-                          setupEnvironment === item.id
-                            ? "bg-emerald-500/15 border-emerald-500 text-emerald-500 dark:text-emerald-400 font-black shadow-sm"
-                            : "bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 font-semibold"
-                        }`}
-                      >
-                        <span className="text-xl block mb-1">{item.emoji}</span>
-                        <span className="text-[11px] block">{item.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 2. Equipamiento disponible */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-baseline">
-                    <label className="text-xs font-black text-gray-900 dark:text-white block">
-                      2. ¿Qué equipamiento tienes a mano?
-                    </label>
-                    <span className="text-[9px] text-gray-400 font-bold">Selecciona varios</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { id: "Mancuernas", label: "Mancuernas", emoji: "🏋️" },
-                      { id: "Barra con discos", label: "Barra con discos", emoji: "⚡" },
-                      { id: "Banco de pesas", label: "Banco de pesas", emoji: "🛋️" },
-                      { id: "Máquinas / Poleas", label: "Máquinas / Poleas", emoji: "🏗️" },
-                      { id: "Bandas elásticas", label: "Bandas elásticas", emoji: "🎗️" },
-                      { id: "Barra de dominadas", label: "Barra dominadas", emoji: "🪜" },
-                      { id: "Peso corporal", label: "Solo peso corporal", emoji: "🧘" }
-                    ].map((eq) => {
-                      const isSelected = setupEquipment.includes(eq.id);
-                      return (
-                        <button
-                          key={eq.id}
-                          type="button"
-                          onClick={() => {
-                            if (eq.id === "Peso corporal") {
-                              setSetupEquipment(["Peso corporal"]);
-                            } else {
-                              const withoutBodyweight = setupEquipment.filter(x => x !== "Peso corporal");
-                              if (isSelected) {
-                                const next = withoutBodyweight.filter(x => x !== eq.id);
-                                setSetupEquipment(next.length > 0 ? next : ["Peso corporal"]);
-                              } else {
-                                setSetupEquipment([...withoutBodyweight, eq.id]);
-                              }
-                            }
-                          }}
-                          className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition cursor-pointer ${
-                            isSelected
-                              ? "bg-emerald-500/15 border-emerald-500 text-emerald-500 dark:text-emerald-400 font-black shadow-sm"
-                              : "bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 font-medium"
-                          }`}
-                        >
-                          <span className="text-xs flex items-center gap-1.5">
-                            <span>{eq.emoji}</span>
-                            <span className="truncate text-[11px]">{eq.label}</span>
-                          </span>
-                          {isSelected && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 3. Nivel de Experiencia */}
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-gray-900 dark:text-white block">
-                    3. Nivel de entrenamiento
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { id: "beginner" as ExperienceLevel, label: "Principiante", desc: "0-1 año" },
-                      { id: "intermediate" as ExperienceLevel, label: "Intermedio", desc: "1-3 años" },
-                      { id: "advanced" as ExperienceLevel, label: "Avanzado", desc: "+3 años" }
-                    ].map((lvl) => (
-                      <button
-                        key={lvl.id}
-                        type="button"
-                        onClick={() => setSetupLevel(lvl.id)}
-                        className={`p-2.5 rounded-xl border text-center transition cursor-pointer ${
-                          setupLevel === lvl.id
-                            ? "bg-emerald-500/15 border-emerald-500 text-emerald-500 dark:text-emerald-400 font-black"
-                            : "bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 font-medium"
-                        }`}
-                      >
-                        <span className="text-[11px] font-bold block">{lvl.label}</span>
-                        <span className="text-[9px] text-gray-400 block mt-0.5">{lvl.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 4. Molestias / Dolor Articular */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-baseline">
-                    <label className="text-xs font-black text-gray-900 dark:text-white block">
-                      4. ¿Molestias o dolor articular?
-                    </label>
-                    <span className="text-[9px] text-gray-400 font-bold">Para cuidar tu postura</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { id: "knee" as const, label: "Rodillas", desc: "Evita sentadillas profundas" },
-                      { id: "back" as const, label: "Espalda baja (Lumbar)", desc: "Evita peso muerto libre" },
-                      { id: "shoulder" as const, label: "Hombros", desc: "Evita press tras nuca" },
-                    ].map((joint) => {
-                      const isSelected = setupJointPain.includes(joint.id);
-                      return (
-                        <button
-                          key={joint.id}
-                          type="button"
-                          onClick={() => {
-                            if (isSelected) {
-                              setSetupJointPain(setupJointPain.filter(x => x !== joint.id));
-                            } else {
-                              setSetupJointPain([...setupJointPain, joint.id]);
-                            }
-                          }}
-                          className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
-                            isSelected
-                              ? "bg-rose-500/15 border-rose-500 text-rose-500 dark:text-rose-400 font-bold"
-                              : "bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 font-medium"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold">{joint.label}</span>
-                            {isSelected && <ShieldAlert className="h-3.5 w-3.5 text-rose-400 shrink-0" />}
-                          </div>
-                          <span className="text-[9px] text-gray-400 block mt-0.5">{joint.desc}</span>
-                        </button>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      onClick={() => setSetupJointPain([])}
-                      className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
-                        setupJointPain.length === 0
-                          ? "bg-emerald-500/15 border-emerald-500 text-emerald-500 dark:text-emerald-400 font-bold"
-                          : "bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 font-medium"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold">Sin molestias</span>
-                        {setupJointPain.length === 0 && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />}
-                      </div>
-                      <span className="text-[9px] text-gray-400 block mt-0.5">Articulaciones 100% sanas</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* 5. Días de entrenamiento */}
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-gray-900 dark:text-white block">
-                    5. Días disponibles por semana
-                  </label>
-                  <div className="flex gap-2 justify-between">
-                    {[2, 3, 4, 5, 6].map((dayNum) => (
-                      <button
-                        key={dayNum}
-                        type="button"
-                        onClick={() => setSetupDays(dayNum)}
-                        className={`flex-1 py-2 rounded-xl border text-center transition cursor-pointer text-xs ${
-                          setupDays === dayNum
-                            ? "bg-emerald-500 border-emerald-400 text-white font-black shadow-sm"
-                            : "bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 font-bold"
-                        }`}
-                      >
-                        {dayNum} d
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Button */}
-              <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-white/[0.01]">
-                <button
-                  type="button"
-                  onClick={handleSavePreferencesAndGenerate}
-                  className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-xs font-black transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-98 cursor-pointer"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  <span>Guardar y Formular Rutina con IA (Gemini 3.8 Flash)</span>
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* 2. Workouts Onboarding & Preferences Dedicated Wizard */}
+      <WorkoutsOnboarding
+        apiKey={apiKey}
+        userProfile={userProfile}
+        isOpen={isWorkoutsOnboardingOpen}
+        onClose={() => setIsWorkoutsOnboardingOpen(false)}
+        onComplete={handleCompleteWorkoutsOnboarding}
+      />
     </div>
   );
 }

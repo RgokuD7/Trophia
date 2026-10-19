@@ -60,6 +60,9 @@ export interface UserProfile {
   };
   requiresMedicalClearance?: boolean;
   jointPainAreas?: ("knee" | "back" | "shoulder")[];
+  customJointPain?: string;
+  customEquipment?: string[];
+  isWorkoutsOnboardingCompleted?: boolean;
   trainingAge?: ExperienceLevel;
 
   aiRecommendations?: {
