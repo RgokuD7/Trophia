@@ -9,7 +9,7 @@ import {
 import { 
   WorkoutSession, WorkoutExercise, MuscleRecovery, UserProfile, 
   TrainingEnvironment, ExperienceLevel, CustomExercise, ExerciseTrackingType,
-  WeeklyRoutinePlan, RoutineTemplate, RoutineDayKey
+  WeeklyRoutinePlan, RoutineTemplate, RoutineDayKey, LoggedSport
 } from "../types";
 import { 
   generateRoutineByIA, suggestAlternativeExercisesByIA, 
@@ -116,28 +116,33 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
 
   // Sports logging states
   const [isSportModalOpen, setIsSportModalOpen] = useState(false);
-  const [selectedSportKey, setSelectedSportKey] = useState("soccer");
+  const [selectedSportKey, setSelectedSportKey] = useState("padel");
   const [sportDuration, setSportDuration] = useState<number | "">(45);
+  const [sportIntensity, setSportIntensity] = useState<"low" | "moderate" | "high">("moderate");
+  const [sportNotes, setSportNotes] = useState("");
   const [customSportNameInput, setCustomSportNameInput] = useState("");
 
   const handleLogSport = () => {
     const duration = Number(sportDuration);
     if (!duration || duration <= 0) return;
 
-    const sportInfo = SPORTS_METS[selectedSportKey];
+    const sportInfo = SPORTS_METS[selectedSportKey] || SPORTS_METS.other;
     const name = selectedSportKey === "other" && customSportNameInput.trim() !== ""
       ? customSportNameInput.trim()
       : sportInfo.label;
 
-    // METs * 0.0175 * weight * duration
-    const caloriesBurned = Math.round(sportInfo.met * 0.0175 * userProfile.weight * duration);
+    const intensityMultiplier = sportIntensity === "high" ? 1.25 : sportIntensity === "low" ? 0.8 : 1.0;
+    const caloriesBurned = Math.round(sportInfo.met * intensityMultiplier * 0.0175 * userProfile.weight * duration);
 
-    const newSportLog = {
+    const newSportLog: LoggedSport = {
       id: Math.random().toString(36).substring(2, 9),
       name,
+      sportKey: selectedSportKey,
       durationMinutes: duration,
       caloriesBurned,
-      date: todayStr
+      date: todayStr,
+      intensity: sportIntensity,
+      notes: sportNotes.trim() || undefined
     };
 
     const currentSports = userProfile.loggedSportsToday || [];
@@ -149,8 +154,63 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     // Reset and close
     setIsSportModalOpen(false);
     setSportDuration(45);
+    setSportIntensity("moderate");
+    setSportNotes("");
     setCustomSportNameInput("");
-    setSelectedSportKey("soccer");
+  };
+
+  const handleDeleteSport = (sportId: string) => {
+    const currentSports = userProfile.loggedSportsToday || [];
+    onUpdateProfile({
+      ...userProfile,
+      loggedSportsToday: currentSports.filter(s => s.id !== sportId)
+    });
+  };
+
+  // Live workout elapsed timer state & Completion celebration
+  const [workoutElapsedSeconds, setWorkoutElapsedSeconds] = useState(0);
+  const [completedWorkoutSummary, setCompletedWorkoutSummary] = useState<{
+    name: string;
+    durationMinutes: number;
+    totalCalories: number;
+    completedSetsCount: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (activeSession && activeSession.startTime && !activeSession.completed) {
+      const startMs = new Date(activeSession.startTime).getTime();
+      const updateElapsed = () => {
+        const diff = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+        setWorkoutElapsedSeconds(diff);
+      };
+      updateElapsed();
+      const interval = setInterval(updateElapsed, 1000);
+      return () => clearInterval(interval);
+    } else {
+      setWorkoutElapsedSeconds(0);
+    }
+  }, [activeSession?.startTime, activeSession?.completed]);
+
+  const formatWorkoutTime = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    if (mins >= 60) {
+      const hrs = Math.floor(mins / 60);
+      const remMins = mins % 60;
+      return `${hrs}h ${remMins}m ${secs < 10 ? "0" : ""}${secs}s`;
+    }
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+  };
+
+  const handleStartActiveWorkout = () => {
+    if (!activeSession) return;
+    const nowIso = new Date().toISOString();
+    const updated: WorkoutSession = {
+      ...activeSession,
+      startTime: nowIso
+    };
+    onAddWorkout(updated);
+    setActiveSession(updated);
   };
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -940,9 +1000,36 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
   const handleMarkSessionComplete = () => {
     if (!activeSession) return;
 
-    const updatedSession = { ...activeSession, completed: true };
+    const now = new Date();
+    const startTimeMs = activeSession.startTime 
+      ? new Date(activeSession.startTime).getTime() 
+      : now.getTime() - (45 * 60000);
+    const elapsedMinutes = Math.max(1, Math.round((now.getTime() - startTimeMs) / 60000));
+
+    const totalCal = activeSession.exercises.reduce((sum, ex) => {
+      const completedSets = ex.completedSets.filter(s => s.completed).length;
+      return sum + (completedSets * ex.caloriesBurnedPerSet);
+    }, 0);
+
+    const completedSetsCount = activeSession.exercises.reduce((sum, ex) => {
+      return sum + ex.completedSets.filter(s => s.completed).length;
+    }, 0);
+
+    const updatedSession: WorkoutSession = {
+      ...activeSession,
+      completed: true,
+      endTime: now.toISOString(),
+      durationMinutes: elapsedMinutes
+    };
+
     onAddWorkout(updatedSession);
     setActiveSession(updatedSession);
+    setCompletedWorkoutSummary({
+      name: activeSession.name,
+      durationMinutes: elapsedMinutes,
+      totalCalories: totalCal,
+      completedSetsCount
+    });
   };
 
   // Build weekly calendar dates array helper
@@ -1119,18 +1206,11 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => setIsWorkoutsOnboardingOpen(true)}
-              className="py-1.5 px-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-xl text-[10px] font-extrabold transition flex items-center gap-1 cursor-pointer border border-gray-200 dark:border-white/10"
+              className="py-1.5 px-3 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-xl text-[10px] font-extrabold transition flex items-center gap-1.5 cursor-pointer border border-gray-200 dark:border-white/10"
               title="Configurar lugar, equipamiento y lesiones"
             >
               <SlidersHorizontal className="h-3 w-3 text-emerald-400" />
               <span>Preferencias</span>
-            </button>
-            <button
-              onClick={() => setIsSportModalOpen(true)}
-              className="py-1.5 px-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-extrabold transition flex items-center gap-1 cursor-pointer shadow-lg shadow-orange-500/10 border-none"
-            >
-              <Activity className="h-3 w-3" />
-              <span>Deporte</span>
             </button>
           </div>
         </div>
@@ -1343,6 +1423,92 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                 </button>
               </div>
             )}
+            {/* Widget de Deportes Registrados Hoy */}
+            <div className="bg-white dark:bg-[#161824] p-4 rounded-3xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-3 text-left">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-2xl bg-orange-500/15 border border-orange-500/25 text-orange-500 flex items-center justify-center shrink-0">
+                    <Activity className="h-4.5 w-4.5" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-mono font-bold text-orange-500 uppercase tracking-wider block">
+                      Actividad Deportiva
+                    </span>
+                    <h4 className="text-xs font-black text-gray-900 dark:text-white">
+                      {(userProfile.loggedSportsToday || []).length > 0 
+                        ? `${(userProfile.loggedSportsToday || []).length} ${(userProfile.loggedSportsToday || []).length === 1 ? "deporte registrado hoy" : "deportes registrados hoy"}`
+                        : "¿Practicaste algún deporte hoy?"}
+                    </h4>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsSportModalOpen(true)}
+                  className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-md shadow-orange-500/15 active:scale-95 cursor-pointer"
+                >
+                  <Plus className="h-3.5 w-3.5 stroke-[3]" />
+                  <span>{(userProfile.loggedSportsToday || []).length > 0 ? "Añadir Otro" : "Registrar Deporte"}</span>
+                </button>
+              </div>
+
+              {/* Si hay deportes registrados hoy */}
+              {(userProfile.loggedSportsToday || []).length > 0 ? (
+                <div className="space-y-2 pt-1 border-t border-gray-100 dark:border-gray-800/60">
+                  {(userProfile.loggedSportsToday || []).map((sport) => {
+                    const sportInfo = SPORTS_METS[sport.sportKey || ""] || SPORTS_METS.other;
+                    return (
+                      <div
+                        key={sport.id}
+                        className="p-3 rounded-2xl bg-gray-50 dark:bg-[#12131d] border border-gray-200/80 dark:border-gray-800/60 flex items-start justify-between gap-2.5"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-base leading-none">{sportInfo.emoji || "⚡"}</span>
+                            <span className="text-xs font-black text-gray-900 dark:text-white">
+                              {sport.name}
+                            </span>
+                            {sport.intensity && (
+                              <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
+                                sport.intensity === "high"
+                                  ? "bg-rose-500/15 text-rose-500 font-black"
+                                  : sport.intensity === "low"
+                                    ? "bg-blue-500/15 text-blue-500 font-bold"
+                                    : "bg-amber-500/15 text-amber-500 font-bold"
+                              }`}>
+                                {sport.intensity === "high" ? "Intenso" : sport.intensity === "low" ? "Suave" : "Moderado"}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+                            <span>⏱️ {sport.durationMinutes} min</span>
+                            <span>·</span>
+                            <span className="font-bold text-orange-500">🔥 ~{sport.caloriesBurned} kcal quemadas</span>
+                          </div>
+                          {sport.notes && (
+                            <p className="text-[10px] text-gray-600 dark:text-gray-300 italic mt-1.5 bg-white/70 dark:bg-black/30 p-2 rounded-xl border border-gray-200/50 dark:border-white/5 leading-relaxed">
+                              "{sport.notes}"
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSport(sport.id)}
+                          className="p-1.5 text-gray-400 hover:text-rose-500 transition cursor-pointer shrink-0 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5"
+                          title="Eliminar este deporte"
+                        >
+                          <Trash className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                  Registra tus partidos de pádel, fútbol, salidas en bicicleta o natación para sumar su gasto calórico a tu balance diario.
+                </p>
+              )}
+            </div>
 
             {!activeSession ? (() => {
               const selectedDayKey = getDayKeyFromDateStr(selectedDay);
@@ -1630,29 +1796,65 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                       <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">
                         Plan del día
                       </span>
+                      {activeSession.completed ? (
+                        <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500 text-white font-black flex items-center gap-1">
+                          <Check className="h-2.5 w-2.5 stroke-[3]" />
+                          <span>Completada ({activeSession.durationMinutes} min)</span>
+                        </span>
+                      ) : activeSession.startTime ? (
+                        <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 font-bold flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                          <span>⏱️ En curso · {formatWorkoutTime(workoutElapsedSeconds)}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500 font-bold">
+                          ⏳ Lista para iniciar
+                        </span>
+                      )}
                       <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
-                        {activeSession.exercises.length} ejercicios · ~{activeSession.durationMinutes || 45} min
+                        {activeSession.exercises.length} ejercicios
                       </span>
                     </div>
                     <h3 className="text-base font-black text-gray-900 dark:text-white">
                       {activeSession.name}
                     </h3>
                   </div>
+
                   {activeSession.completed ? (
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-500/10 py-1.5 px-3 rounded-xl border border-emerald-500/20 self-start sm:self-auto">
-                      <Check className="h-4 w-4 stroke-[3]" />
-                      <span>Completado</span>
+                    <div className="flex items-center gap-2.5 self-start sm:self-auto">
+                      <span className="text-xs font-black text-emerald-500">
+                        🔥 ~{activeSession.exercises.reduce((s, ex) => s + (ex.completedSets.filter(c => c.completed).length * ex.caloriesBurnedPerSet), 0)} kcal
+                      </span>
+                      <button
+                        onClick={handleStartActiveWorkout}
+                        className="text-[10px] font-bold text-gray-500 hover:text-emerald-400 underline cursor-pointer"
+                        title="Reiniciar temporizador y registrar de nuevo"
+                      >
+                        Reiniciar
+                      </button>
+                    </div>
+                  ) : !activeSession.startTime ? (
+                    /* BOTÓN INICIAR ENTRENAMIENTO */
+                    <div className="flex items-center gap-2 self-start sm:self-auto">
+                      <button
+                        onClick={handleStartActiveWorkout}
+                        className="py-2.5 px-5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-xs rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/25 active:scale-95 cursor-pointer"
+                      >
+                        <Play className="h-4 w-4 fill-current" />
+                        <span>Iniciar Entrenamiento</span>
+                      </button>
                     </div>
                   ) : (
+                    /* EN PROGRESO: TEMPORIZADOR Y TERMINAR SESIÓN */
                     <div className="flex items-center gap-2 self-start sm:self-auto">
                       <button
                         type="button"
                         onClick={() => setIsTimerModalOpen(true)}
                         className="bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-800 dark:text-gray-200 text-xs font-bold py-2 px-3 rounded-xl transition flex items-center gap-1.5 cursor-pointer border border-gray-200 dark:border-white/10"
-                        title="Abrir cronómetro y temporizador de series"
+                        title="Abrir cronómetro y temporizador de descanso"
                       >
                         <Timer className="h-4 w-4 text-emerald-400" />
-                        <span>Temporizador</span>
+                        <span>Descanso</span>
                         {isTimerRunning && (
                           <span className="px-1.5 py-0.2 rounded-full bg-emerald-500 text-white text-[9px] font-mono animate-pulse">
                             {timeRemaining}s
@@ -1661,9 +1863,10 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                       </button>
                       <button
                         onClick={handleMarkSessionComplete}
-                        className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black py-2 px-4 rounded-xl transition cursor-pointer shadow-md shadow-emerald-500/20 active:scale-95"
+                        className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black py-2 px-4 rounded-xl transition cursor-pointer shadow-md shadow-emerald-500/20 active:scale-95 flex items-center gap-1.5"
                       >
-                        Terminar Sesión
+                        <Check className="h-3.5 w-3.5 stroke-[3]" />
+                        <span>Terminar Sesión</span>
                       </button>
                     </div>
                   )}
@@ -2703,7 +2906,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
               </div>
               <button 
                 onClick={() => setIsSportModalOpen(false)}
-                className="p-1.5 bg-gray-50 hover:bg-gray-100 dark:bg-white/5 dark:hover:bg-white/10 rounded-xl text-gray-400 hover:text-gray-655 dark:hover:text-white transition cursor-pointer border-none"
+                className="p-1.5 bg-gray-50 hover:bg-gray-100 dark:bg-white/5 dark:hover:bg-white/10 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-white transition cursor-pointer border-none"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -2740,35 +2943,104 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                 </div>
               )}
 
-              {/* Duration Input */}
+              {/* Intensity Selector */}
               <div className="space-y-1.5 text-left">
-                <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Duración (minutos)</label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    value={sportDuration}
-                    onChange={(e) => setSportDuration(e.target.value === "" ? "" : Math.max(1, Number(e.target.value)))}
-                    className="w-full p-2.5 bg-gray-50 dark:bg-black/40 border border-gray-200 dark:border-gray-800 rounded-xl text-xs text-gray-900 dark:text-white font-mono focus:outline-none focus:border-orange-500/50 transition"
-                  />
+                <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Intensidad</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { key: "low" as const, label: "Suave", factor: "0.8x" },
+                    { key: "moderate" as const, label: "Moderado", factor: "1.0x" },
+                    { key: "high" as const, label: "Intenso", factor: "1.25x" },
+                  ].map((lvl) => {
+                    const isSelected = sportIntensity === lvl.key;
+                    return (
+                      <button
+                        key={lvl.key}
+                        type="button"
+                        onClick={() => setSportIntensity(lvl.key)}
+                        className={`p-2 rounded-xl text-center border transition cursor-pointer ${
+                          isSelected
+                            ? "bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-500/20"
+                            : "bg-gray-50 dark:bg-black/30 border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-700"
+                        }`}
+                      >
+                        <span className="block text-xs font-bold leading-tight">{lvl.label}</span>
+                        <span className={`block text-[9px] font-mono ${isSelected ? "text-white/80" : "text-gray-400"}`}>{lvl.factor}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Estimation Preview */}
-              {Number(sportDuration) > 0 && (
-                <div className="bg-orange-500/5 border border-orange-500/10 p-3 rounded-xl flex items-center justify-between">
-                  <span className="text-[10px] text-gray-555 dark:text-gray-400 font-bold uppercase">Calorías estimadas quemadas:</span>
-                  <span className="text-xs font-black text-orange-500 font-mono">
-                    -{Math.round(SPORTS_METS[selectedSportKey].met * 0.0175 * userProfile.weight * Number(sportDuration))} kcal
-                  </span>
+              {/* Duration Input & Presets */}
+              <div className="space-y-1.5 text-left">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Duración (minutos)</label>
+                  <span className="text-[10px] text-gray-400 font-mono">{sportDuration ? `${sportDuration} min` : ""}</span>
                 </div>
-              )}
+                <input
+                  type="number"
+                  value={sportDuration}
+                  onChange={(e) => setSportDuration(e.target.value === "" ? "" : Math.max(1, Number(e.target.value)))}
+                  className="w-full p-2.5 bg-gray-50 dark:bg-black/40 border border-gray-200 dark:border-gray-800 rounded-xl text-xs text-gray-900 dark:text-white font-mono focus:outline-none focus:border-orange-500/50 transition"
+                />
+                {/* Quick duration presets */}
+                <div className="flex gap-1.5 pt-1">
+                  {[15, 30, 45, 60, 90].map((mins) => (
+                    <button
+                      key={mins}
+                      type="button"
+                      onClick={() => setSportDuration(mins)}
+                      className={`flex-1 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
+                        sportDuration === mins
+                          ? "bg-orange-500/20 text-orange-500 border-orange-500/40"
+                          : "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10"
+                      }`}
+                    >
+                      {mins}m
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Notes / Context */}
+              <div className="space-y-1.5 text-left">
+                <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Contexto o Notas (Opcional)
+                </label>
+                <textarea
+                  value={sportNotes}
+                  onChange={(e) => setSportNotes(e.target.value)}
+                  placeholder="Ej: Partido de pádel a 3 sets muy reñido, o rodaje suave en bicicleta..."
+                  rows={2}
+                  className="w-full p-2.5 bg-gray-50 dark:bg-black/40 border border-gray-200 dark:border-gray-800 rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none focus:border-orange-500/50 transition placeholder-gray-400 resize-none"
+                />
+              </div>
+
+              {/* Estimation Preview */}
+              {Number(sportDuration) > 0 && (() => {
+                const met = SPORTS_METS[selectedSportKey]?.met || 5;
+                const multiplier = sportIntensity === "high" ? 1.25 : sportIntensity === "low" ? 0.8 : 1.0;
+                const calEst = Math.round(met * multiplier * 0.0175 * userProfile.weight * Number(sportDuration));
+                return (
+                  <div className="bg-orange-500/5 border border-orange-500/15 p-3 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Flame className="h-4 w-4 text-orange-500" />
+                      <span className="text-[10px] text-gray-600 dark:text-gray-300 font-bold uppercase">Gasto calórico estimado:</span>
+                    </div>
+                    <span className="text-xs font-black text-orange-500 font-mono">
+                      ~{calEst} kcal
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
 
-            <div className="p-5 border-t border-gray-100 dark:border-gray-800/60 bg-gray-50 dark:bg-black/20 flex gap-3">
+            <div className="p-4 border-t border-gray-100 dark:border-gray-800/60 bg-gray-50 dark:bg-black/20 flex gap-3">
               <button
                 type="button"
                 onClick={() => setIsSportModalOpen(false)}
-                className="flex-1 py-2 border border-gray-200 dark:border-gray-800 text-gray-550 dark:text-gray-400 text-xs font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer"
+                className="flex-1 py-2.5 border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 text-xs font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer"
               >
                 Cancelar
               </button>
@@ -2776,9 +3048,9 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                 type="button"
                 onClick={handleLogSport}
                 disabled={!sportDuration}
-                className="flex-1 py-2 bg-orange-500 hover:bg-orange-600 text-white disabled:bg-gray-200 dark:disabled:bg-white/5 disabled:text-gray-400 dark:disabled:text-white/30 text-xs font-bold rounded-xl transition cursor-pointer shadow-lg shadow-orange-500/10"
+                className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white disabled:bg-gray-200 dark:disabled:bg-white/5 disabled:text-gray-400 dark:disabled:text-white/30 text-xs font-bold rounded-xl transition cursor-pointer shadow-lg shadow-orange-500/20"
               >
-                Guardar registro
+                Guardar actividad
               </button>
             </div>
           </motion.div>
@@ -3018,6 +3290,90 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                   )}
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 4. Workout Completed Celebration Modal */}
+      <AnimatePresence>
+        {completedWorkoutSummary && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="w-full max-w-sm bg-white dark:bg-[#0c0d14] border border-gray-200 dark:border-gray-800 rounded-3xl shadow-2xl overflow-hidden text-center p-6 text-gray-900 dark:text-white"
+            >
+              {/* Badge Icon */}
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                <Award className="h-8 w-8 text-white animate-bounce" />
+              </div>
+
+              <span className="text-[10px] font-mono font-bold text-emerald-500 uppercase tracking-widest block mb-1">
+                ¡Objetivo Cumplido!
+              </span>
+              <h3 className="text-lg font-black tracking-tight mb-1 text-gray-900 dark:text-white">
+                ¡Entrenamiento Finalizado!
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-5">
+                {completedWorkoutSummary.name}
+              </p>
+
+              {/* Stats Cards */}
+              <div className="grid grid-cols-3 gap-2.5 mb-5">
+                <div className="bg-gray-50 dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800/80 rounded-2xl p-3">
+                  <div className="flex items-center justify-center text-blue-500 mb-1">
+                    <Clock className="h-4 w-4" />
+                  </div>
+                  <span className="block text-sm font-black font-mono text-gray-900 dark:text-white">
+                    {completedWorkoutSummary.durationMinutes}m
+                  </span>
+                  <span className="block text-[9px] font-bold text-gray-400 uppercase">
+                    Tiempo
+                  </span>
+                </div>
+
+                <div className="bg-gray-50 dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800/80 rounded-2xl p-3">
+                  <div className="flex items-center justify-center text-orange-500 mb-1">
+                    <Flame className="h-4 w-4" />
+                  </div>
+                  <span className="block text-sm font-black font-mono text-orange-500">
+                    ~{completedWorkoutSummary.totalCalories}
+                  </span>
+                  <span className="block text-[9px] font-bold text-gray-400 uppercase">
+                    Kcal
+                  </span>
+                </div>
+
+                <div className="bg-gray-50 dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800/80 rounded-2xl p-3">
+                  <div className="flex items-center justify-center text-emerald-500 mb-1">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </div>
+                  <span className="block text-sm font-black font-mono text-emerald-500">
+                    {completedWorkoutSummary.completedSetsCount}
+                  </span>
+                  <span className="block text-[9px] font-bold text-gray-400 uppercase">
+                    Series
+                  </span>
+                </div>
+              </div>
+
+              {/* Motivational note */}
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3 mb-5 text-left flex items-start gap-2.5">
+                <Sparkles className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-300 font-medium leading-relaxed">
+                  ¡Gran trabajo manteniendo la constancia! Cada sesión suma para alcanzar tu mejor versión física.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setCompletedWorkoutSummary(null)}
+                className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-xs font-black transition cursor-pointer shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-1.5"
+              >
+                <span>¡Genial, a descansar!</span>
+              </button>
             </motion.div>
           </div>
         )}

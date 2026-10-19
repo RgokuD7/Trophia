@@ -34,10 +34,12 @@ export const SPORTS_METS: Record<string, { label: string; met: number; emoji: st
   swimming: { label: "Natación", met: 7.0, emoji: "🏊" },
   running: { label: "Running / Carrera", met: 9.0, emoji: "🏃" },
   cycling: { label: "Ciclismo / Spinning", met: 7.5, emoji: "🚴" },
-  tennis: { label: "Tenis / Pádel", met: 7.3, emoji: "🎾" },
+  padel: { label: "Pádel", met: 7.5, emoji: "🎾" },
+  tennis: { label: "Tenis", met: 7.3, emoji: "🎾" },
   basketball: { label: "Baloncesto", met: 8.0, emoji: "🏀" },
   martial_arts: { label: "Artes Marciales", met: 10.0, emoji: "🥋" },
   crossfit: { label: "Crossfit / HIIT", met: 9.0, emoji: "🥵" },
+  hiking: { label: "Senderismo / Trekking", met: 6.5, emoji: "🥾" },
   yoga: { label: "Yoga / Pilates", met: 3.0, emoji: "🧘" },
   walking: { label: "Caminata Rápida", met: 4.0, emoji: "🚶" },
   other: { label: "Otro deporte / actividad", met: 6.0, emoji: "⚡" }

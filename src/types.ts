@@ -163,6 +163,8 @@ export interface WorkoutSession {
   cooldown: string[]; // cool-down stretches
   completed: boolean;
   durationMinutes: number;
+  startTime?: string; // ISO timestamp when user clicked Iniciar
+  endTime?: string;   // ISO timestamp when workout was completed
 }
 
 export type RoutineDayKey = 
@@ -232,6 +234,9 @@ export interface LoggedSport {
   durationMinutes: number;
   caloriesBurned: number;
   date: string; // YYYY-MM-DD
+  sportKey?: string;
+  intensity?: "low" | "moderate" | "high";
+  notes?: string;
 }
 
 export interface CustomFood {
