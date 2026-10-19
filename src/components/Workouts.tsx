@@ -2,25 +2,50 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Dumbbell, Calendar, RefreshCw, Check, Play, Square, Pause, Flame, Info, ChevronRight, 
-  Sparkles, Timer, RotateCcw, Award, Trash, Star, Activity, X, Video, SlidersHorizontal, 
-  Eye, HelpCircle, CheckCircle2, ShieldAlert
+  Sparkles, Timer, RotateCcw, Award, Trash, Star, Activity, X, SlidersHorizontal, 
+  Eye, HelpCircle, CheckCircle2, ShieldAlert, Plus, BookOpen, Search, Copy, 
+  ClipboardList, Clock, Layers, Edit3, ArrowRight, Zap, ChevronDown
 } from "lucide-react";
-import { WorkoutSession, WorkoutExercise, MuscleRecovery, UserProfile, TrainingEnvironment, ExperienceLevel } from "../types";
-import { generateRoutineByIA, suggestAlternativeExercisesByIA } from "../services/geminiService";
-import { getExerciseGuide, MuscleWikiExercise } from "../services/muscleWikiService";
+import { 
+  WorkoutSession, WorkoutExercise, MuscleRecovery, UserProfile, 
+  TrainingEnvironment, ExperienceLevel, CustomExercise, ExerciseTrackingType 
+} from "../types";
+import { 
+  generateRoutineByIA, suggestAlternativeExercisesByIA, 
+  analyzeExerciseByIA, parseExerciseBatchByIA 
+} from "../services/geminiService";
+import { 
+  DEFAULT_EXERCISES, findExerciseInCatalog, resolveOrAnalyzeExercise, 
+  createWorkoutExerciseFromData, normalizeExerciseName 
+} from "../services/exerciseLibrary";
+import { 
+  getCustomExercises, addCustomExercise, deleteCustomExercise, updateCustomExercise 
+} from "../services/dbService";
 import { SPORTS_METS, getLocalDateString } from "../utils/fitnessUtils";
+
+export interface ExerciseGuideViewData {
+  name: string;
+  trackingType: ExerciseTrackingType;
+  primaryMuscles: string[];
+  secondaryMuscles?: string[];
+  techniqueTips?: string;
+  equipmentNeeded?: string;
+  caloriesBurnedPerSet?: number;
+  source: "db_cache" | "gemini_ai";
+}
 
 interface WorkoutsProps {
   apiKey?: string;
   userProfile: UserProfile;
+  userId?: string;
   workoutHistory: WorkoutSession[];
   onAddWorkout: (workout: WorkoutSession) => void;
   onClearWorkouts: () => void;
   onUpdateProfile: (profile: UserProfile) => void;
 }
 
-export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWorkout, onClearWorkouts, onUpdateProfile }: WorkoutsProps) {
-  const [activeTab, setActiveTab] = useState<"routine" | "recovery" | "timer">("routine");
+export default function Workouts({ apiKey, userProfile, userId, workoutHistory, onAddWorkout, onClearWorkouts, onUpdateProfile }: WorkoutsProps) {
+  const [activeTab, setActiveTab] = useState<"routine" | "recovery" | "timer" | "library">("routine");
   const [selectedDay, setSelectedDay] = useState<string>(getLocalDateString());
   const [activeSession, setActiveSession] = useState<WorkoutSession | null>(null);
 
@@ -73,11 +98,41 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
   const [alternativesList, setAlternativesList] = useState<any[]>([]);
   const [loadingAlternatives, setLoadingAlternatives] = useState(false);
 
-  // MuscleWiki Technique & Video Guide State
+  // Custom Exercises DB Cache State
+  const [customExercises, setCustomExercises] = useState<CustomExercise[]>([]);
+
+  // Load custom exercises on mount
+  useEffect(() => {
+    if (userId) {
+      getCustomExercises(userId)
+        .then(setCustomExercises)
+        .catch((err) => console.error("Error loading custom exercises:", err));
+    }
+  }, [userId]);
+
+  // Exercise Addition / Batch Import States
+  const [isAddExerciseOpen, setIsAddExerciseOpen] = useState(false);
+  const [newExerciseName, setNewExerciseName] = useState("");
+  const [newExerciseSets, setNewExerciseSets] = useState(3);
+  const [newExerciseReps, setNewExerciseReps] = useState(10);
+  const [newExerciseWeight, setNewExerciseWeight] = useState(0);
+  const [newExerciseTrackingType, setNewExerciseTrackingType] = useState<ExerciseTrackingType>("reps");
+  const [isAnalyzingExercise, setIsAnalyzingExercise] = useState(false);
+  const [exerciseSearchSuggestions, setExerciseSearchSuggestions] = useState<(CustomExercise | Omit<CustomExercise, "id" | "createdAt">)[]>([]);
+
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [batchInputText, setBatchInputText] = useState("");
+  const [isProcessingBatch, setIsProcessingBatch] = useState(false);
+  const [batchProcessingStatus, setBatchProcessingStatus] = useState<string | null>(null);
+
+  // Library tab filter states
+  const [librarySearchQuery, setLibrarySearchQuery] = useState("");
+  const [libraryMuscleFilter, setLibraryMuscleFilter] = useState("all");
+
+  // Biomechanical Technique Guide State (Gemini + Local DB, zero MuscleWiki dependency)
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
-  const [selectedGuideExercise, setSelectedGuideExercise] = useState<MuscleWikiExercise | null>(null);
+  const [selectedGuideExercise, setSelectedGuideExercise] = useState<ExerciseGuideViewData | null>(null);
   const [isLoadingGuide, setIsLoadingGuide] = useState(false);
-  const [videoAngle, setVideoAngle] = useState<"front" | "side">("front");
 
   // Initial / Reconfiguration Workout Questionnaire State
   const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
@@ -96,20 +151,116 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
     }
   }, []);
 
-  const handleOpenTechniqueGuide = async (exerciseName: string) => {
+  // Update suggestions whenever user types in new exercise input
+  useEffect(() => {
+    const q = newExerciseName.trim().toLowerCase();
+    if (!q) {
+      setExerciseSearchSuggestions([]);
+      return;
+    }
+    const matches: (CustomExercise | Omit<CustomExercise, "id" | "createdAt">)[] = [];
+    // User custom exercises first
+    for (const ex of customExercises) {
+      const norm = ex.normalizedName || normalizeExerciseName(ex.name);
+      if (norm.includes(q) || ex.name.toLowerCase().includes(q)) {
+        matches.push(ex);
+      }
+    }
+    // Baseline defaults
+    for (const def of DEFAULT_EXERCISES) {
+      if (!matches.some(m => normalizeExerciseName(m.name) === normalizeExerciseName(def.name))) {
+        const norm = def.normalizedName || normalizeExerciseName(def.name);
+        if (norm.includes(q) || def.name.toLowerCase().includes(q)) {
+          matches.push(def);
+        }
+      }
+    }
+    setExerciseSearchSuggestions(matches.slice(0, 6));
+  }, [newExerciseName, customExercises]);
+
+  const handleOpenTechniqueGuide = async (exercise: WorkoutExercise | string) => {
     setIsGuideModalOpen(true);
     setIsLoadingGuide(true);
     setSelectedGuideExercise(null);
-    setVideoAngle("front");
 
-    try {
-      const guide = await getExerciseGuide(exerciseName, {
-        apiKey: userProfile.muscleWikiApiKey,
-        gender: userProfile.sex || "male"
+    const exerciseName = typeof exercise === "string" ? exercise : exercise.name;
+    const existingTips = typeof exercise === "object" ? exercise.techniqueTips : undefined;
+    const existingPrimary = typeof exercise === "object" ? exercise.primaryMuscles : undefined;
+
+    // 1. If exercise in session already has tips and muscles, load in 0ms!
+    if (existingTips && existingPrimary && existingPrimary.length > 0) {
+      setSelectedGuideExercise({
+        name: exerciseName,
+        trackingType: (typeof exercise === "object" && exercise.trackingType) || "reps",
+        primaryMuscles: existingPrimary,
+        secondaryMuscles: typeof exercise === "object" ? exercise.secondaryMuscles : [],
+        techniqueTips: existingTips,
+        equipmentNeeded: typeof exercise === "object" ? exercise.equipmentNeeded : undefined,
+        caloriesBurnedPerSet: typeof exercise === "object" ? exercise.caloriesBurnedPerSet : 5,
+        source: "db_cache",
       });
-      setSelectedGuideExercise(guide);
+      setIsLoadingGuide(false);
+      return;
+    }
+
+    // 2. Check local DB / baseline catalog
+    const cached = findExerciseInCatalog(exerciseName, customExercises);
+    if (cached) {
+      setSelectedGuideExercise({
+        name: cached.name,
+        trackingType: cached.trackingType || "reps",
+        primaryMuscles: cached.primaryMuscles || [],
+        secondaryMuscles: cached.secondaryMuscles || [],
+        techniqueTips: cached.techniqueTips || "Ejecuta el ejercicio con postura controlada y rango completo.",
+        equipmentNeeded: cached.equipmentNeeded,
+        caloriesBurnedPerSet: cached.caloriesBurnedPerSet || 5,
+        source: "db_cache",
+      });
+      setIsLoadingGuide(false);
+      return;
+    }
+
+    // 3. Fallback: Analyze with Gemini AI and auto-save to Firestore DB
+    try {
+      const res = await analyzeExerciseByIA(apiKey || "", exerciseName, userProfile.equipment);
+      const viewData: ExerciseGuideViewData = {
+        name: res.name || exerciseName,
+        trackingType: res.trackingType || "reps",
+        primaryMuscles: res.primaryMuscles || [],
+        secondaryMuscles: res.secondaryMuscles || [],
+        techniqueTips: res.techniqueTips || "Mantén la postura y no fuerces las articulaciones.",
+        equipmentNeeded: res.equipmentNeeded,
+        caloriesBurnedPerSet: res.caloriesBurnedPerSet || 5,
+        source: "gemini_ai",
+      };
+      setSelectedGuideExercise(viewData);
+
+      if (userId) {
+        addCustomExercise(userId, {
+          name: res.name || exerciseName,
+          trackingType: res.trackingType || "reps",
+          defaultSets: res.defaultSets || 3,
+          defaultReps: res.defaultReps || 10,
+          defaultWeight: res.defaultWeight || 0,
+          primaryMuscles: res.primaryMuscles || [],
+          secondaryMuscles: res.secondaryMuscles || [],
+          techniqueTips: res.techniqueTips,
+          caloriesBurnedPerSet: res.caloriesBurnedPerSet || 5,
+          equipmentNeeded: res.equipmentNeeded,
+          createdAt: new Date().toISOString(),
+        }).then((saved) => {
+          setCustomExercises((prev) => [saved, ...prev]);
+        }).catch(console.error);
+      }
     } catch (err) {
-      console.error("Error loading exercise technique guide:", err);
+      console.error("Error analyzing exercise technique with AI:", err);
+      setSelectedGuideExercise({
+        name: exerciseName,
+        trackingType: "reps",
+        primaryMuscles: ["Músculo principal"],
+        techniqueTips: "Mantén una ejecución controlada y cuida la alineación de la espalda durante todo el movimiento.",
+        source: "db_cache",
+      });
     } finally {
       setIsLoadingGuide(false);
     }
@@ -508,6 +659,302 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
     setActiveSession(updatedSession);
   };
 
+  // Toggle exercise tracking type ("reps" vs "time")
+  const handleToggleTrackingType = (exId: string) => {
+    if (!activeSession) return;
+    const updatedExercises = activeSession.exercises.map(ex => {
+      if (ex.id === exId) {
+        const nextType: ExerciseTrackingType = ex.trackingType === "time" ? "reps" : "time";
+        const newReps = nextType === "time" ? 45 : 10;
+        return {
+          ...ex,
+          trackingType: nextType,
+          reps: newReps,
+          completedSets: ex.completedSets.map(s => ({
+            ...s,
+            reps: newReps
+          }))
+        };
+      }
+      return ex;
+    });
+    const updatedSession = { ...activeSession, exercises: updatedExercises };
+    onAddWorkout(updatedSession);
+    setActiveSession(updatedSession);
+  };
+
+  // Add a new set to an exercise
+  const handleAddSet = (exId: string) => {
+    if (!activeSession) return;
+    const updatedExercises = activeSession.exercises.map(ex => {
+      if (ex.id === exId) {
+        const lastSet = ex.completedSets[ex.completedSets.length - 1];
+        const newSetIndex = ex.completedSets.length;
+        const newSet = {
+          setIndex: newSetIndex,
+          completed: false,
+          reps: lastSet ? lastSet.reps : ex.reps,
+          weight: lastSet ? lastSet.weight : ex.weight,
+        };
+        const updatedCompletedSets = [...ex.completedSets, newSet];
+        return {
+          ...ex,
+          sets: updatedCompletedSets.length,
+          completedSets: updatedCompletedSets,
+        };
+      }
+      return ex;
+    });
+    const updatedSession = { ...activeSession, exercises: updatedExercises };
+    onAddWorkout(updatedSession);
+    setActiveSession(updatedSession);
+  };
+
+  // Remove the last set from an exercise
+  const handleRemoveSet = (exId: string) => {
+    if (!activeSession) return;
+    const updatedExercises = activeSession.exercises.map(ex => {
+      if (ex.id === exId && ex.completedSets.length > 1) {
+        const updatedCompletedSets = ex.completedSets.slice(0, -1);
+        return {
+          ...ex,
+          sets: updatedCompletedSets.length,
+          completedSets: updatedCompletedSets,
+        };
+      }
+      return ex;
+    });
+    const updatedSession = { ...activeSession, exercises: updatedExercises };
+    onAddWorkout(updatedSession);
+    setActiveSession(updatedSession);
+  };
+
+  // Remove an exercise from the active session
+  const handleRemoveExercise = (exId: string) => {
+    if (!activeSession) return;
+    const updatedExercises = activeSession.exercises.filter(ex => ex.id !== exId);
+    const updatedSession = { ...activeSession, exercises: updatedExercises };
+    onAddWorkout(updatedSession);
+    setActiveSession(updatedSession);
+  };
+
+  // Start an empty session if user wants to build from scratch or paste a list
+  const handleStartManualSession = () => {
+    const newSession: WorkoutSession = {
+      id: Math.random().toString(36).substr(2, 9),
+      date: selectedDay,
+      name: `Entrenamiento Personalizado`,
+      warmup: ["Movilidad articular general - 5 min"],
+      cooldown: ["Estiramientos generales - 5 min"],
+      exercises: [],
+      completed: false,
+      durationMinutes: 45,
+    };
+    onAddWorkout(newSession);
+    setActiveSession(newSession);
+    setIsAddExerciseOpen(true);
+  };
+
+  // Add exercise to active session (checks DB / catalog first, falls back to AI, saves to DB)
+  const handleAddExerciseToSession = async (
+    nameInput: string,
+    overrideType?: ExerciseTrackingType,
+    overrideSets?: number,
+    overrideReps?: number,
+    overrideWeight?: number
+  ) => {
+    const rawName = nameInput.trim();
+    if (!rawName) return;
+
+    setIsAnalyzingExercise(true);
+    try {
+      let session = activeSession;
+      if (!session) {
+        session = {
+          id: Math.random().toString(36).substr(2, 9),
+          date: selectedDay,
+          name: `Entrenamiento Personalizado`,
+          warmup: ["Movilidad articular general - 5 min"],
+          cooldown: ["Estiramientos generales - 5 min"],
+          exercises: [],
+          completed: false,
+          durationMinutes: 45,
+        };
+      }
+
+      // Check cache / catalog first
+      const cached = findExerciseInCatalog(rawName, customExercises);
+      let newWorkoutEx: WorkoutExercise;
+
+      if (cached) {
+        newWorkoutEx = createWorkoutExerciseFromData(
+          cached,
+          overrideSets,
+          overrideReps,
+          overrideWeight
+        );
+        if (overrideType) newWorkoutEx.trackingType = overrideType;
+      } else {
+        // Not in DB: analyze with Gemini AI
+        const aiData = await analyzeExerciseByIA(apiKey || "", rawName, userProfile.equipment);
+        newWorkoutEx = createWorkoutExerciseFromData(
+          aiData,
+          overrideSets,
+          overrideReps,
+          overrideWeight
+        );
+        if (overrideType) newWorkoutEx.trackingType = overrideType;
+
+        // Save newly discovered exercise to Firestore DB so future calls are instant
+        if (userId) {
+          try {
+            const saved = await addCustomExercise(userId, {
+              name: aiData.name || rawName,
+              trackingType: aiData.trackingType || "reps",
+              defaultSets: aiData.defaultSets || 3,
+              defaultReps: aiData.defaultReps || 10,
+              defaultWeight: aiData.defaultWeight || 0,
+              primaryMuscles: aiData.primaryMuscles || [],
+              secondaryMuscles: aiData.secondaryMuscles || [],
+              techniqueTips: aiData.techniqueTips,
+              caloriesBurnedPerSet: aiData.caloriesBurnedPerSet || 5,
+              equipmentNeeded: aiData.equipmentNeeded,
+              createdAt: new Date().toISOString(),
+            });
+            setCustomExercises(prev => [saved, ...prev]);
+          } catch (e) {
+            console.error("Error saving custom exercise to DB:", e);
+          }
+        }
+      }
+
+      const updatedSession: WorkoutSession = {
+        ...session,
+        exercises: [...session.exercises, newWorkoutEx],
+      };
+      onAddWorkout(updatedSession);
+      setActiveSession(updatedSession);
+
+      // Reset form
+      setNewExerciseName("");
+      setNewExerciseSets(3);
+      setNewExerciseReps(10);
+      setNewExerciseWeight(0);
+      setIsAddExerciseOpen(false);
+    } catch (err: any) {
+      console.error("Error adding exercise:", err);
+      alert("No se pudo analizar el ejercicio: " + (err?.message || "Inténtalo de nuevo"));
+    } finally {
+      setIsAnalyzingExercise(false);
+    }
+  };
+
+  // Batch import exercises from multi-line text
+  const handleImportBatch = async (rawText: string) => {
+    const lines = rawText
+      .split("\n")
+      .map(l => l.trim())
+      .filter(l => l.length > 0 && !l.startsWith("#"));
+
+    if (lines.length === 0) return;
+
+    setIsProcessingBatch(true);
+    setBatchProcessingStatus("Revisando biblioteca y base de datos...");
+
+    try {
+      let session = activeSession;
+      if (!session) {
+        session = {
+          id: Math.random().toString(36).substr(2, 9),
+          date: selectedDay,
+          name: `Entrenamiento Personalizado`,
+          warmup: ["Movilidad articular general - 5 min"],
+          cooldown: ["Estiramientos generales - 5 min"],
+          exercises: [],
+          completed: false,
+          durationMinutes: 45,
+        };
+      }
+
+      const resolvedExercises: WorkoutExercise[] = [];
+      const linesNeedingAI: string[] = [];
+
+      // Check each line against DB / catalog first
+      for (const line of lines) {
+        const cached = findExerciseInCatalog(line, customExercises);
+        if (cached) {
+          resolvedExercises.push(createWorkoutExerciseFromData(cached));
+        } else {
+          linesNeedingAI.push(line);
+        }
+      }
+
+      // If any line is unknown, call Gemini batch parser
+      if (linesNeedingAI.length > 0) {
+        setBatchProcessingStatus(`Analizando ${linesNeedingAI.length} ejercicio(s) con Inteligencia Artificial...`);
+        const aiParsed = await parseExerciseBatchByIA(
+          apiKey || "",
+          linesNeedingAI.join("\n"),
+          userProfile.equipment
+        );
+
+        for (const item of aiParsed) {
+          const workoutEx = createWorkoutExerciseFromData(item);
+          resolvedExercises.push(workoutEx);
+
+          // Save to Firestore DB
+          if (userId) {
+            try {
+              const saved = await addCustomExercise(userId, {
+                name: item.name,
+                trackingType: item.trackingType || "reps",
+                defaultSets: item.defaultSets || 3,
+                defaultReps: item.defaultReps || 10,
+                defaultWeight: item.defaultWeight || 0,
+                primaryMuscles: item.primaryMuscles || [],
+                secondaryMuscles: item.secondaryMuscles || [],
+                techniqueTips: item.techniqueTips,
+                caloriesBurnedPerSet: item.caloriesBurnedPerSet || 5,
+                equipmentNeeded: item.equipmentNeeded,
+                createdAt: new Date().toISOString(),
+              });
+              setCustomExercises(prev => [saved, ...prev]);
+            } catch (e) {
+              console.error("Error saving batched exercise to DB:", e);
+            }
+          }
+        }
+      }
+
+      const updatedSession: WorkoutSession = {
+        ...session,
+        exercises: [...session.exercises, ...resolvedExercises],
+      };
+      onAddWorkout(updatedSession);
+      setActiveSession(updatedSession);
+
+      setBatchInputText("");
+      setIsBatchModalOpen(false);
+    } catch (err: any) {
+      console.error("Error importing batch exercises:", err);
+      alert("Error al procesar la lista: " + (err?.message || "Inténtalo de nuevo"));
+    } finally {
+      setIsProcessingBatch(false);
+      setBatchProcessingStatus(null);
+    }
+  };
+
+  // Delete custom exercise from Firestore DB
+  const handleDeleteCustomExercise = async (exerciseId: string) => {
+    if (!userId) return;
+    try {
+      await deleteCustomExercise(userId, exerciseId);
+      setCustomExercises(prev => prev.filter(e => e.id !== exerciseId));
+    } catch (err) {
+      console.error("Error deleting custom exercise:", err);
+    }
+  };
+
   const handleMarkSessionComplete = () => {
     if (!activeSession) return;
 
@@ -732,6 +1179,15 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
             <Timer className="h-3.5 w-3.5" />
             Temporizadores
           </button>
+          <button
+            onClick={() => setActiveTab("library")}
+            className={`pb-2.5 text-xs font-bold border-b-2 transition flex items-center gap-1 ${
+              activeTab === "library" ? "border-emerald-500 text-gray-900 dark:text-white" : "border-transparent text-gray-500 dark:text-gray-400"
+            }`}
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            Biblioteca ({customExercises.length + DEFAULT_EXERCISES.length})
+          </button>
         </div>
       </div>
 
@@ -933,6 +1389,26 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                       </>
                     )}
                   </button>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      onClick={handleStartManualSession}
+                      className="py-2.5 px-3 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-800 dark:text-gray-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border border-gray-200 dark:border-white/10"
+                    >
+                      <Plus className="h-3.5 w-3.5 text-emerald-400" />
+                      <span>Crear Sesión Propia</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleStartManualSession();
+                        setIsBatchModalOpen(true);
+                      }}
+                      className="py-2.5 px-3 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border border-blue-500/20"
+                    >
+                      <ClipboardList className="h-3.5 w-3.5" />
+                      <span>Pegar Lista con IA</span>
+                    </button>
+                  </div>
                   
                   {generationError && (() => {
                     const errorStr = String(generationError);
@@ -1027,6 +1503,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                   
                   {activeSession.exercises.map((ex) => {
                     const allCompleted = ex.completedSets.every(s => s.completed);
+                    const isTimeTracking = ex.trackingType === "time";
 
                     return (
                       <div 
@@ -1049,15 +1526,32 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                               <Star className={`h-4 w-4 ${(userProfile.favoriteExercises || []).includes(ex.name) ? "fill-current" : ""}`} />
                             </button>
                             <div>
-                              <h4 className="text-xs font-black text-gray-900 dark:text-white flex items-center gap-1.5 flex-wrap">
-                                <span>{ex.name}</span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <h4 className="text-xs font-black text-gray-900 dark:text-white">
+                                  {ex.name}
+                                </h4>
                                 {(userProfile.favoriteExercises || []).includes(ex.name) && (
                                   <span className="text-[9px] bg-amber-500/10 text-amber-500 font-black px-1.5 py-0.5 rounded-md border border-amber-500/20 font-mono">FAV</span>
                                 )}
-                              </h4>
-                              <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase mt-0.5 block">
-                                {ex.sets} series × {ex.reps} reps
-                              </span>
+                                {ex.primaryMuscles && ex.primaryMuscles.length > 0 && (
+                                  <span className="text-[9px] bg-emerald-500/10 text-emerald-500 font-bold px-1.5 py-0.5 rounded-md border border-emerald-500/20 font-mono">
+                                    🎯 {ex.primaryMuscles[0]}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase">
+                                  {ex.sets} series × {ex.reps} {isTimeTracking ? "seg" : "reps"}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleTrackingType(ex.id)}
+                                  className="text-[9px] font-bold text-gray-500 hover:text-emerald-400 bg-gray-100 dark:bg-white/5 hover:bg-emerald-500/10 px-1.5 py-0.5 rounded border border-gray-200 dark:border-white/10 transition cursor-pointer"
+                                  title="Alternar entre Repeticiones y Segundos de duración"
+                                >
+                                  {isTimeTracking ? "⏱️ Tiempo" : "🔄 Reps"}
+                                </button>
+                              </div>
                             </div>
                           </div>
                           
@@ -1072,11 +1566,11 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                             </div>
                             <div className="flex items-center gap-1">
                               <button
-                                onClick={() => handleOpenTechniqueGuide(ex.name)}
+                                onClick={() => handleOpenTechniqueGuide(ex)}
                                 className="text-[9px] font-black text-blue-500 hover:text-blue-600 bg-blue-500/10 hover:bg-blue-500/20 px-2 py-1 rounded-lg border border-blue-500/20 flex items-center gap-1 transition cursor-pointer"
-                                title="Ver demostración y técnica MuscleWiki"
+                                title="Ver biomecánica y técnica del ejercicio"
                               >
-                                <Video className="h-2.5 w-2.5" />
+                                <Sparkles className="h-2.5 w-2.5" />
                                 <span>Técnica</span>
                               </button>
                               <button
@@ -1090,7 +1584,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                           </div>
                         </div>
                           
-                          {/* Series table for Progressive Overload adjustments */}
+                        {/* Series table for Progressive Overload adjustments */}
                         <div className="space-y-2 border-t border-gray-250 dark:border-gray-800/40 pt-2.5">
                           {ex.completedSets.map((set) => (
                             <div 
@@ -1100,15 +1594,15 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                               <div className="flex items-center gap-2">
                                 <span className="font-mono text-[10px] text-gray-450 dark:text-gray-500 font-bold">SET {set.setIndex + 1}</span>
                                 
-                                {/* Edit Reps */}
+                                {/* Edit Reps / Seconds */}
                                 <div className="flex items-center gap-1 bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-lg px-2 py-0.5">
                                   <input
                                     type="number"
                                     value={set.reps}
                                     onChange={(e) => handleUpdateSetWeightOrReps(ex.id, set.setIndex, set.weight, Math.max(1, Number(e.target.value) || set.reps))}
-                                    className="w-8 text-center text-xs bg-transparent text-gray-900 dark:text-white focus:outline-none"
+                                    className="w-10 text-center text-xs bg-transparent text-gray-900 dark:text-white focus:outline-none"
                                   />
-                                  <span className="text-[9px] text-gray-400 dark:text-gray-500">rep</span>
+                                  <span className="text-[9px] text-gray-400 dark:text-gray-500">{isTimeTracking ? "seg" : "rep"}</span>
                                 </div>
 
                                 {/* Edit Weight */}
@@ -1117,7 +1611,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                                     type="number"
                                     value={set.weight}
                                     onChange={(e) => handleUpdateSetWeightOrReps(ex.id, set.setIndex, Math.max(0, Number(e.target.value) || 0), set.reps)}
-                                    className="w-8 text-center text-xs bg-transparent text-gray-900 dark:text-white focus:outline-none"
+                                    className="w-10 text-center text-xs bg-transparent text-gray-900 dark:text-white focus:outline-none"
                                   />
                                   <span className="text-[9px] text-gray-400 dark:text-gray-500">kg</span>
                                 </div>
@@ -1136,9 +1630,207 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                             </div>
                           ))}
                         </div>
+
+                        {/* Exercise Controls Row: Add Set, Remove Set, Delete Exercise */}
+                        <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800/40 text-[10px]">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleAddSet(ex.id)}
+                              className="px-2 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 font-bold rounded-lg transition flex items-center gap-1 cursor-pointer"
+                            >
+                              <Plus className="h-3 w-3 text-emerald-400" />
+                              <span>Serie</span>
+                            </button>
+                            {ex.completedSets.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSet(ex.id)}
+                                className="px-2 py-1 bg-gray-100 hover:bg-rose-500/10 dark:bg-white/5 dark:hover:bg-rose-500/20 text-gray-500 hover:text-rose-400 font-bold rounded-lg transition cursor-pointer"
+                                title="Eliminar última serie"
+                              >
+                                - Serie
+                              </button>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveExercise(ex.id)}
+                            className="p-1 text-gray-400 hover:text-rose-400 transition cursor-pointer"
+                            title="Eliminar este ejercicio de la sesión"
+                          >
+                            <Trash className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
+
+                  {/* Add Exercise & Batch Importer Bar */}
+                  <div className="pt-1 space-y-3">
+                    {!isAddExerciseOpen ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsAddExerciseOpen(true)}
+                          className="py-2.5 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-bold border border-emerald-500/20 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Plus className="h-4 w-4" />
+                          <span>+ Agregar Ejercicio</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsBatchModalOpen(true)}
+                          className="py-2.5 px-3 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold border border-blue-500/20 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <ClipboardList className="h-4 w-4" />
+                          <span>📋 Pegar Lista con IA</span>
+                        </button>
+                      </div>
+                    ) : (
+                      /* Inline Add Exercise Card with Autocomplete & Defaults */
+                      <div className="bg-white dark:bg-[#161824] p-4 rounded-2xl border border-emerald-500/30 space-y-3 shadow-lg text-left">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                            <Sparkles className="h-3.5 w-3.5" />
+                            Nuevo Ejercicio (Biblioteca o IA)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsAddExerciseOpen(false);
+                              setExerciseSearchSuggestions([]);
+                            }}
+                            className="text-gray-400 hover:text-gray-200 cursor-pointer"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+
+                        {/* Search / Name Input */}
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={newExerciseName}
+                            onChange={(e) => setNewExerciseName(e.target.value)}
+                            placeholder="Ej: Press militar con mancuernas, Sentadilla búlgara, Plancha..."
+                            className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-xl px-3 py-2 text-xs text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:border-emerald-500"
+                            autoFocus
+                          />
+
+                          {/* Autocomplete Suggestions Dropdown */}
+                          {exerciseSearchSuggestions.length > 0 && (
+                            <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-[#12131d] border border-gray-200 dark:border-gray-800 rounded-xl shadow-xl z-20 overflow-hidden max-h-48 overflow-y-auto">
+                              {exerciseSearchSuggestions.map((sug, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => {
+                                    setNewExerciseName(sug.name);
+                                    setNewExerciseSets(sug.defaultSets || 3);
+                                    setNewExerciseReps(sug.defaultReps || (sug.trackingType === "time" ? 45 : 10));
+                                    setNewExerciseWeight(sug.defaultWeight || 0);
+                                    setNewExerciseTrackingType(sug.trackingType || "reps");
+                                    setExerciseSearchSuggestions([]);
+                                  }}
+                                  className="w-full p-2.5 text-left hover:bg-gray-50 dark:hover:bg-white/5 border-b border-gray-100 dark:border-gray-800/40 flex items-center justify-between cursor-pointer"
+                                >
+                                  <div>
+                                    <span className="block text-xs font-bold text-gray-800 dark:text-gray-200">{sug.name}</span>
+                                    <span className="block text-[9px] text-gray-400">
+                                      {sug.primaryMuscles?.join(", ") || "General"} · {sug.trackingType === "time" ? "⏱️ Tiempo" : "🔄 Reps"}
+                                    </span>
+                                  </div>
+                                  <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                    {"createdAt" in sug ? "Tu BBDD" : "Base"}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Sets, Reps/Time, Weight Controls */}
+                        <div className="grid grid-cols-4 gap-2">
+                          <div>
+                            <label className="block text-[9px] font-bold text-gray-400 mb-1">Tipo</label>
+                            <select
+                              value={newExerciseTrackingType}
+                              onChange={(e) => {
+                                const t = e.target.value as ExerciseTrackingType;
+                                setNewExerciseTrackingType(t);
+                                if (t === "time" && newExerciseReps === 10) setNewExerciseReps(45);
+                                if (t === "reps" && newExerciseReps === 45) setNewExerciseReps(10);
+                              }}
+                              className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-lg px-2 py-1 text-xs text-gray-900 dark:text-white"
+                            >
+                              <option value="reps">Reps</option>
+                              <option value="time">Tiempo</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-gray-400 mb-1">Series</label>
+                            <input
+                              type="number"
+                              min={1}
+                              max={10}
+                              value={newExerciseSets}
+                              onChange={(e) => setNewExerciseSets(Math.max(1, Number(e.target.value) || 1))}
+                              className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-lg px-2 py-1 text-xs text-center text-gray-900 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-gray-400 mb-1">
+                              {newExerciseTrackingType === "time" ? "Segundos" : "Reps"}
+                            </label>
+                            <input
+                              type="number"
+                              min={1}
+                              value={newExerciseReps}
+                              onChange={(e) => setNewExerciseReps(Math.max(1, Number(e.target.value) || 1))}
+                              className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-lg px-2 py-1 text-xs text-center text-gray-900 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-gray-400 mb-1">Peso (kg)</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={newExerciseWeight}
+                              onChange={(e) => setNewExerciseWeight(Math.max(0, Number(e.target.value) || 0))}
+                              className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-lg px-2 py-1 text-xs text-center text-gray-900 dark:text-white"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Add Button */}
+                        <button
+                          type="button"
+                          disabled={!newExerciseName.trim() || isAnalyzingExercise}
+                          onClick={() => handleAddExerciseToSession(
+                            newExerciseName,
+                            newExerciseTrackingType,
+                            newExerciseSets,
+                            newExerciseReps,
+                            newExerciseWeight
+                          )}
+                          className="w-full py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-500/10"
+                        >
+                          {isAnalyzingExercise ? (
+                            <>
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                              <span>Analizando con IA y guardando en BD...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Check className="h-3.5 w-3.5" />
+                              <span>Guardar y Agregar Ejercicio</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Cooldown stretching list */}
@@ -1422,6 +2114,213 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
         </div>
       )}
 
+      {/* 4. Tab Biblioteca de Ejercicios */}
+      {activeTab === "library" && (
+        <div className="px-6 py-5 space-y-4 text-left flex-1 flex flex-col">
+          {/* Header & Stats */}
+          <div className="bg-white dark:bg-[#161824] p-4.5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider block">
+                  Base de Datos & Catálogo Anatómico
+                </span>
+                <h3 className="text-sm font-black text-gray-900 dark:text-white mt-0.5">
+                  Biblioteca de Ejercicios Inteligente
+                </h3>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                  {customExercises.length} ejercicios personalizados en tu cuenta y {DEFAULT_EXERCISES.length} ejercicios base. Cada ejercicio analizado con IA se guarda aquí automáticamente para no consumir más tokens.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("routine");
+                  setIsAddExerciseOpen(true);
+                }}
+                className="self-start sm:self-center px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-500/10 shrink-0"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>+ Nuevo Ejercicio</span>
+              </button>
+            </div>
+
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={librarySearchQuery}
+                onChange={(e) => setLibrarySearchQuery(e.target.value)}
+                placeholder="Buscar por nombre o músculo (ej: pectoral, sentadilla, bíceps)..."
+                className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-xl text-xs text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            {/* Muscle Filter Pills */}
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar pt-1">
+              {[
+                { id: "all", label: "Todos" },
+                { id: "pecho", label: "Pecho" },
+                { id: "espalda", label: "Espalda" },
+                { id: "pierna", label: "Piernas" },
+                { id: "hombro", label: "Hombros" },
+                { id: "biceps", label: "Bíceps" },
+                { id: "triceps", label: "Tríceps" },
+                { id: "core", label: "Core / Abdomen" },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setLibraryMuscleFilter(f.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition shrink-0 cursor-pointer ${
+                    libraryMuscleFilter === f.id
+                      ? "bg-emerald-500 text-white shadow-sm"
+                      : "bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Exercises List */}
+          <div className="space-y-2.5">
+            {(() => {
+              const allCatalog: { item: CustomExercise | Omit<CustomExercise, "id" | "createdAt">; isCustom: boolean }[] = [
+                ...customExercises.map(e => ({ item: e, isCustom: true })),
+                ...DEFAULT_EXERCISES.filter(d => !customExercises.some(c => normalizeExerciseName(c.name) === normalizeExerciseName(d.name))).map(d => ({ item: d, isCustom: false })),
+              ];
+
+              const query = librarySearchQuery.trim().toLowerCase();
+              const filtered = allCatalog.filter(({ item }) => {
+                const normName = normalizeExerciseName(item.name);
+                const normMuscles = [
+                  ...(item.primaryMuscles || []),
+                  ...(item.secondaryMuscles || []),
+                ].map(m => normalizeExerciseName(m)).join(" ");
+
+                const matchesQuery = !query || normName.includes(query) || normMuscles.includes(query) || item.name.toLowerCase().includes(query);
+
+                if (!matchesQuery) return false;
+
+                if (libraryMuscleFilter === "all") return true;
+                return normMuscles.includes(libraryMuscleFilter) || normName.includes(libraryMuscleFilter);
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="py-12 text-center space-y-2 bg-white dark:bg-[#161824] rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
+                    <p className="text-xs text-gray-400 font-bold">No se encontraron ejercicios con ese filtro.</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLibrarySearchQuery("");
+                        setLibraryMuscleFilter("all");
+                      }}
+                      className="text-xs text-emerald-400 font-bold hover:underline"
+                    >
+                      Limpiar filtros
+                    </button>
+                  </div>
+                );
+              }
+
+              return filtered.map(({ item, isCustom }, idx) => {
+                const isTimeTracking = item.trackingType === "time";
+                return (
+                  <div
+                    key={idx}
+                    className="bg-white dark:bg-[#161824] p-3.5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-2 hover:border-emerald-500/30 transition"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="text-xs font-black text-gray-900 dark:text-white">
+                            {item.name}
+                          </h4>
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded font-mono ${
+                              isCustom
+                                ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                                : "bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400"
+                            }`}
+                          >
+                            {isCustom ? "★ Tu BBDD" : "Catálogo Base"}
+                          </span>
+                          <span className="text-[9px] font-bold text-gray-400">
+                            {isTimeTracking ? "⏱️ Tiempo" : "🔄 Reps"}
+                          </span>
+                        </div>
+
+                        {/* Muscle Badges */}
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          {item.primaryMuscles?.map((m, mIdx) => (
+                            <span
+                              key={mIdx}
+                              className="text-[9px] font-bold text-emerald-500 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded"
+                            >
+                              🎯 {m}
+                            </span>
+                          ))}
+                          {item.equipmentNeeded && (
+                            <span className="text-[9px] text-gray-400 font-medium">
+                              · 🏋️ {item.equipmentNeeded}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenTechniqueGuide(item.name)}
+                          className="px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer border border-blue-500/20"
+                          title="Ver técnica"
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          <span>Técnica</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleAddExerciseToSession(item.name, item.trackingType, item.defaultSets, item.defaultReps, item.defaultWeight);
+                            setActiveTab("routine");
+                          }}
+                          className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm shadow-emerald-500/10"
+                          title="Añadir a la sesión de hoy"
+                        >
+                          <Plus className="h-3 w-3" />
+                          <span>Añadir a hoy</span>
+                        </button>
+
+                        {isCustom && "id" in item && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCustomExercise(item.id)}
+                            className="p-1 text-gray-400 hover:text-rose-400 transition cursor-pointer"
+                            title="Eliminar de mi base de datos"
+                          >
+                            <Trash className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {item.techniqueTips && (
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed border-t border-gray-100 dark:border-gray-800/40 pt-1.5">
+                        💡 {item.techniqueTips}
+                      </p>
+                    )}
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        </div>
+      )}
+
       {/* Log Sport Modal */}
       {isSportModalOpen && (
         <div className="fixed inset-0 bg-black/60 dark:bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
@@ -1519,7 +2418,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
         </div>
       )}
 
-      {/* 1. MuscleWiki Technique & Video Modal */}
+      {/* 1. Biomechanical Technique & Muscle Guide Modal (DB + Gemini AI, 0 MuscleWiki) */}
       <AnimatePresence>
         {isGuideModalOpen && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
@@ -1532,11 +2431,13 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
               {/* Modal Header */}
               <div className="p-4.5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0 bg-gray-50/50 dark:bg-white/[0.02]">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-blue-500/15 flex items-center justify-center text-blue-400">
-                    <Video className="h-4 w-4" />
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-400">
+                    <Sparkles className="h-4 w-4" />
                   </div>
                   <div>
-                    <span className="text-[9px] font-mono font-bold text-blue-400 uppercase tracking-wider block">Técnica y Demostración</span>
+                    <span className="text-[9px] font-mono font-bold text-emerald-400 uppercase tracking-wider block">
+                      Guía Biomecánica & Músculos
+                    </span>
                     <h3 className="text-xs font-black text-gray-900 dark:text-white truncate max-w-[220px]">
                       {selectedGuideExercise ? selectedGuideExercise.name : "Cargando ejercicio..."}
                     </h3>
@@ -1554,69 +2455,40 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
               <div className="p-5 overflow-y-auto space-y-4 no-scrollbar flex-1 text-left">
                 {isLoadingGuide ? (
                   <div className="py-12 text-center space-y-3">
-                    <RefreshCw className="h-7 w-7 text-blue-400 animate-spin mx-auto" />
-                    <p className="text-xs text-gray-400 font-bold">Obteniendo técnica e instrucciones...</p>
+                    <RefreshCw className="h-7 w-7 text-emerald-400 animate-spin mx-auto" />
+                    <p className="text-xs text-gray-400 font-bold">Analizando biomecánica y anatomía muscular...</p>
                   </div>
                 ) : selectedGuideExercise ? (
                   <>
-                    {/* Video Player or Fallback */}
-                    {selectedGuideExercise.videoFront ? (
-                      <div className="space-y-2">
-                        <div className="relative rounded-2xl overflow-hidden bg-black aspect-video border border-gray-200 dark:border-gray-800 shadow-inner flex items-center justify-center">
-                          <video
-                            key={videoAngle === "front" ? selectedGuideExercise.videoFront : (selectedGuideExercise.videoSide || selectedGuideExercise.videoFront)}
-                            src={videoAngle === "front" ? selectedGuideExercise.videoFront : (selectedGuideExercise.videoSide || selectedGuideExercise.videoFront)}
-                            autoPlay
-                            loop
-                            muted
-                            playsInline
-                            className="w-full h-full object-contain"
-                          />
-                        </div>
+                    {/* Source & Tracking Badges */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap pb-1">
+                      <span
+                        className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                          selectedGuideExercise.source === "db_cache"
+                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            : "bg-indigo-500/10 text-indigo-400 border-indigo-500/20"
+                        }`}
+                      >
+                        {selectedGuideExercise.source === "db_cache"
+                          ? "⚡ Desde tu Biblioteca Guardada (0 latencia)"
+                          : "✨ Analizado con IA Gemini (Guardado en BD)"}
+                      </span>
 
-                        {selectedGuideExercise.videoSide && (
-                          <div className="flex justify-center gap-2">
-                            <button
-                              onClick={() => setVideoAngle("front")}
-                              className={`px-3 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer border ${
-                                videoAngle === "front"
-                                  ? "bg-blue-500 border-blue-400 text-white"
-                                  : "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400"
-                              }`}
-                            >
-                              Vista Frontal
-                            </button>
-                            <button
-                              onClick={() => setVideoAngle("side")}
-                              className={`px-3 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer border ${
-                                videoAngle === "side"
-                                  ? "bg-blue-500 border-blue-400 text-white"
-                                  : "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400"
-                              }`}
-                            >
-                              Vista Lateral
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-center space-y-1.5">
-                        <Dumbbell className="h-6 w-6 text-blue-400 mx-auto" />
-                        <span className="block text-xs font-black text-gray-900 dark:text-white">Demostración Anatómica</span>
-                        <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-normal max-w-xs mx-auto">
-                          Sigue los pasos a continuación para realizar el ejercicio con postura biomecánica ideal.
-                        </p>
-                      </div>
-                    )}
+                      <span className="text-[10px] font-bold text-gray-400">
+                        {selectedGuideExercise.trackingType === "time" ? "⏱️ Por Tiempo" : "🔄 Por Repeticiones"}
+                      </span>
+                    </div>
 
-                    {/* Muscle Badges */}
-                    <div className="space-y-1.5">
-                      <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider block">Músculos Involucrados</span>
-                      <div className="flex flex-wrap gap-1.5">
+                    {/* Muscle Targeting */}
+                    <div className="space-y-1.5 bg-gray-50 dark:bg-[#12131d] p-3.5 rounded-2xl border border-gray-200 dark:border-gray-800/60">
+                      <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider block">
+                        Músculos Objetivos
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 pt-1">
                         {selectedGuideExercise.primaryMuscles.map((m, idx) => (
                           <span
                             key={idx}
-                            className="px-2.5 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-[10px] font-black text-emerald-500 dark:text-emerald-400"
+                            className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-black text-emerald-500 dark:text-emerald-400"
                           >
                             🎯 {m}
                           </span>
@@ -1624,7 +2496,7 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                         {selectedGuideExercise.secondaryMuscles?.map((m, idx) => (
                           <span
                             key={idx}
-                            className="px-2 py-0.5 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-[10px] font-medium text-gray-600 dark:text-gray-400"
+                            className="px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-[10px] font-medium text-gray-600 dark:text-gray-400"
                           >
                             {m}
                           </span>
@@ -1632,41 +2504,43 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
                       </div>
                     </div>
 
-                    {/* Step by Step instructions */}
-                    <div className="space-y-2">
-                      <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider block">Paso a Paso</span>
-                      <div className="space-y-2">
-                        {selectedGuideExercise.steps.map((step, idx) => (
-                          <div key={idx} className="flex gap-2.5 items-start text-xs text-gray-700 dark:text-gray-200 leading-relaxed">
-                            <span className="w-5 h-5 rounded-full bg-blue-500/15 text-blue-500 dark:text-blue-400 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
-                              {idx + 1}
-                            </span>
-                            <span>{step}</span>
-                          </div>
-                        ))}
+                    {/* Equipment & Calories Info */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="p-3 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-gray-800">
+                        <span className="text-[9px] text-gray-400 block font-bold uppercase">Equipamiento</span>
+                        <span className="text-xs font-black text-gray-900 dark:text-white mt-0.5 block truncate">
+                          🏋️ {selectedGuideExercise.equipmentNeeded || "Peso corporal"}
+                        </span>
+                      </div>
+                      <div className="p-3 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-gray-800">
+                        <span className="text-[9px] text-gray-400 block font-bold uppercase">Gasto estimado</span>
+                        <span className="text-xs font-black text-amber-500 mt-0.5 block">
+                          🔥 ~{selectedGuideExercise.caloriesBurnedPerSet || 5} kcal/serie
+                        </span>
                       </div>
                     </div>
 
-                    {/* Safety Tips / Prevention */}
-                    {selectedGuideExercise.tips && (
-                      <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-300 space-y-1">
-                        <div className="flex items-center gap-1.5 font-bold text-[11px]">
-                          <ShieldAlert className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                          <span>Consejo de Biomecánica y Seguridad</span>
-                        </div>
-                        <p className="text-[10px] leading-relaxed text-amber-600 dark:text-amber-200/90 pl-5">
-                          {selectedGuideExercise.tips}
+                    {/* Technique & Execution Tips */}
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider block">
+                        Indicaciones Biomecánicas
+                      </span>
+                      <div className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-900 dark:text-blue-200 leading-relaxed space-y-1">
+                        <p className="font-medium text-[11px]">
+                          {selectedGuideExercise.techniqueTips || "Ejecuta con control en todo el rango de movimiento manteniendo estabilidad en la columna."}
                         </p>
                       </div>
-                    )}
+                    </div>
 
-                    {/* API Source note */}
-                    <div className="pt-2 border-t border-gray-100 dark:border-gray-800/60 text-center">
-                      <span className="text-[9px] text-gray-400 dark:text-gray-500 font-mono">
-                        {selectedGuideExercise.source === "musclewiki_api" 
-                          ? "✓ Demostración verificada vía MuscleWiki API"
-                          : "💡 Guía biomecánica Trophia · Para activar videos HD oficiales, añade tu API Key de MuscleWiki en Ajustes"}
-                      </span>
+                    {/* Safety Alert */}
+                    <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-300 space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold text-[11px]">
+                        <ShieldAlert className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                        <span>Cuidado Articular y Postura</span>
+                      </div>
+                      <p className="text-[10px] leading-relaxed text-amber-600 dark:text-amber-200/90 pl-5">
+                        No bloquees articulaciones bruscamente al final del movimiento. Mantén el abdomen activo para proteger la zona lumbar.
+                      </p>
                     </div>
                   </>
                 ) : null}
@@ -1675,10 +2549,106 @@ export default function Workouts({ apiKey, userProfile, workoutHistory, onAddWor
               {/* Modal Footer */}
               <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-white/[0.01]">
                 <button
+                  type="button"
                   onClick={() => setIsGuideModalOpen(false)}
-                  className="w-full py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-lg shadow-blue-500/20"
+                  className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-lg shadow-emerald-500/20"
                 >
                   Entendido
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 2. Batch List Importer Modal (Text to Exercises via IA + Cache) */}
+      <AnimatePresence>
+        {isBatchModalOpen && (
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="w-full max-w-md bg-white dark:bg-[#0e101a] border border-gray-200 dark:border-gray-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              {/* Header */}
+              <div className="p-4.5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0 bg-gray-50/50 dark:bg-white/[0.02]">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-blue-500/15 flex items-center justify-center text-blue-400">
+                    <ClipboardList className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-mono font-bold text-blue-400 uppercase tracking-wider block">
+                      Importar Lista con IA
+                    </span>
+                    <h3 className="text-xs font-black text-gray-900 dark:text-white">
+                      Pegar Lista de Ejercicios
+                    </h3>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsBatchModalOpen(false);
+                    setBatchProcessingStatus(null);
+                  }}
+                  className="w-7 h-7 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-white transition cursor-pointer border-none"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-5 space-y-3 overflow-y-auto no-scrollbar flex-1 text-left">
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                  Pega o escribe tu lista de ejercicios (uno por línea). El sistema buscará primero en tu biblioteca personal (0 tokens y 0 latencia), y analizará con Gemini solo los nuevos, guardándolos en tu cuenta.
+                </p>
+
+                <textarea
+                  rows={7}
+                  value={batchInputText}
+                  onChange={(e) => setBatchInputText(e.target.value)}
+                  placeholder={`Ejemplo:\nPress de banca 4x10 con 60kg\nSentadilla búlgara 3x12 14kg\nPlancha abdominal 3x45s\nDominadas pronas 4x8\nElevaciones laterales 4x15 8kg`}
+                  className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-2xl p-3 text-xs text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 font-mono"
+                  autoFocus
+                />
+
+                {batchProcessingStatus && (
+                  <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-400 flex items-center gap-2">
+                    <RefreshCw className="h-4 w-4 animate-spin shrink-0" />
+                    <span>{batchProcessingStatus}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-white/[0.01] flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsBatchModalOpen(false);
+                    setBatchProcessingStatus(null);
+                  }}
+                  className="flex-1 py-2.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={!batchInputText.trim() || isProcessingBatch}
+                  onClick={() => handleImportBatch(batchInputText)}
+                  className="flex-1 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-blue-500/20"
+                >
+                  {isProcessingBatch ? (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      <span>Procesando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-3.5 w-3.5" />
+                      <span>Procesar y Agregar</span>
+                    </>
+                  )}
                 </button>
               </div>
             </motion.div>

@@ -427,6 +427,7 @@ export default function App() {
                 <Workouts
                   apiKey={profile.apiKey}
                   userProfile={profile}
+                  userId={user.uid}
                   workoutHistory={workoutHistory}
                   onAddWorkout={handleAddWorkout}
                   onClearWorkouts={handleClearWorkouts}

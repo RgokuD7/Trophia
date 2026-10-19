@@ -30,7 +30,6 @@ export interface UserProfile {
   fatTarget: number; // in grams
   apiKey?: string;
   usdaApiKey?: string;
-  muscleWikiApiKey?: string;
   isOnboardingCompleted: boolean;
   allergies?: string[];
   customAllergies?: string;
@@ -113,25 +112,42 @@ export interface WaterLog {
   timestamp: string; // ISO string
 }
 
+export type ExerciseTrackingType = "reps" | "time" | "distance";
+
+export interface CustomExercise {
+  id: string;
+  name: string;
+  normalizedName?: string;
+  trackingType: ExerciseTrackingType; // "reps" | "time" | "distance"
+  defaultSets: number;
+  defaultReps: number; // reps or seconds
+  defaultWeight: number; // in kg (0 if bodyweight)
+  primaryMuscles: string[]; // e.g. ["Pectoral", "Tríceps"]
+  secondaryMuscles?: string[]; // e.g. ["Deltoides anterior"]
+  techniqueTips?: string; // ejecución, postura y seguridad
+  caloriesBurnedPerSet: number; // gasto calórico estimado conservador
+  equipmentNeeded?: string; // e.g. "Mancuernas", "Barra", "Peso corporal"
+  createdAt: string;
+}
+
 export interface WorkoutExercise {
   id: string;
   name: string;
+  trackingType?: ExerciseTrackingType;
   sets: number;
-  reps: number;
-  weight: number; // in kg
+  reps: number; // reps or seconds if trackingType === "time"
+  weight: number; // in kg (0 if bodyweight)
   caloriesBurnedPerSet: number; // conservative estimation
+  primaryMuscles?: string[];
+  secondaryMuscles?: string[];
+  techniqueTips?: string;
+  equipmentNeeded?: string;
   completedSets: {
     setIndex: number;
     completed: boolean;
     reps: number;
     weight: number;
   }[];
-  muscleWikiId?: number;
-  primaryMuscles?: string[];
-  videoUrl?: string;
-  sideVideoUrl?: string;
-  instructions?: string[];
-  tips?: string;
 }
 
 export interface WorkoutSession {

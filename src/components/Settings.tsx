@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   Settings, Key, CircleUser, RefreshCw, Check, Info, AlertCircle, 
-  LogOut, Bell, Utensils, Activity, Sliders, ShieldAlert, Sparkles, Scale, Target, Flame, Dumbbell, Video
+  LogOut, Bell, Utensils, Activity, Sliders, ShieldAlert, Sparkles, Scale, Target, Flame
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { UserProfile, BiologicalSex, FitnessGoal, ExperienceLevel, DietType } from "../types";
@@ -51,9 +51,6 @@ export default function SettingsView({
 
   // System data
   const [apiKey, setApiKey] = useState(profile.apiKey || "");
-  const [muscleWikiApiKey, setMuscleWikiApiKey] = useState(
-    profile.muscleWikiApiKey || (typeof localStorage !== "undefined" ? localStorage.getItem("trophia_musclewiki_api_key") || "" : "")
-  );
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Push Notifications state
@@ -80,7 +77,6 @@ export default function SettingsView({
     setActivityLevel(profile.activityLevel || "sedentary");
     setStepsRange(profile.stepsRange || "under_4k");
     setApiKey(profile.apiKey || "");
-    setMuscleWikiApiKey(profile.muscleWikiApiKey || (typeof localStorage !== "undefined" ? localStorage.getItem("trophia_musclewiki_api_key") || "" : ""));
   }, [profile]);
 
   // Live BMI calculation
@@ -224,7 +220,6 @@ export default function SettingsView({
       carbsTarget: reqs.carbs,
       fatTarget: reqs.fat,
       apiKey: apiKey || undefined,
-      muscleWikiApiKey: muscleWikiApiKey.trim() || undefined,
       takesCreatine,
       dietType,
       customDiet: dietType === "other" && customDiet.trim() ? customDiet.trim() : undefined,
@@ -241,12 +236,6 @@ export default function SettingsView({
       localStorage.setItem("trophia_api_key", apiKey);
     } else {
       localStorage.removeItem("trophia_api_key");
-    }
-
-    if (muscleWikiApiKey && muscleWikiApiKey.trim()) {
-      localStorage.setItem("trophia_musclewiki_api_key", muscleWikiApiKey.trim());
-    } else {
-      localStorage.removeItem("trophia_musclewiki_api_key");
     }
 
     setSaveSuccess(true);
@@ -739,43 +728,6 @@ export default function SettingsView({
                   </Button>
                 </div>
               </div>
-
-              {/* MuscleWiki API Key */}
-              <div className="bg-white dark:bg-[#161824] p-4.5 rounded-3xl border border-gray-200 dark:border-gray-800 space-y-3 shadow-sm">
-                <span className="block text-xs font-black text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
-                  <Dumbbell className="h-4 w-4 text-blue-400" />
-                  <span>MuscleWiki API (Videos y Técnica HD)</span>
-                </span>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-normal">
-                  Permite reproducir videos oficiales de técnica en alta definición para cada ejercicio (hombres y mujeres, frontal y lateral). Obtén tu clave en <span className="text-emerald-400 font-bold">api.musclewiki.com</span> o <span className="text-emerald-400 font-bold">RapidAPI</span>.
-                </p>
-                
-                <div className="flex gap-2 items-center">
-                  <div className="flex-1">
-                    <Input
-                      type="password"
-                      icon={Key}
-                      value={muscleWikiApiKey}
-                      onChange={(e) => setMuscleWikiApiKey(e.target.value)}
-                      placeholder="mw_... o tu clave de RapidAPI"
-                      className="bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 font-mono text-xs"
-                      size="md"
-                    />
-                  </div>
-                  <Button
-                    variant="secondary"
-                    onClick={async () => {
-                      try {
-                        const text = await navigator.clipboard.readText();
-                        if (text) setMuscleWikiApiKey(text.trim());
-                      } catch {}
-                    }}
-                    className="shrink-0 h-[42px] px-3.5 text-xs font-bold rounded-xl cursor-pointer"
-                  >
-                    Pegar
-                  </Button>
-                </div>
-              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -813,7 +765,7 @@ export default function SettingsView({
           <div className="text-center pt-2 text-[10px] text-gray-400 font-mono tracking-wider">
             <span>Trophia • by Richard Bouryssieres</span>
             <span className="mx-1.5">•</span>
-            <span>v0.1.14</span>
+            <span>v0.1.15</span>
           </div>
         </div>
 

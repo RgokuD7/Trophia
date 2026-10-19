@@ -13,7 +13,7 @@ import {
   increment
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { UserProfile, LoggedMeal, WaterLog, WorkoutSession, CustomFood, BarcodeCorrection } from "../types";
+import { UserProfile, LoggedMeal, WaterLog, WorkoutSession, CustomFood, CustomExercise, BarcodeCorrection } from "../types";
 
 // User Profile Operations
 export const getUserProfile = async (userId: string): Promise<UserProfile | null> => {
@@ -299,6 +299,17 @@ export const deleteUserAllData = async (userId: string): Promise<void> => {
       await customFoodsBatch.commit();
     }
 
+    // Delete custom exercises
+    const customExercisesRef = collection(db, "users", userId, "customExercises");
+    const customExercisesSnap = await getDocs(customExercisesRef);
+    if (!customExercisesSnap.empty) {
+      const customExercisesBatch = writeBatch(db);
+      customExercisesSnap.docs.forEach((doc) => {
+        customExercisesBatch.delete(doc.ref);
+      });
+      await customExercisesBatch.commit();
+    }
+
     // 4. Delete push subscriptions if any
     const pushRef = collection(db, "users", userId, "push_subscriptions");
     const pushSnap = await getDocs(pushRef);
@@ -407,5 +418,68 @@ export const voteBarcodeCorrection = async (barcode: string, approved: boolean):
     });
   } catch (error) {
     console.error("Error voting on barcode correction:", error);
+  }
+};
+
+// Custom Exercises Operations (Personal exercise library & AI cache)
+export const getCustomExercises = async (userId: string): Promise<CustomExercise[]> => {
+  try {
+    const exRef = collection(db, "users", userId, "customExercises");
+    const q = query(exRef, orderBy("createdAt", "desc"));
+    const querySnapshot = await getDocs(q);
+    const exercises: CustomExercise[] = [];
+    querySnapshot.forEach((doc) => {
+      exercises.push({ id: doc.id, ...doc.data() } as CustomExercise);
+    });
+    return exercises;
+  } catch (error) {
+    console.error("Error getting custom exercises:", error);
+    return [];
+  }
+};
+
+export const addCustomExercise = async (userId: string, exercise: Omit<CustomExercise, "id">): Promise<CustomExercise> => {
+  try {
+    const exRef = collection(db, "users", userId, "customExercises");
+    const newDocRef = doc(exRef);
+    const cleaned = removeUndefinedRecursive(exercise);
+    const newExercise: CustomExercise = {
+      ...cleaned,
+      id: newDocRef.id,
+      normalizedName: exercise.name.trim().toLowerCase(),
+    };
+    await setDoc(newDocRef, newExercise);
+    return newExercise;
+  } catch (error) {
+    console.error("Error adding custom exercise:", error);
+    throw error;
+  }
+};
+
+export const updateCustomExercise = async (
+  userId: string, 
+  exerciseId: string, 
+  updates: Partial<Omit<CustomExercise, "id">>
+): Promise<void> => {
+  try {
+    const exDocRef = doc(db, "users", userId, "customExercises", exerciseId);
+    const cleaned = removeUndefinedRecursive(updates);
+    if (cleaned.name) {
+      cleaned.normalizedName = cleaned.name.trim().toLowerCase();
+    }
+    await updateDoc(exDocRef, cleaned);
+  } catch (error) {
+    console.error("Error updating custom exercise:", error);
+    throw error;
+  }
+};
+
+export const deleteCustomExercise = async (userId: string, exerciseId: string): Promise<void> => {
+  try {
+    const exDocRef = doc(db, "users", userId, "customExercises", exerciseId);
+    await deleteDoc(exDocRef);
+  } catch (error) {
+    console.error("Error deleting custom exercise:", error);
+    throw error;
   }
 };

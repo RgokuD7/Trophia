@@ -607,10 +607,15 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   "exercises": [
     {
       "name": "Nombre preciso del ejercicio",
+      "trackingType": "reps" | "time" | "distance" (usar "time" para planchas/isométricos/cardio, "reps" para fuerza),
       "sets": número de series (entero, ej: 3 o 4),
-      "reps": número de repeticiones (entero, ej: 10 o 15),
-      "weight": peso inicial recomendado en kg (número, ej: 12),
-      "caloriesBurnedPerSet": número estimado conservador de kcal por serie (número, ej: 5)
+      "reps": número de repeticiones o segundos si es time (entero, ej: 10 o 45),
+      "weight": peso inicial recomendado en kg (número, ej: 12, 0 si es peso corporal),
+      "caloriesBurnedPerSet": número estimado conservador de kcal por serie (número, ej: 5),
+      "primaryMuscles": ["Músculo principal 1", "Músculo principal 2"],
+      "secondaryMuscles": ["Músculo secundario 1"],
+      "techniqueTips": "Pauta de postura, respiración y seguridad biomecánica clave",
+      "equipmentNeeded": "Equipamiento necesario (ej: Mancuernas, Barra, Peso corporal)"
     }
   ],
   "cooldown": ["Descripción de estiramiento de enfriamiento 1", "Descripción de estiramiento de enfriamiento 2"]
@@ -1163,4 +1168,107 @@ Responde estrictamente en formato JSON con la siguiente estructura:
 }`;
 
   return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.5-flash-lite", tier: "flash-lite" });
+}
+
+export interface AnalyzedExerciseResult {
+  name: string;
+  trackingType: "reps" | "time" | "distance";
+  defaultSets: number;
+  defaultReps: number;
+  defaultWeight: number;
+  primaryMuscles: string[];
+  secondaryMuscles?: string[];
+  techniqueTips?: string;
+  caloriesBurnedPerSet: number;
+  equipmentNeeded?: string;
+}
+
+// 16. Analyze single exercise biomechanics, muscles, tracking type and technique tips
+export async function analyzeExerciseByIA(
+  apiKey: string,
+  exerciseName: string,
+  equipmentContext?: string[]
+): Promise<AnalyzedExerciseResult> {
+  const equipStr = equipmentContext && equipmentContext.length > 0 
+    ? `Equipamiento disponible en su perfil: ${equipmentContext.join(", ")}` 
+    : "";
+
+  const prompt = `Actúas como un fisiólogo del ejercicio y biomecánico deportivo de Trophia.
+Analiza biomecánicamente el siguiente ejercicio introducido por el usuario: "${exerciseName}".
+${equipStr}
+
+Determina de forma rigurosa y científica:
+1. "name": Nombre limpio, profesional y estandarizado del ejercicio en español (ej: "Press de Banca Plano", "Sentadilla Búlgara", "Plancha Frontal Isométrica", "Dominadas Pronas").
+2. "trackingType": "reps" (si se entrena contando repeticiones de fuerza como sentadillas, press, dominadas), "time" (si es isométrico o por duración como planchas, paseos del granjero, sentadilla isométrica en pared, saltos de comba), o "distance" (si es de desplazamiento o carrera).
+3. "defaultSets": Número recomendado de series (típicamente 3 o 4).
+4. "defaultReps": Si trackingType es "reps", repeticiones recomendadas por serie (ej: 8, 10, 12). Si trackingType es "time", segundos recomendados de duración por serie (ej: 30, 45, 60).
+5. "defaultWeight": Peso inicial de referencia en kg (ej: 10, 20; o 0 si es calistenia/peso corporal).
+6. "primaryMuscles": Array de músculos principales trabajados (ej: ["Pectoral mayor", "Tríceps braquial"]).
+7. "secondaryMuscles": Array de músculos sinergistas o estabilizadores (ej: ["Deltoides anterior", "Core"]).
+8. "techniqueTips": 2 o 3 indicaciones directas de técnica, alineación postural, respiración y prevención de lesiones (ej: "Retrae escápulas y apoya los pies firmes. Desciende la carga controlando la fase excéntrica sin rebotar.").
+9. "caloriesBurnedPerSet": Gasto calórico estimado CONSERVADOR por serie (entre 3 y 8 kcal).
+10. "equipmentNeeded": Material requerido (ej: "Mancuernas", "Barra", "Peso corporal", "Polea", "Banda elástica").
+
+Responde estrictamente en formato JSON con la siguiente estructura:
+{
+  "name": "Nombre estándar del ejercicio",
+  "trackingType": "reps",
+  "defaultSets": 3,
+  "defaultReps": 10,
+  "defaultWeight": 0,
+  "primaryMuscles": ["Músculo principal 1"],
+  "secondaryMuscles": ["Músculo secundario 1"],
+  "techniqueTips": "Consejos clave de ejecución y seguridad biomecánica",
+  "caloriesBurnedPerSet": 5,
+  "equipmentNeeded": "Equipamiento"
+}`;
+
+  return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.5-flash-lite", tier: "flash-lite" });
+}
+
+// 17. Batch parse a list or multiline text of exercises
+export async function parseExerciseBatchByIA(
+  apiKey: string,
+  rawText: string,
+  equipmentContext?: string[]
+): Promise<AnalyzedExerciseResult[]> {
+  const equipStr = equipmentContext && equipmentContext.length > 0 
+    ? `Equipamiento disponible del usuario: ${equipmentContext.join(", ")}` 
+    : "";
+
+  const prompt = `Actúas como un entrenador y analista deportivo de Trophia.
+El usuario ha escrito o pegado una lista de ejercicios para su sesión de entrenamiento:
+"""
+${rawText}
+"""
+${equipStr}
+
+Tu tarea es descomponer y estructurar cada ejercicio individualmente:
+- Si el usuario especificó series, repeticiones o peso en el texto (ej: "Press banca 4x10 con 50kg" o "Plancha 3x45s"), extrae esos valores exactos en defaultSets, defaultReps y defaultWeight.
+- Si no especificó números, asigna valores predeterminados seguros y óptimos basados en biomecánica.
+- Clasifica con precisión trackingType ("reps" para repeticiones, "time" para ejercicios basados en tiempo en segundos, "distance" para desplazamientos).
+- Identifica músculos principales, secundarios, tips de postura y equipamiento.
+
+Responde estrictamente en formato JSON con un arreglo dentro del campo "exercises":
+{
+  "exercises": [
+    {
+      "name": "Nombre limpio del ejercicio",
+      "trackingType": "reps",
+      "defaultSets": 3,
+      "defaultReps": 10,
+      "defaultWeight": 14,
+      "primaryMuscles": ["Pectoral mayor"],
+      "secondaryMuscles": ["Tríceps braquial"],
+      "techniqueTips": "Instrucciones biomecánicas clave y postura segura",
+      "caloriesBurnedPerSet": 5,
+      "equipmentNeeded": "Mancuernas"
+    }
+  ]
+}`;
+
+  const res = await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.5-flash", tier: "flash" });
+  if (Array.isArray(res)) return res;
+  if (res && Array.isArray(res.exercises)) return res.exercises;
+  return [];
 }
