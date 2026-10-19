@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Calendar, Dumbbell, Sparkles, Plus, Trash2, ChevronDown, 
   ChevronUp, Play, Check, AlertCircle, ArrowRight, Layers, 
-  SlidersHorizontal, Info, CheckCircle2, Clock
+  SlidersHorizontal, Info, CheckCircle2, Clock, RefreshCw
 } from "lucide-react";
 import { 
   WeeklyRoutinePlan, RoutineTemplate, RoutineDayKey, WorkoutExercise 
@@ -11,10 +11,13 @@ import {
 
 export interface WorkoutsRoutineManagerProps {
   plan?: WeeklyRoutinePlan;
+  isGenerating?: boolean;
+  generationError?: string | null;
   onUpdatePlan: (updatedPlan: WeeklyRoutinePlan) => void;
   onSelectRoutineForToday: (routine: RoutineTemplate) => void;
   onOpenPreferences: () => void;
   onGoToDailySession: () => void;
+  onRetryGenerate?: () => void;
 }
 
 export const DAY_KEYS: { key: RoutineDayKey; label: string; short: string; index: number }[] = [
@@ -40,19 +43,205 @@ export const DAY_LABEL_MAP: Record<string, string> = {
 
 export default function WorkoutsRoutineManager({
   plan,
+  isGenerating = false,
+  generationError = null,
   onUpdatePlan,
   onSelectRoutineForToday,
   onOpenPreferences,
-  onGoToDailySession
+  onGoToDailySession,
+  onRetryGenerate
 }: WorkoutsRoutineManagerProps) {
   const [expandedRoutineId, setExpandedRoutineId] = useState<string | null>(
     plan?.routines?.[0]?.id || null
   );
 
-  // If no plan exists yet
+  const [loadingStep, setLoadingStep] = useState(0);
+
+  // Progressive step animation when generating with IA
+  useEffect(() => {
+    if (!isGenerating) {
+      setLoadingStep(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setLoadingStep(prev => (prev < 3 ? prev + 1 : prev));
+    }, 1600);
+    return () => clearInterval(interval);
+  }, [isGenerating]);
+
+  // If AI is formulating the routines, show beautiful animated loader
+  if (isGenerating) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-lg mx-auto space-y-6 min-h-[60vh] my-auto">
+        {/* Animated Central Graphic */}
+        <div className="relative w-32 h-32 flex items-center justify-center">
+          {/* Outer glowing pulsing orb */}
+          <motion.div
+            animate={{ scale: [1, 1.25, 1], opacity: [0.3, 0.7, 0.3] }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl pointer-events-none"
+          />
+
+          {/* Outer rotating dashed ring */}
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-0 rounded-full border-2 border-emerald-500/30 border-dashed"
+          />
+
+          {/* Middle fast spinning accent ring */}
+          <motion.div
+            animate={{ rotate: -360 }}
+            transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-2 rounded-full border-2 border-t-emerald-400 border-r-teal-300 border-b-transparent border-l-transparent"
+          />
+
+          {/* Core circular badge */}
+          <motion.div
+            animate={{ scale: [1, 1.06, 1] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            className="w-20 h-20 rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-2xl shadow-emerald-500/40 relative z-10"
+          >
+            <Sparkles className="h-9 w-9 text-white animate-pulse" />
+          </motion.div>
+
+          {/* Orbiting sparkles badge */}
+          <motion.div
+            animate={{
+              x: [0, 48, 0, -48, 0],
+              y: [-48, 0, 48, 0, -48]
+            }}
+            transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+            className="absolute z-20 w-7 h-7 rounded-full bg-[#0d0e15] border border-emerald-400 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/20"
+          >
+            <Dumbbell className="h-3.5 w-3.5" />
+          </motion.div>
+        </div>
+
+        {/* Text Header */}
+        <div className="space-y-2 max-w-sm">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 dark:text-emerald-400 text-[10px] font-mono font-bold uppercase tracking-wider">
+            <Sparkles className="h-3 w-3 animate-spin" />
+            <span>Gemini 3.8 Flash • IA Activa</span>
+          </div>
+
+          <h3 className="text-lg font-black text-gray-900 dark:text-white tracking-tight">
+            Diseñando tus Rutinas Personalizadas...
+          </h3>
+
+          <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+            Estamos creando una rutina inteligente para cada uno de tus días de entrenamiento, adaptada a tu equipamiento y articulaciones.
+          </p>
+        </div>
+
+        {/* Animated Progress Steps */}
+        <div className="w-full bg-white dark:bg-[#161824] border border-gray-200 dark:border-gray-800 p-4.5 rounded-3xl shadow-lg space-y-3 text-left">
+          <div className="space-y-2.5">
+            {[
+              { label: "Analizando entorno y equipamiento disponible", minStep: 0 },
+              { label: "Optimizando división muscular según tus días", minStep: 1 },
+              { label: "Seleccionando ejercicios, series y biomecánica", minStep: 2 },
+              { label: "Formulando rutinas completas y calentamiento", minStep: 3 },
+            ].map((step, sIdx) => {
+              const isDone = loadingStep > step.minStep;
+              const isCurrent = loadingStep === step.minStep;
+
+              return (
+                <div
+                  key={sIdx}
+                  className={`flex items-center gap-3 p-2 rounded-xl transition-all duration-300 ${
+                    isCurrent
+                      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold"
+                      : isDone
+                      ? "text-gray-700 dark:text-gray-300 font-medium"
+                      : "text-gray-400 dark:text-gray-600 font-normal"
+                  }`}
+                >
+                  <div className="shrink-0">
+                    {isDone ? (
+                      <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center">
+                        <Check className="h-3 w-3 stroke-[3]" />
+                      </div>
+                    ) : isCurrent ? (
+                      <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-400 flex items-center justify-center">
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                      </div>
+                    ) : (
+                      <div className="w-5 h-5 rounded-full border border-gray-300 dark:border-gray-700 flex items-center justify-center text-[10px] text-gray-400 font-mono">
+                        {sIdx + 1}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-xs truncate">{step.label}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Shimmer progress bar */}
+          <div className="w-full h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden mt-3 relative">
+            <motion.div
+              animate={{
+                x: ["-100%", "100%"]
+              }}
+              transition={{
+                duration: 1.8,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+              className="w-1/2 h-full bg-gradient-to-r from-emerald-500 via-teal-300 to-emerald-400 rounded-full shadow-lg shadow-emerald-500/50"
+            />
+          </div>
+        </div>
+
+        <span className="text-[10px] text-gray-400 dark:text-gray-500 italic">
+          💡 En unos segundos aparecerán todas tus rutinas para que asignes qué día harás cada una.
+        </span>
+      </div>
+    );
+  }
+
+  // If there was an error generating and no plan exists
+  if (generationError && (!plan || !plan.routines || plan.routines.length === 0)) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto space-y-4 my-auto">
+        <div className="w-14 h-14 rounded-3xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
+          <AlertCircle className="h-7 w-7" />
+        </div>
+        <div>
+          <h3 className="text-base font-black text-gray-900 dark:text-white">
+            No se pudo completar la generación
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+            {generationError}
+          </p>
+        </div>
+        <div className="flex gap-2 w-full pt-1">
+          {onRetryGenerate && (
+            <button
+              onClick={onRetryGenerate}
+              className="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-500/15"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              <span>Reintentar</span>
+            </button>
+          )}
+          <button
+            onClick={onOpenPreferences}
+            className="flex-1 py-3 px-4 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-800 dark:text-gray-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border border-gray-200 dark:border-white/10"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            <span>Preferencias</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // If no plan exists yet and not generating
   if (!plan || !plan.routines || plan.routines.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto space-y-4">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto space-y-4 my-auto">
         <div className="w-16 h-16 rounded-3xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-xl shadow-emerald-500/10">
           <Layers className="h-8 w-8" />
         </div>

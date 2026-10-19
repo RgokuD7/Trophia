@@ -349,6 +349,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
 
     onUpdateProfile(updatedProfile);
     setIsWorkoutsOnboardingOpen(false);
+    setActiveTab("routines");
 
     // Auto-generate weekly routine plan with Gemini
     setIsGenerating(true);
@@ -522,6 +523,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
   const handleGenerateRoutine = async () => {
     setIsGenerating(true);
     setGenerationError(null);
+    setActiveTab("routines");
 
     try {
       const plan = await generateRoutineByIA(apiKey || "", {
@@ -555,6 +557,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
   const handleGenerateDefaultOffline = async () => {
     setIsGenerating(true);
     setGenerationError(null);
+    setActiveTab("routines");
     try {
       // generateRoutineByIA with empty apiKey falls back to full multi-routine offline templates
       const plan = await generateRoutineByIA("", {
@@ -1143,9 +1146,17 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
               activeTab === "routines" ? "border-emerald-500 text-gray-900 dark:text-white" : "border-transparent text-gray-500 dark:text-gray-400"
             }`}
           >
-            <Layers className="h-3.5 w-3.5 text-emerald-400" />
+            {isGenerating ? (
+              <RefreshCw className="h-3.5 w-3.5 text-emerald-400 animate-spin" />
+            ) : (
+              <Layers className="h-3.5 w-3.5 text-emerald-400" />
+            )}
             <span>Tus Rutinas</span>
-            {userProfile.weeklyRoutinePlan?.routines?.length ? (
+            {isGenerating ? (
+              <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[9px] font-bold animate-pulse">
+                Creando...
+              </span>
+            ) : userProfile.weeklyRoutinePlan?.routines?.length ? (
               <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 text-[9px] font-bold">
                 {userProfile.weeklyRoutinePlan.routines.length}
               </span>
@@ -1322,6 +1333,31 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
 
           <div className="px-6 py-5 space-y-4 flex-1">
             
+            {isGenerating && (
+              <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-3 shadow-md text-left">
+                <div className="flex items-center gap-3">
+                  <div className="relative shrink-0">
+                    <RefreshCw className="h-5 w-5 text-emerald-500 dark:text-emerald-400 animate-spin" />
+                    <div className="absolute inset-0 bg-emerald-400/20 rounded-full blur-sm animate-ping" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-black text-gray-900 dark:text-white block">
+                      Diseñando tu Plan de Rutinas con IA...
+                    </span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                      Gemini está calculando la distribución y ejercicios en "Tus Rutinas".
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveTab("routines")}
+                  className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer shrink-0 transition"
+                >
+                  Ver Progreso
+                </button>
+              </div>
+            )}
+
             {!activeSession ? (() => {
               const selectedDayKey = getDayKeyFromDateStr(selectedDay);
               const assignedRoutine = userProfile.weeklyRoutinePlan?.routines?.find(
@@ -1992,6 +2028,9 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
       {activeTab === "routines" && (
         <WorkoutsRoutineManager
           plan={userProfile.weeklyRoutinePlan}
+          isGenerating={isGenerating}
+          generationError={generationError}
+          onRetryGenerate={handleGenerateRoutine}
           onUpdatePlan={(updatedPlan) => {
             onUpdateProfile({
               ...userProfile,
