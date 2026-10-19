@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import { 
   WorkoutSession, WorkoutExercise, MuscleRecovery, UserProfile, 
-  TrainingEnvironment, ExperienceLevel, CustomExercise, ExerciseTrackingType 
+  TrainingEnvironment, ExperienceLevel, CustomExercise, ExerciseTrackingType,
+  WeeklyRoutinePlan, RoutineTemplate, RoutineDayKey
 } from "../types";
 import { 
   generateRoutineByIA, suggestAlternativeExercisesByIA, 
@@ -23,6 +24,7 @@ import {
 } from "../services/dbService";
 import { SPORTS_METS, getLocalDateString } from "../utils/fitnessUtils";
 import WorkoutsOnboarding from "./WorkoutsOnboarding";
+import WorkoutsRoutineManager, { DAY_KEYS, DAY_LABEL_MAP } from "./WorkoutsRoutineManager";
 
 export interface ExerciseGuideViewData {
   name: string;
@@ -46,9 +48,69 @@ interface WorkoutsProps {
 }
 
 export default function Workouts({ apiKey, userProfile, userId, workoutHistory, onAddWorkout, onClearWorkouts, onUpdateProfile }: WorkoutsProps) {
-  const [activeTab, setActiveTab] = useState<"routine" | "recovery" | "timer" | "library">("routine");
+  const [activeTab, setActiveTab] = useState<"routine" | "routines" | "recovery" | "timer" | "library">("routine");
   const [selectedDay, setSelectedDay] = useState<string>(getLocalDateString());
   const [activeSession, setActiveSession] = useState<WorkoutSession | null>(null);
+
+  // Helper to convert date string "YYYY-MM-DD" to RoutineDayKey
+  const getDayKeyFromDateStr = (dateStr: string): RoutineDayKey => {
+    const parts = dateStr.split("-").map(Number);
+    if (parts.length === 3) {
+      const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+      const dayIdx = d.getDay();
+      const map: Record<number, RoutineDayKey> = {
+        1: "monday",
+        2: "tuesday",
+        3: "wednesday",
+        4: "thursday",
+        5: "friday",
+        6: "saturday",
+        0: "sunday"
+      };
+      return map[dayIdx] || "unassigned";
+    }
+    return "unassigned";
+  };
+
+  // Instantiate a routine template into active session for selectedDay
+  const startSessionFromTemplate = (routine: RoutineTemplate) => {
+    const newSession: WorkoutSession = {
+      id: Math.random().toString(36).substr(2, 9),
+      date: selectedDay,
+      name: routine.name,
+      warmup: routine.warmup && routine.warmup.length > 0 ? routine.warmup : ["Movilidad articular general - 5 min"],
+      cooldown: routine.cooldown && routine.cooldown.length > 0 ? routine.cooldown : ["Estiramiento general completo - 5 min"],
+      exercises: (routine.exercises || []).map((ex, idx) => {
+        const setsCount = ex.sets || 3;
+        const repsCount = ex.reps || 12;
+        const weightVal = ex.weight || 0;
+        return {
+          id: `ex-${idx}`,
+          name: ex.name,
+          sets: setsCount,
+          reps: repsCount,
+          weight: weightVal,
+          trackingType: ex.trackingType || "reps",
+          caloriesBurnedPerSet: ex.caloriesBurnedPerSet || 5,
+          primaryMuscles: ex.primaryMuscles || [],
+          secondaryMuscles: ex.secondaryMuscles || [],
+          techniqueTips: ex.techniqueTips,
+          equipmentNeeded: ex.equipmentNeeded,
+          completedSets: Array.from({ length: setsCount }).map((_, sIdx) => ({
+            setIndex: sIdx,
+            completed: false,
+            reps: repsCount,
+            weight: weightVal
+          }))
+        };
+      }),
+      completed: false,
+      durationMinutes: 45
+    };
+    onAddWorkout(newSession);
+    setActiveSession(newSession);
+    setActiveTab("routine");
+  };
 
   const todayStr = getLocalDateString();
 
@@ -288,12 +350,12 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     onUpdateProfile(updatedProfile);
     setIsWorkoutsOnboardingOpen(false);
 
-    // Auto-generate routine with these updated preferences
+    // Auto-generate weekly routine plan with Gemini
     setIsGenerating(true);
     setGenerationError(null);
 
     try {
-      const routineData = await generateRoutineByIA(apiKey || "", {
+      const routinePlan = await generateRoutineByIA(apiKey || "", {
         goal: updatedProfile.goal,
         level: updatedProfile.level,
         environment: updatedProfile.environment,
@@ -305,37 +367,19 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
         weeklyTrainingDays: updatedProfile.weeklyTrainingDays
       });
 
-      if (routineData) {
-        const newSession: WorkoutSession = {
-          id: Math.random().toString(36).substr(2, 9),
-          date: selectedDay,
-          name: routineData.name || "Sesión de Entrenamiento",
-          warmup: routineData.warmup || ["Movilidad articular general - 5 min"],
-          cooldown: routineData.cooldown || ["Estiramiento general completo - 5 min"],
-          exercises: (routineData.exercises || []).map((ex: any, idx: number) => ({
-            id: `ex-${idx}`,
-            name: ex.name,
-            sets: ex.sets || 3,
-            reps: ex.reps || 12,
-            weight: ex.weight || 0,
-            caloriesBurnedPerSet: ex.caloriesBurnedPerSet || 5,
-            completedSets: Array.from({ length: ex.sets || 3 }).map((_, sIdx) => ({
-              setIndex: sIdx,
-              completed: false,
-              reps: ex.reps || 12,
-              weight: ex.weight || 0
-            }))
-          })),
-          completed: false,
-          durationMinutes: 45
+      if (routinePlan) {
+        const profileWithPlan: UserProfile = {
+          ...updatedProfile,
+          weeklyRoutinePlan: routinePlan
         };
-
-        onAddWorkout(newSession);
-        setActiveSession(newSession);
+        onUpdateProfile(profileWithPlan);
+        // Direct the user to Tus Rutinas view as requested!
+        setActiveTab("routines");
       }
     } catch (err: any) {
-      console.error("Error generating routine:", err);
+      console.error("Error generating routine plan:", err);
       setGenerationError(err?.message || "No se pudo conectar con el creador de rutinas.");
+      setActiveTab("routines");
     } finally {
       setIsGenerating(false);
     }
@@ -474,13 +518,13 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     setHiitRound(1);
   };
 
-  // Generate Routine with Gemini
+  // Generate Routine Plan with Gemini
   const handleGenerateRoutine = async () => {
     setIsGenerating(true);
     setGenerationError(null);
 
     try {
-      const data = await generateRoutineByIA(apiKey || "", {
+      const plan = await generateRoutineByIA(apiKey || "", {
         goal: userProfile.goal,
         level: userProfile.level,
         environment: userProfile.environment,
@@ -491,130 +535,46 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
         requiresMedicalClearance: userProfile.requiresMedicalClearance,
         weeklyTrainingDays: userProfile.weeklyTrainingDays
       });
-      if (data) {
-        // Construct the local routine session
-        const newSession: WorkoutSession = {
-          id: Math.random().toString(36).substr(2, 9),
-          date: selectedDay,
-          name: data.name || "Sesión de Entrenamiento",
-          warmup: data.warmup || ["Movilidad articular general - 5 min"],
-          cooldown: data.cooldown || ["Estiramiento general completo - 5 min"],
-          exercises: (data.exercises || []).map((ex: any, idx: number) => ({
-            id: `ex-${idx}`,
-            name: ex.name,
-            sets: ex.sets || 3,
-            reps: ex.reps || 12,
-            weight: ex.weight || 0,
-            caloriesBurnedPerSet: ex.caloriesBurnedPerSet || 5,
-            completedSets: Array.from({ length: ex.sets || 3 }).map((_, sIdx) => ({
-              setIndex: sIdx,
-              completed: false,
-              reps: ex.reps || 12,
-              weight: ex.weight || 0
-            }))
-          })),
-          completed: false,
-          durationMinutes: 45
-        };
-
-        onAddWorkout(newSession);
-        setActiveSession(newSession);
+      if (plan) {
+        onUpdateProfile({
+          ...userProfile,
+          weeklyRoutinePlan: plan
+        });
+        setActiveTab("routines");
       } else {
-        setGenerationError(data.error || "No se pudo conectar con el creador de rutinas.");
+        setGenerationError("No se pudo formular el plan de rutinas.");
       }
     } catch (err: any) {
-      // Fallback local generated template if offline or server fails
-      const fallbackSession: WorkoutSession = {
-        id: Math.random().toString(36).substr(2, 9),
-        date: selectedDay,
-        name: `Rutina Fullbody (${userProfile.environment === "gym" ? "Gym" : "Casa"})`,
-        warmup: ["Estiramientos de movilidad general - 5 min", "Salto de cuerda o sombra suave - 3 min"],
-        exercises: [
-          {
-            id: "ex-0",
-            name: userProfile.environment === "gym" ? "Prensa de Piernas o Sentadillas" : "Sentadillas con peso corporal",
-            sets: 4,
-            reps: 15,
-            weight: userProfile.environment === "gym" ? 40 : 0,
-            caloriesBurnedPerSet: 6,
-            completedSets: [
-              { setIndex: 0, completed: false, reps: 15, weight: userProfile.environment === "gym" ? 40 : 0 },
-              { setIndex: 1, completed: false, reps: 15, weight: userProfile.environment === "gym" ? 40 : 0 },
-              { setIndex: 2, completed: false, reps: 15, weight: userProfile.environment === "gym" ? 40 : 0 },
-              { setIndex: 3, completed: false, reps: 15, weight: userProfile.environment === "gym" ? 40 : 0 }
-            ]
-          },
-          {
-            id: "ex-1",
-            name: userProfile.environment === "gym" ? "Press de Banca con Mancuernas" : "Flexiones de pecho (Push-ups)",
-            sets: 3,
-            reps: 12,
-            weight: userProfile.environment === "gym" ? 14 : 0,
-            caloriesBurnedPerSet: 5,
-            completedSets: [
-              { setIndex: 0, completed: false, reps: 12, weight: userProfile.environment === "gym" ? 14 : 0 },
-              { setIndex: 1, completed: false, reps: 12, weight: userProfile.environment === "gym" ? 14 : 0 },
-              { setIndex: 2, completed: false, reps: 12, weight: userProfile.environment === "gym" ? 14 : 0 }
-            ]
-          }
-        ],
-        cooldown: ["Estiramientos de cuádriceps y pecho - 5 min"],
-        completed: false,
-        durationMinutes: 40
-      };
-
-      onAddWorkout(fallbackSession);
-      setActiveSession(fallbackSession);
+      console.error("Error generating routine plan:", err);
+      setGenerationError(err?.message || "No se pudo conectar con el creador de rutinas.");
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const handleGenerateDefaultOffline = () => {
+  const handleGenerateDefaultOffline = async () => {
     setIsGenerating(true);
     setGenerationError(null);
     try {
-      const fallbackSession: WorkoutSession = {
-        id: Math.random().toString(36).substr(2, 9),
-        date: selectedDay,
-        name: `Rutina Fullbody (${userProfile.environment === "gym" ? "Gimnasio" : "Casa"})`,
-        warmup: ["Estiramientos de movilidad general - 5 min", "Salto de cuerda o sombra suave - 3 min"],
-        exercises: [
-          {
-            id: "ex-0",
-            name: userProfile.environment === "gym" ? "Prensa de Piernas o Sentadillas" : "Sentadillas con peso corporal",
-            sets: 4,
-            reps: 15,
-            weight: userProfile.environment === "gym" ? 40 : 0,
-            caloriesBurnedPerSet: 6,
-            completedSets: [
-              { setIndex: 0, completed: false, reps: 15, weight: userProfile.environment === "gym" ? 40 : 0 },
-              { setIndex: 1, completed: false, reps: 15, weight: userProfile.environment === "gym" ? 40 : 0 },
-              { setIndex: 2, completed: false, reps: 15, weight: userProfile.environment === "gym" ? 40 : 0 },
-              { setIndex: 3, completed: false, reps: 15, weight: userProfile.environment === "gym" ? 40 : 0 }
-            ]
-          },
-          {
-            id: "ex-1",
-            name: userProfile.environment === "gym" ? "Press de Banca con Mancuernas" : "Flexiones de pecho (Push-ups)",
-            sets: 3,
-            reps: 12,
-            weight: userProfile.environment === "gym" ? 14 : 0,
-            caloriesBurnedPerSet: 5,
-            completedSets: [
-              { setIndex: 0, completed: false, reps: 12, weight: userProfile.environment === "gym" ? 14 : 0 },
-              { setIndex: 1, completed: false, reps: 12, weight: userProfile.environment === "gym" ? 14 : 0 },
-              { setIndex: 2, completed: false, reps: 12, weight: userProfile.environment === "gym" ? 14 : 0 }
-            ]
-          }
-        ],
-        cooldown: ["Estiramientos de cuádriceps y pecho - 5 min"],
-        completed: false,
-        durationMinutes: 40
-      };
-
-      onAddWorkout(fallbackSession);
-      setActiveSession(fallbackSession);
+      // generateRoutineByIA with empty apiKey falls back to full multi-routine offline templates
+      const plan = await generateRoutineByIA("", {
+        goal: userProfile.goal,
+        level: userProfile.level,
+        environment: userProfile.environment,
+        environments: userProfile.environments,
+        equipment: userProfile.equipment,
+        jointPainAreas: userProfile.jointPainAreas,
+        customJointPain: userProfile.customJointPain,
+        requiresMedicalClearance: userProfile.requiresMedicalClearance,
+        weeklyTrainingDays: userProfile.weeklyTrainingDays
+      });
+      if (plan) {
+        onUpdateProfile({
+          ...userProfile,
+          weeklyRoutinePlan: plan
+        });
+        setActiveTab("routines");
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -1178,6 +1138,20 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
             Sesión Diaria
           </button>
           <button
+            onClick={() => setActiveTab("routines")}
+            className={`pb-2.5 text-xs font-bold border-b-2 transition flex items-center gap-1.5 ${
+              activeTab === "routines" ? "border-emerald-500 text-gray-900 dark:text-white" : "border-transparent text-gray-500 dark:text-gray-400"
+            }`}
+          >
+            <Layers className="h-3.5 w-3.5 text-emerald-400" />
+            <span>Tus Rutinas</span>
+            {userProfile.weeklyRoutinePlan?.routines?.length ? (
+              <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 text-[9px] font-bold">
+                {userProfile.weeklyRoutinePlan.routines.length}
+              </span>
+            ) : null}
+          </button>
+          <button
             onClick={() => setActiveTab("recovery")}
             className={`pb-2.5 text-xs font-bold border-b-2 transition ${
               activeTab === "recovery" ? "border-emerald-500 text-gray-900 dark:text-white" : "border-transparent text-gray-500 dark:text-gray-400"
@@ -1348,133 +1322,272 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
 
           <div className="px-6 py-5 space-y-4 flex-1">
             
-            {!activeSession ? (
-              <div className="space-y-4">
-                {/* Active Rest Suggestions Card */}
-                <div className="bg-white dark:bg-[#12131d]/60 border border-gray-200 dark:border-gray-800/80 p-4.5 rounded-2xl space-y-3 shadow-md text-left">
-                  <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider block">Recomendación de Descanso Activo</span>
-                  <p className="text-xs text-gray-755 dark:text-gray-300 leading-relaxed font-medium">
-                    {userProfile.goal === "lose_weight" 
-                      ? "🚶 Caminata ligera de 30-45 minutos. Ideal para mantener un gasto calórico bajo control sin fatigar tu sistema muscular y articular."
-                      : userProfile.goal === "gain_muscle"
-                        ? "🧘 15 minutos de elongaciones estáticas completas. Enfocado en descomprimir articulaciones y acelerar el flujo de recuperación de fibras musculares."
-                        : "🏃 Paseo recreativo o movilidad suave de 20 minutos. Ayuda a lubricar las articulaciones y reducir la rigidez acumulada."}
-                  </p>
-                  <span className="block text-[9px] text-gray-400 dark:text-gray-500 italic leading-none">
-                    💡 Aprovechar hoy para descansar permitirá que tus fibras musculares se reparen más fuerte.
-                  </span>
-                </div>
+            {!activeSession ? (() => {
+              const selectedDayKey = getDayKeyFromDateStr(selectedDay);
+              const assignedRoutine = userProfile.weeklyRoutinePlan?.routines?.find(
+                r => r.assignedDay === selectedDayKey
+              );
+              const hasRoutinePlan = !!(userProfile.weeklyRoutinePlan && userProfile.weeklyRoutinePlan.routines && userProfile.weeklyRoutinePlan.routines.length > 0);
 
-                <div className="bg-white dark:bg-[#12131d] border border-gray-250 dark:border-gray-800 border-dashed rounded-2xl p-6 text-center space-y-4 shadow-sm dark:shadow-none">
-                <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto text-emerald-400">
-                  <Sparkles className="h-6 w-6" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-extrabold text-gray-900 dark:text-white">¿Entrenamos hoy?</h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs mx-auto mt-1 leading-relaxed">
-                    Rutina inteligente adaptada a tu equipamiento y restricciones articulares.
-                  </p>
-                  <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-full text-[10px] text-gray-600 dark:text-gray-300">
-                    <Dumbbell className="h-3 w-3 text-emerald-400" />
-                    <span className="font-bold truncate max-w-[180px]">{userProfile.equipment && userProfile.equipment.length > 0 ? userProfile.equipment.join(", ") : "Peso corporal"}</span>
-                    <button
-                      onClick={() => setIsWorkoutsOnboardingOpen(true)}
-                      className="ml-1 text-emerald-400 font-black hover:underline cursor-pointer bg-transparent border-none"
-                    >
-                      Cambiar
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2.5">
-                  <button
-                    onClick={handleGenerateRoutine}
-                    disabled={isGenerating}
-                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black py-3 rounded-xl transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 active:scale-98 cursor-pointer"
-                  >
-                    {isGenerating ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                        <span>Formulando rutina óptima...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-4 w-4" />
-                        <span>Generar Rutina Personalizada por IA</span>
-                      </>
-                    )}
-                  </button>
-
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <button
-                      onClick={handleStartManualSession}
-                      className="py-2.5 px-3 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-800 dark:text-gray-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border border-gray-200 dark:border-white/10"
-                    >
-                      <Plus className="h-3.5 w-3.5 text-emerald-400" />
-                      <span>Crear Sesión Propia</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleStartManualSession();
-                        setIsBatchModalOpen(true);
-                      }}
-                      className="py-2.5 px-3 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border border-blue-500/20"
-                    >
-                      <ClipboardList className="h-3.5 w-3.5" />
-                      <span>Pegar Lista con IA</span>
-                    </button>
-                  </div>
-                  
-                  {generationError && (() => {
-                    const errorStr = String(generationError);
-                    const isHighDemand = 
-                      errorStr.includes("503") || 
-                      errorStr.toLowerCase().includes("high demand") || 
-                      errorStr.toLowerCase().includes("unavailable") || 
-                      errorStr.toLowerCase().includes("spikes in demand") || 
-                      errorStr.toLowerCase().includes("try again later");
-
-                    return (
-                      <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl space-y-3 mt-1 text-left w-full">
-                        <div className="flex gap-2.5 items-start">
-                          <Info className="h-4.5 w-4.5 text-rose-400 flex-shrink-0 mt-0.5" />
-                          <div className="space-y-0.5">
-                            <span className="block text-xs font-bold text-rose-200">
-                              {isHighDemand ? "Saturación del Servidor de Rutinas (503)" : "Error al Generar Rutina"}
+              if (assignedRoutine) {
+                return (
+                  <div className="space-y-4 text-left">
+                    {/* Scheduled Routine Card */}
+                    <div className="bg-white dark:bg-[#161824] p-5 rounded-3xl border border-emerald-500/30 dark:border-emerald-500/20 shadow-lg space-y-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-500 text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            <span>{DAY_LABEL_MAP[selectedDayKey]}</span>
+                          </span>
+                          {assignedRoutine.focus && (
+                            <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 text-[10px] font-bold">
+                              🎯 {assignedRoutine.focus}
                             </span>
-                            <span className="block text-[10px] text-gray-500 dark:text-white/50 leading-relaxed">
-                              {isHighDemand 
-                                ? "El motor de IA está experimentando alta demanda en este momento. ¡Puedes intentar de nuevo en un momento o usar una excelente plantilla sin conexión!" 
-                                : generationError}
-                            </span>
-                          </div>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-gray-500 dark:text-gray-400 font-mono font-bold">
+                          {assignedRoutine.exercises.length} ejercicios · ~45 min
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider block">
+                          Rutina Programada para Hoy
+                        </span>
+                        <h3 className="text-base font-black text-gray-900 dark:text-white mt-0.5">
+                          {assignedRoutine.name}
+                        </h3>
+                      </div>
+
+                      {/* Warmup preview */}
+                      {assignedRoutine.warmup && assignedRoutine.warmup.length > 0 && (
+                        <div className="p-3 rounded-2xl bg-gray-50 dark:bg-[#12131d] border border-gray-200 dark:border-gray-800/60 space-y-1.5">
+                          <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide block">
+                            Calentamiento sugerido:
+                          </span>
+                          <ul className="text-xs text-gray-700 dark:text-gray-300 space-y-1">
+                            {assignedRoutine.warmup.map((w, wIdx) => (
+                              <li key={wIdx} className="flex items-start gap-1.5">
+                                <span className="text-emerald-400 font-bold">•</span>
+                                <span>{w}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Exercises preview */}
+                      <div className="space-y-2">
+                        <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide block">
+                          Ejercicios de la sesión:
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {assignedRoutine.exercises.map((ex, exIdx) => (
+                            <div
+                              key={exIdx}
+                              className="p-2.5 rounded-xl bg-gray-50 dark:bg-[#12131d] border border-gray-200 dark:border-gray-800/60 flex items-center justify-between"
+                            >
+                              <div className="min-w-0 pr-2">
+                                <span className="block text-xs font-bold text-gray-900 dark:text-white truncate">
+                                  {ex.name}
+                                </span>
+                                <span className="block text-[10px] text-gray-500 dark:text-gray-400">
+                                  {ex.sets} series × {ex.reps} {ex.trackingType === "time" ? "seg" : "reps"}
+                                  {ex.weight > 0 ? ` · ${ex.weight}kg` : ""}
+                                </span>
+                              </div>
+                              {ex.primaryMuscles && ex.primaryMuscles[0] && (
+                                <span className="text-[9px] px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 font-medium shrink-0">
+                                  {ex.primaryMuscles[0]}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* CTA Button */}
+                      <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                        <button
+                          onClick={() => startSessionFromTemplate(assignedRoutine)}
+                          className="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-98 cursor-pointer"
+                        >
+                          <Play className="h-4 w-4 fill-current" />
+                          <span>Iniciar Entrenamiento de Hoy</span>
+                        </button>
+                        <button
+                          onClick={() => setActiveTab("routines")}
+                          className="py-3 px-3.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border border-gray-200 dark:border-white/10"
+                        >
+                          <Layers className="h-4 w-4 text-emerald-400" />
+                          <span>Reorganizar en Tus Rutinas</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Rest day or no plan
+              return (
+                <div className="space-y-4">
+                  {hasRoutinePlan ? (
+                    /* Scheduled Rest Day */
+                    <div className="space-y-4">
+                      <div className="bg-white dark:bg-[#161824] p-5 rounded-3xl border border-gray-200 dark:border-gray-800 shadow-md space-y-3.5 text-left">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-1 rounded-full bg-blue-500/15 text-blue-500 dark:text-blue-400 text-[10px] font-black uppercase tracking-wider">
+                            🧘 Día de Descanso Programado
+                          </span>
+                          <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold">
+                            {DAY_LABEL_MAP[selectedDayKey]}
+                          </span>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row gap-2 pt-1 border-t border-white/5">
+                        <div>
+                          <h4 className="text-sm font-black text-gray-900 dark:text-white">
+                            Hoy no tienes ninguna rutina asignada
+                          </h4>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed mt-1">
+                            Según tu plan de {userProfile.weeklyRoutinePlan?.weeklyDaysCount || userProfile.weeklyRoutinePlan?.routines.length} días de entrenamiento, hoy es una jornada de descanso o actividad ligera. El descanso es cuando ocurre la verdadera síntesis de proteínas e hipertrofia.
+                          </p>
+                        </div>
+
+                        {/* Active Rest Tip */}
+                        <div className="p-3 rounded-2xl bg-gray-50 dark:bg-[#12131d] border border-gray-200 dark:border-gray-800/60">
+                          <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider block mb-1">
+                            Sugerencia de Descanso Activo:
+                          </span>
+                          <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
+                            {userProfile.goal === "lose_weight" 
+                              ? "🚶 Caminata ligera de 30-45 minutos para mantener gasto energético sin sobrecargar articulaciones."
+                              : userProfile.goal === "gain_muscle"
+                                ? "🧘 15 minutos de elongaciones estáticas completas y buena hidratación para descomprimir la columna."
+                                : "🏃 Movilidad articular suave de 20 minutos para mantener el cuerpo ágil y sin rigidez."}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-2 pt-1">
                           <button
-                            type="button"
-                            onClick={handleGenerateRoutine}
-                            className="flex-1 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-900 dark:text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 border border-gray-200 dark:border-transparent transition cursor-pointer"
+                            onClick={() => setActiveTab("routines")}
+                            className="flex-1 py-2.5 px-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/15 cursor-pointer"
                           >
-                            <RefreshCw className="h-3 w-3" />
-                            Reintentar con IA
+                            <Calendar className="h-3.5 w-3.5" />
+                            <span>Ver y Asignar Días en Tus Rutinas</span>
                           </button>
                           <button
-                            type="button"
-                            onClick={handleGenerateDefaultOffline}
-                            className="flex-1 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition cursor-pointer"
+                            onClick={() => setIsSportModalOpen(true)}
+                            className="py-2.5 px-3 bg-orange-500/15 hover:bg-orange-500/25 text-orange-500 dark:text-orange-400 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border border-orange-500/20"
                           >
-                            <Dumbbell className="h-3 w-3" />
-                            Rutina sin Conexión
+                            <Activity className="h-3.5 w-3.5" />
+                            <span>Registrar Deporte</span>
                           </button>
                         </div>
                       </div>
-                    );
-                  })()}
+
+                      {/* Option to train an unassigned or any routine from plan today anyway */}
+                      {userProfile.weeklyRoutinePlan && userProfile.weeklyRoutinePlan.routines.length > 0 && (
+                        <div className="p-4 rounded-2xl bg-white dark:bg-[#12131d] border border-gray-200 dark:border-gray-800/80 space-y-3 text-left">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs font-bold text-gray-900 dark:text-white">
+                              ¿Quieres entrenar hoy de todas formas?
+                            </span>
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                              Elige una rutina:
+                            </span>
+                          </div>
+                          <div className="space-y-2">
+                            {userProfile.weeklyRoutinePlan.routines.map((r) => (
+                              <div
+                                key={r.id}
+                                className="p-3 rounded-xl bg-gray-50 dark:bg-[#161824] border border-gray-200 dark:border-gray-800 flex items-center justify-between gap-2"
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                                      {r.name}
+                                    </span>
+                                    {r.assignedDay && r.assignedDay !== "unassigned" && (
+                                      <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-400 font-mono">
+                                        ({DAY_LABEL_MAP[r.assignedDay]})
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[10px] text-gray-500 dark:text-gray-400 block truncate">
+                                    {r.exercises.length} ejercicios · {r.focus}
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => startSessionFromTemplate(r)}
+                                  className="px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-500 dark:text-emerald-400 rounded-lg text-xs font-black transition flex items-center gap-1 shrink-0 cursor-pointer border border-emerald-500/25"
+                                >
+                                  <Play className="h-3 w-3 fill-current" />
+                                  <span>Hacer hoy</span>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* No Routine Plan configured yet */
+                    <div className="bg-white dark:bg-[#12131d] border border-gray-250 dark:border-gray-800 border-dashed rounded-3xl p-6 text-center space-y-4 shadow-sm dark:shadow-none">
+                      <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto text-emerald-400">
+                        <Sparkles className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-extrabold text-gray-900 dark:text-white">Configura tus Rutinas Semanales</h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs mx-auto mt-1 leading-relaxed">
+                          La IA creará tus rutinas para cada día según tu equipamiento y disponibilidad.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        <button
+                          onClick={() => setIsWorkoutsOnboardingOpen(true)}
+                          disabled={isGenerating}
+                          className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black py-3 rounded-xl transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 active:scale-98 cursor-pointer"
+                        >
+                          {isGenerating ? (
+                            <>
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                              <span>Formulando tus rutinas...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-4 w-4" />
+                              <span>Configurar y Crear Rutinas con IA</span>
+                            </>
+                          )}
+                        </button>
+
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <button
+                            onClick={handleStartManualSession}
+                            className="py-2.5 px-3 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-800 dark:text-gray-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border border-gray-200 dark:border-white/10"
+                          >
+                            <Plus className="h-3.5 w-3.5 text-emerald-400" />
+                            <span>Crear Sesión Propia</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleStartManualSession();
+                              setIsBatchModalOpen(true);
+                            }}
+                            className="py-2.5 px-3 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border border-blue-500/20"
+                          >
+                            <ClipboardList className="h-3.5 w-3.5" />
+                            <span>Pegar Lista con IA</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            </div>
-          ) : (
+              );
+            })() : (
               /* Session active display */
               <div className="space-y-4">
                 
@@ -1876,7 +1989,24 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
         </div>
       )}
 
-        {activeTab === "recovery" && (
+      {activeTab === "routines" && (
+        <WorkoutsRoutineManager
+          plan={userProfile.weeklyRoutinePlan}
+          onUpdatePlan={(updatedPlan) => {
+            onUpdateProfile({
+              ...userProfile,
+              weeklyRoutinePlan: updatedPlan
+            });
+          }}
+          onSelectRoutineForToday={(routine) => {
+            startSessionFromTemplate(routine);
+          }}
+          onOpenPreferences={() => setIsWorkoutsOnboardingOpen(true)}
+          onGoToDailySession={() => setActiveTab("routine")}
+        />
+      )}
+
+      {activeTab === "recovery" && (
         <div className="px-6 py-5 space-y-5">
           <p className="text-xs text-gray-500 dark:text-gray-400 leading-normal">
             Porcentaje de recuperación muscular estimado basado en el historial de ejercicios completados. Deja descansar los músculos si están por debajo de 35% de recuperación.

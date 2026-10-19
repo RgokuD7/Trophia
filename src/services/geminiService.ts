@@ -1,4 +1,7 @@
-import { UserProfile, FitnessGoal, ExperienceLevel, TrainingEnvironment } from "../types";
+import { 
+  UserProfile, FitnessGoal, ExperienceLevel, TrainingEnvironment, 
+  WeeklyRoutinePlan, RoutineTemplate, RoutineDayKey 
+} from "../types";
 
 interface GeminiImage {
   mimeType: string;
@@ -551,7 +554,7 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
   }
 }
 
-// 4. Generate Workout Routine
+// 4. Generate Workout Routine Plan
 export async function generateRoutineByIA(
   apiKey: string,
   input: {
@@ -565,7 +568,7 @@ export async function generateRoutineByIA(
     requiresMedicalClearance?: boolean;
     weeklyTrainingDays?: number;
   }
-): Promise<any> {
+): Promise<WeeklyRoutinePlan> {
   const { 
     goal, 
     level, 
@@ -575,8 +578,10 @@ export async function generateRoutineByIA(
     jointPainAreas = [], 
     customJointPain,
     requiresMedicalClearance,
-    weeklyTrainingDays 
+    weeklyTrainingDays = 4
   } = input;
+
+  const targetDays = Math.min(6, Math.max(2, weeklyTrainingDays));
 
   let safetyInstructions = "";
   if (requiresMedicalClearance) {
@@ -604,50 +609,230 @@ export async function generateRoutineByIA(
     ? environments.map(e => e === "gym" ? "Gimnasio" : e === "home" ? "Casa" : "Aire libre / Calistenia").join(" y ")
     : (environment === "gym" ? "Gimnasio" : environment === "home" ? "Casa" : "Aire libre");
 
-  const prompt = `Genera una rutina de entrenamiento única y de alta calidad basada en el perfil del usuario:
-- Objetivo: ${goal} (ej: bajar de peso, ganar masa muscular, objetivos estéticos, mantenimiento)
-- Nivel de experiencia (Edad de entrenamiento): ${level} (principiante, intermedio, avanzado)
+  const prompt = `Actúas como un Entrenador Deportivo de Élite, Biomecánico y Fisiólogo de la app Trophia.
+Tu misión es diseñar un PLAN DE ENTRENAMIENTO SEMANAL COMPLETO compuesto por exactamente ${targetDays} RUTINAS DISTINTAS (una para cada día de entrenamiento planificado por el usuario).
+
+[DATOS DEL USUARIO]:
+- Objetivo: ${goal}
+- Nivel de experiencia: ${level}
 - Entorno(s) de trabajo: ${envText}
-- Días planificados por semana: ${weeklyTrainingDays || 4} días
+- Días planificados por semana: ${targetDays} días
 - Equipamiento disponible: ${Array.isArray(equipment) ? equipment.join(", ") : "Peso corporal"}${safetyInstructions}
 
-Lógica de Volumen y Capacidad Física a respetar:
-1. Reglas de series semanales por músculo: Principiante (4-10 series/semana), Intermedio (10-16 series/semana), Avanzado (14-22 series/semana).
-2. Regla de las 11 series: No concentres más de 8-10 series para el mismo grupo muscular en una única sesión para evitar volumen basura. Si es mayor, repártelo.
-3. Tope por sesión: No programes más de 30 series de trabajo total en una única sesión sumando todos los ejercicios.
-4. Escala decimal de compuestos: Un Press de banca cuenta como 1.0 Pecho, 0.5 Deltoides Anterior y 0.5 Tríceps en fatiga acumulada. Ajusta el aislamiento final en consecuencia para evitar sobreentrenamiento local.
+[ESPECIFICACIÓN DE LA DIVISIÓN SEMANAL SEGÚN ${targetDays} DÍAS]:
+- Si son 2 días: Rutina 1 (Full Body A: Enfoque Empuje y Cuádriceps) y Rutina 2 (Full Body B: Enfoque Tirón y Cadena Posterior). Sugiere días "monday" y "thursday".
+- Si son 3 días: Rutina 1 (Empuje / Pecho y Hombros), Rutina 2 (Tirón / Espalda y Bíceps), Rutina 3 (Piernas y Core). Sugiere días "monday", "wednesday" y "friday".
+- Si son 4 días: Rutina 1 (Torso A / Fuerza), Rutina 2 (Pierna A / Cuádriceps), Rutina 3 (Torso B / Hipertrofia), Rutina 4 (Pierna B / Cadena Posterior). Sugiere días "monday", "tuesday", "thursday" y "friday".
+- Si son 5 días: Rutina 1 (Pecho y Tríceps), Rutina 2 (Espalda y Bíceps), Rutina 3 (Piernas Cuádriceps), Rutina 4 (Hombros y Core), Rutina 5 (Piernas Isquios y Glúteo). Sugiere "monday", "tuesday", "wednesday", "thursday" y "friday".
+- Si son 6 días: Empuje / Tirón / Pierna x 2. Sugiere "monday" a "saturday".
 
-La rutina debe estar dividida en tres partes obligatorias:
-1. Calentamiento: 2 o 3 ejercicios de movilidad o activación con breves descripciones de 1 frase.
-2. Rutina Central (Ejercicios de fuerza o resistencia): 3 a 5 ejercicios adaptados estrictamente al equipamiento disponible, nivel de experiencia y restricciones de salud. Cada ejercicio debe tener series (sets), repeticiones por serie (reps), peso inicial recomendado en kg (0 si es peso corporal) y un gasto calórico por serie estrictamente CONSERVADOR (ajustado a la baja, ej: entre 3 y 8 kcal por serie).
-3. Enfriamiento: 2 o 3 estiramientos o ejercicios de vuelta a la calma de 1 frase.
+Para CADA UNA de las ${targetDays} rutinas:
+1. "name": Título motivador y claro (ej: "Día 1: Empuje (Pecho, Hombro y Tríceps)").
+2. "focus": Grupo muscular o enfoque principal (ej: "Pectoral, Hombro y Tríceps").
+3. "suggestedDay": "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday".
+4. "warmup": 2 o 3 ejercicios de movilidad articular o calentamiento específico.
+5. "exercises": 3 a 5 ejercicios adaptados al equipamiento y restricciones.
+   - trackingType: "reps" para fuerza con repeticiones, "time" para ejercicios basados en tiempo (planchas, isométricos).
+   - sets: número de series de trabajo (3 o 4).
+   - reps: repeticiones recomendadas por serie o segundos si es time.
+   - weight: peso de inicio recomendado en kg (0 si es peso corporal).
+   - caloriesBurnedPerSet: gasto calórico conservador por serie (3 a 8 kcal).
+   - primaryMuscles: músculos principales trabajados.
+   - secondaryMuscles: músculos sinergistas o secundarios.
+   - techniqueTips: indicación clara de alineación, respiración y seguridad.
+   - equipmentNeeded: implemento necesario.
+6. "cooldown": 2 o 3 estiramientos o relajación final.
 
-Debes responder estrictamente en formato JSON con la siguiente estructura:
+Responde estrictamente en formato JSON con la siguiente estructura:
 {
-  "name": "Título creativo y motivacional del entrenamiento (ej: Empuje Poderoso en Casa, HIIT Quema Grasa Extremo)",
-  "warmup": ["Descripción de ejercicio de calentamiento 1", "Descripción de ejercicio de calentamiento 2"],
-  "exercises": [
+  "planName": "Nombre creativo y profesional del plan completo",
+  "description": "Explicación breve de 2 oraciones de la división semanal.",
+  "weeklyDaysCount": ${targetDays},
+  "routines": [
     {
-      "name": "Nombre preciso del ejercicio",
-      "trackingType": "reps" | "time" | "distance" (usar "time" para planchas/isométricos/cardio, "reps" para fuerza),
-      "sets": número de series (entero, ej: 3 o 4),
-      "reps": número de repeticiones o segundos si es time (entero, ej: 10 o 45),
-      "weight": peso inicial recomendado en kg (número, ej: 12, 0 si es peso corporal),
-      "caloriesBurnedPerSet": número estimado conservador de kcal por serie (número, ej: 5),
-      "primaryMuscles": ["Músculo principal 1", "Músculo principal 2"],
-      "secondaryMuscles": ["Músculo secundario 1"],
-      "techniqueTips": "Pauta de postura, respiración y seguridad biomecánica clave",
-      "equipmentNeeded": "Equipamiento necesario (ej: Mancuernas, Barra, Peso corporal)"
+      "id": "routine-1",
+      "name": "Día 1: Empuje (Pecho, Hombro y Tríceps)",
+      "focus": "Pecho y Hombros",
+      "suggestedDay": "monday",
+      "warmup": ["Movilidad articular escapular - 3 min"],
+      "exercises": [
+        {
+          "name": "Press de Banca Plano",
+          "trackingType": "reps",
+          "sets": 3,
+          "reps": 10,
+          "weight": 14,
+          "caloriesBurnedPerSet": 5,
+          "primaryMuscles": ["Pectoral mayor"],
+          "secondaryMuscles": ["Tríceps braquial", "Deltoides anterior"],
+          "techniqueTips": "Retrae escápulas y apoya los pies con firmeza.",
+          "equipmentNeeded": "Mancuernas y Banco"
+        }
+      ],
+      "cooldown": ["Estiramiento de pecho en pared - 2 min"]
     }
-  ],
-  "cooldown": ["Descripción de estiramiento de enfriamiento 1", "Descripción de estiramiento de enfriamiento 2"]
+  ]
 }`;
 
+  const defaultDayKeys: RoutineDayKey[] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
   try {
-    return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.8-flash", tier: "pro" });
+    const res = await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.8-flash", tier: "pro" });
+
+    if (res && Array.isArray(res.routines) && res.routines.length > 0) {
+      const parsedRoutines: RoutineTemplate[] = res.routines.map((r: any, rIdx: number) => {
+        const fallbackDay = defaultDayKeys[rIdx % defaultDayKeys.length];
+        const assigned: RoutineDayKey = r.suggestedDay && defaultDayKeys.includes(r.suggestedDay) ? r.suggestedDay : fallbackDay;
+
+        return {
+          id: r.id || `routine-${rIdx + 1}`,
+          name: r.name || `Rutina ${rIdx + 1}`,
+          focus: r.focus || "Acondicionamiento Físico",
+          assignedDay: assigned,
+          warmup: Array.isArray(r.warmup) ? r.warmup : ["Movilidad articular general - 5 min"],
+          cooldown: Array.isArray(r.cooldown) ? r.cooldown : ["Estiramientos generales - 5 min"],
+          exercises: (r.exercises || []).map((ex: any, idx: number) => {
+            const numSets = Number(ex.sets) || 3;
+            const numReps = Number(ex.reps) || 10;
+            const numWeight = Number(ex.weight) || 0;
+            return {
+              id: `ex-${idx}`,
+              name: ex.name || `Ejercicio ${idx + 1}`,
+              trackingType: ex.trackingType === "time" ? "time" : ex.trackingType === "distance" ? "distance" : "reps",
+              sets: numSets,
+              reps: numReps,
+              weight: numWeight,
+              caloriesBurnedPerSet: Number(ex.caloriesBurnedPerSet) || 5,
+              primaryMuscles: Array.isArray(ex.primaryMuscles) && ex.primaryMuscles.length > 0 ? ex.primaryMuscles : ["Músculo principal"],
+              secondaryMuscles: Array.isArray(ex.secondaryMuscles) ? ex.secondaryMuscles : [],
+              techniqueTips: ex.techniqueTips || "Mantén una ejecución controlada y alineada.",
+              equipmentNeeded: ex.equipmentNeeded || "Peso corporal",
+              completedSets: Array.from({ length: numSets }).map((_, sIdx) => ({
+                setIndex: sIdx,
+                completed: false,
+                reps: numReps,
+                weight: numWeight
+              }))
+            };
+          })
+        };
+      });
+
+      return {
+        planName: res.planName || `Plan de Entrenamiento (${targetDays} Días)`,
+        description: res.description || "Plan dividido científicamente según tu disponibilidad y equipamiento.",
+        weeklyDaysCount: targetDays,
+        routines: parsedRoutines,
+        createdAt: new Date().toISOString()
+      };
+    }
+
+    // Fallback if returned single routine
+    if (res && res.exercises) {
+      const numSets = 3;
+      const numReps = 10;
+      return {
+        planName: res.name || "Plan de Entrenamiento",
+        description: "Rutina inteligente adaptada a tu perfil",
+        weeklyDaysCount: 1,
+        routines: [
+          {
+            id: "routine-1",
+            name: res.name || "Día 1: Entrenamiento Principal",
+            focus: "General",
+            assignedDay: "monday",
+            warmup: res.warmup || ["Movilidad articular general - 5 min"],
+            cooldown: res.cooldown || ["Estiramientos completos - 5 min"],
+            exercises: (res.exercises || []).map((ex: any, idx: number) => ({
+              id: `ex-${idx}`,
+              name: ex.name,
+              trackingType: ex.trackingType || "reps",
+              sets: ex.sets || numSets,
+              reps: ex.reps || numReps,
+              weight: ex.weight || 0,
+              caloriesBurnedPerSet: ex.caloriesBurnedPerSet || 5,
+              primaryMuscles: ex.primaryMuscles || ["Cuerpo completo"],
+              secondaryMuscles: ex.secondaryMuscles || [],
+              techniqueTips: ex.techniqueTips || "Ejecuta con control biomecánico.",
+              equipmentNeeded: ex.equipmentNeeded || "Peso corporal",
+              completedSets: Array.from({ length: ex.sets || numSets }).map((_, sIdx) => ({
+                setIndex: sIdx,
+                completed: false,
+                reps: ex.reps || numReps,
+                weight: ex.weight || 0
+              }))
+            }))
+          }
+        ],
+        createdAt: new Date().toISOString()
+      };
+    }
+
+    throw new Error("Respuesta de rutina no válida de la IA");
   } catch (apiError: any) {
     console.error("Gemini API error in generateRoutineByIA:", apiError);
-    throw apiError;
+    // Graceful offline fallback plan
+    const fallbackDays: { name: string; focus: string; day: RoutineDayKey }[] = [
+      { name: "Día 1: Empuje & Core", focus: "Pecho, Hombro y Tríceps", day: "monday" },
+      { name: "Día 2: Tirón & Bíceps", focus: "Espalda, Bíceps y Lumbar", day: "wednesday" },
+      { name: "Día 3: Piernas & Glúteos", focus: "Cuádriceps, Isquios y Pantorrillas", day: "friday" },
+      { name: "Día 4: Torso Completo", focus: "Hipertrofia de Torso", day: "saturday" }
+    ];
+
+    const routines = fallbackDays.slice(0, targetDays).map((fb, idx) => ({
+      id: `fallback-routine-${idx + 1}`,
+      name: fb.name,
+      focus: fb.focus,
+      assignedDay: fb.day,
+      warmup: ["Movilidad articular general - 5 min", "Activación dinámica - 3 min"],
+      cooldown: ["Estiramientos completos - 5 min"],
+      exercises: [
+        {
+          id: `ex-${idx}-1`,
+          name: idx % 2 === 0 ? "Press de Banca o Flexiones" : "Remo con Mancuerna o Jalón",
+          trackingType: "reps" as const,
+          sets: 3,
+          reps: 12,
+          weight: 12,
+          caloriesBurnedPerSet: 5,
+          primaryMuscles: [idx % 2 === 0 ? "Pectoral" : "Dorsal ancho"],
+          secondaryMuscles: ["Tríceps", "Bíceps"],
+          techniqueTips: "Controla la fase excéntrica y mantén alineada la columna.",
+          equipmentNeeded: "Mancuernas o peso corporal",
+          completedSets: [
+            { setIndex: 0, completed: false, reps: 12, weight: 12 },
+            { setIndex: 1, completed: false, reps: 12, weight: 12 },
+            { setIndex: 2, completed: false, reps: 12, weight: 12 }
+          ]
+        },
+        {
+          id: `ex-${idx}-2`,
+          name: idx % 2 === 0 ? "Sentadilla Copa (Goblet Squat)" : "Peso Muerto Rumano",
+          trackingType: "reps" as const,
+          sets: 3,
+          reps: 12,
+          weight: 16,
+          caloriesBurnedPerSet: 6,
+          primaryMuscles: [idx % 2 === 0 ? "Cuádriceps" : "Isquiosurales"],
+          secondaryMuscles: ["Glúteos", "Core"],
+          techniqueTips: "Mantén el pecho erguido y las rodillas estables.",
+          equipmentNeeded: "Mancuerna o peso corporal",
+          completedSets: [
+            { setIndex: 0, completed: false, reps: 12, weight: 16 },
+            { setIndex: 1, completed: false, reps: 12, weight: 16 },
+            { setIndex: 2, completed: false, reps: 12, weight: 16 }
+          ]
+        }
+      ]
+    }));
+
+    return {
+      planName: `Plan de Entrenamiento (${targetDays} Días)`,
+      description: "Plan formulado con pautas biomecánicas de seguridad y volumen semanal.",
+      weeklyDaysCount: targetDays,
+      routines,
+      createdAt: new Date().toISOString()
+    };
   }
 }
 

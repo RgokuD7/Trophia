@@ -63,6 +63,7 @@ export interface UserProfile {
   customJointPain?: string;
   customEquipment?: string[];
   isWorkoutsOnboardingCompleted?: boolean;
+  weeklyRoutinePlan?: WeeklyRoutinePlan;
   trainingAge?: ExperienceLevel;
 
   aiRecommendations?: {
@@ -162,6 +163,35 @@ export interface WorkoutSession {
   cooldown: string[]; // cool-down stretches
   completed: boolean;
   durationMinutes: number;
+}
+
+export type RoutineDayKey = 
+  | "monday" 
+  | "tuesday" 
+  | "wednesday" 
+  | "thursday" 
+  | "friday" 
+  | "saturday" 
+  | "sunday" 
+  | "unassigned";
+
+export interface RoutineTemplate {
+  id: string;
+  name: string;
+  focus: string; // e.g. "Pecho, Hombro y Tríceps"
+  assignedDay?: RoutineDayKey;
+  warmup: string[];
+  exercises: WorkoutExercise[];
+  cooldown: string[];
+}
+
+export interface WeeklyRoutinePlan {
+  planName: string;
+  description: string;
+  weeklyDaysCount: number;
+  routines: RoutineTemplate[];
+  createdAt: string;
+  lastUpdated?: string;
 }
 
 export interface MuscleRecovery {
