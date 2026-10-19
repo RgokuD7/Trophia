@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   Dumbbell, Sparkles, Check, ChevronRight, ChevronLeft, ShieldAlert, 
   AlertTriangle, X, Plus, Info, RefreshCw, Flame, Calendar, Award, 
-  Layers, CheckCircle2, Trash2, Lightbulb
+  Layers, CheckCircle2, Trash2, Lightbulb, ChevronDown
 } from "lucide-react";
 import { 
   UserProfile, TrainingEnvironment, ExperienceLevel 
@@ -58,6 +58,19 @@ const PRESET_HOME_EQUIPMENT = [
   "Rueda de abdominales (Ab roller)"
 ];
 
+const PRESET_HOME_MACHINES = [
+  "Bicicleta elíptica",
+  "Polea simple / Polea de pared",
+  "Cinta de correr / Caminadora",
+  "Bicicleta estática / Spinning",
+  "Máquina multifunción / Multigimnasio de placas",
+  "Remo indoor / Water rower",
+  "Máquina Smith / Multipower doméstica",
+  "Sillón de extensiones y curl de piernas",
+  "Banco Scott / Predicador",
+  "Soporte para sentadillas (Squat Stands)"
+];
+
 const PRESET_OUTDOOR_EQUIPMENT = [
   "Barras fijas de parque (altas)",
   "Barras paralelas de exterior",
@@ -109,6 +122,12 @@ export default function WorkoutsOnboarding({
   const [isValidatingEquipment, setIsValidatingEquipment] = useState(false);
   const [rejectedItemsList, setRejectedItemsList] = useState<RejectedEquipmentItem[]>([]);
   const [customAddSuccessMsg, setCustomAddSuccessMsg] = useState<string | null>(null);
+
+  // 2b. Home machines toggle & catalog states
+  const [showHomeMachines, setShowHomeMachines] = useState<boolean>(() => {
+    return PRESET_HOME_MACHINES.some(m => userProfile.equipment?.includes(m));
+  });
+  const [showFullGymCatalogForHome, setShowFullGymCatalogForHome] = useState(false);
 
   // 3. Training Level & Days
   const [trainingLevel, setTrainingLevel] = useState<ExperienceLevel>(userProfile.level || "intermediate");
@@ -242,15 +261,15 @@ export default function WorkoutsOnboarding({
   };
 
   // Available equipment options based on environments selected
-  const availableOptions: { category: string; items: string[] }[] = [];
+  const availableOptions: { id: string; category: string; items: string[]; isHome?: boolean }[] = [];
   if (selectedEnvironments.includes("gym")) {
-    availableOptions.push({ category: "🏢 Gimnasio y Máquinas de Fuerza", items: PRESET_GYM_EQUIPMENT });
+    availableOptions.push({ id: "gym", category: "🏢 Gimnasio y Máquinas de Fuerza", items: PRESET_GYM_EQUIPMENT });
   }
   if (selectedEnvironments.includes("home")) {
-    availableOptions.push({ category: "🏠 Equipamiento de Casa / Funcional", items: PRESET_HOME_EQUIPMENT });
+    availableOptions.push({ id: "home", category: "🏠 Equipamiento de Casa / Funcional", items: PRESET_HOME_EQUIPMENT, isHome: true });
   }
   if (selectedEnvironments.includes("outdoor")) {
-    availableOptions.push({ category: "🌳 Calistenia y Parque al Aire Libre", items: PRESET_OUTDOOR_EQUIPMENT });
+    availableOptions.push({ id: "outdoor", category: "🌳 Calistenia y Parque al Aire Libre", items: PRESET_OUTDOOR_EQUIPMENT });
   }
 
   return (
@@ -432,7 +451,7 @@ export default function WorkoutsOnboarding({
                     id: "home" as TrainingEnvironment,
                     title: "En Casa",
                     emoji: "🏠",
-                    desc: "Entrenamiento doméstico con mancuernas, bandas elásticas, barra de dominadas o esterilla."
+                    desc: "Mancuernas, bandas, polea, elíptica o máquinas que tengas en casa."
                   },
                   {
                     id: "outdoor" as TrainingEnvironment,
@@ -542,6 +561,129 @@ export default function WorkoutsOnboarding({
                         );
                       })}
                     </div>
+
+                    {/* Dedicated "Elegir máquinas en casa" Button and Panel */}
+                    {cat.isHome && (
+                      <div className="pt-2 space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowHomeMachines(prev => !prev)}
+                          className={`w-full p-3.5 rounded-2xl border transition flex items-center justify-between cursor-pointer ${
+                            showHomeMachines
+                              ? "bg-emerald-500/15 border-emerald-500 text-white shadow-md shadow-emerald-500/10"
+                              : "bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/15"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                              <Dumbbell className="h-4 w-4" />
+                            </div>
+                            <div className="text-left">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-black text-white">Elegir máquinas en casa</span>
+                                <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+                                  {PRESET_HOME_MACHINES.filter(m => selectedEquipment.includes(m)).length > 0
+                                    ? `${PRESET_HOME_MACHINES.filter(m => selectedEquipment.includes(m)).length} seleccionadas`
+                                    : "Elíptica, poleas, cardio..."}
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-white/50 block mt-0.5">
+                                ¿Tienes elíptica, polea simple, cinta de correr o multigimnasio en tu casa?
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 text-emerald-400 text-xs font-bold shrink-0 ml-2">
+                            <span>{showHomeMachines ? "Ocultar" : "Elegir máquinas"}</span>
+                            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showHomeMachines ? "rotate-180" : ""}`} />
+                          </div>
+                        </button>
+
+                        <AnimatePresence>
+                          {showHomeMachines && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.2 }}
+                              className="overflow-hidden p-3.5 rounded-2xl bg-black/40 border border-emerald-500/30 space-y-3"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                                  <span>🏗️</span> Máquinas de Casa y Cardio
+                                </span>
+                                <span className="text-[9px] text-white/40">Marca las que tengas</span>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {PRESET_HOME_MACHINES.map((machine) => {
+                                  const isSelected = selectedEquipment.includes(machine);
+                                  return (
+                                    <button
+                                      key={machine}
+                                      type="button"
+                                      onClick={() => handleToggleEquipment(machine)}
+                                      className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition cursor-pointer ${
+                                        isSelected
+                                          ? "bg-emerald-500/20 border-emerald-500 text-white font-bold shadow-sm"
+                                          : "bg-white/[0.02] border-white/5 text-white/70 hover:bg-white/[0.04]"
+                                      }`}
+                                    >
+                                      <span className="text-xs truncate pr-1">{machine}</span>
+                                      <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
+                                        isSelected ? "border-emerald-400 bg-emerald-500 text-black" : "border-white/20"
+                                      }`}>
+                                        {isSelected && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
+                              {/* Option to also see all commercial gym machines if they have a full home gym setup */}
+                              {!selectedEnvironments.includes("gym") && (
+                                <div className="pt-2 border-t border-white/5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowFullGymCatalogForHome(prev => !prev)}
+                                    className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 cursor-pointer bg-transparent border-none transition"
+                                  >
+                                    <span>{showFullGymCatalogForHome ? "Ocultar otras máquinas de gimnasio" : "+ ¿Tienes más máquinas de gimnasio comercial en casa?"}</span>
+                                    <ChevronDown className={`h-3 w-3 transition-transform ${showFullGymCatalogForHome ? "rotate-180" : ""}`} />
+                                  </button>
+
+                                  {showFullGymCatalogForHome && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 pt-2 border-t border-white/5">
+                                      {PRESET_GYM_EQUIPMENT.filter(g => !PRESET_HOME_MACHINES.includes(g)).map((gymEq) => {
+                                        const isSelected = selectedEquipment.includes(gymEq);
+                                        return (
+                                          <button
+                                            key={gymEq}
+                                            type="button"
+                                            onClick={() => handleToggleEquipment(gymEq)}
+                                            className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition cursor-pointer ${
+                                              isSelected
+                                                ? "bg-emerald-500/20 border-emerald-500 text-white font-bold shadow-sm"
+                                                : "bg-white/[0.02] border-white/5 text-white/70 hover:bg-white/[0.04]"
+                                            }`}
+                                          >
+                                            <span className="text-xs truncate pr-1">{gymEq}</span>
+                                            <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
+                                              isSelected ? "border-emerald-400 bg-emerald-500 text-black" : "border-white/20"
+                                            }`}>
+                                              {isSelected && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+                                            </div>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
                   </div>
                 ))}
 
