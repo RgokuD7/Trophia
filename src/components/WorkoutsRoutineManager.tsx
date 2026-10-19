@@ -8,12 +8,13 @@ import {
 } from "lucide-react";
 import { 
   WeeklyRoutinePlan, RoutineTemplate, RoutineDayKey, WorkoutExercise,
-  CustomExercise, ExerciseTrackingType
+  CustomExercise, ExerciseTrackingType, UserProfile
 } from "../types";
 import { 
   DEFAULT_EXERCISES, createWorkoutExerciseFromData, normalizeExerciseName, 
   resolveOrAnalyzeExercise, findExerciseInCatalog
 } from "../services/exerciseLibrary";
+import ExerciseAiAdvisorModal from "./ExerciseAiAdvisorModal";
 
 export interface WorkoutsRoutineManagerProps {
   plan?: WeeklyRoutinePlan;
@@ -27,6 +28,7 @@ export interface WorkoutsRoutineManagerProps {
   apiKey?: string;
   userId?: string;
   userEquipment?: string[];
+  userProfile?: UserProfile;
   customExercises?: CustomExercise[];
   onAddCustomExercise?: (exercise: CustomExercise) => void;
 }
@@ -74,6 +76,7 @@ export default function WorkoutsRoutineManager({
   apiKey,
   userId,
   userEquipment,
+  userProfile,
   customExercises = [],
   onAddCustomExercise
 }: WorkoutsRoutineManagerProps) {
@@ -82,6 +85,13 @@ export default function WorkoutsRoutineManager({
   );
 
   const [loadingStep, setLoadingStep] = useState(0);
+
+  // Exercise AI Consultation / Replacement state
+  const [consultingExerciseData, setConsultingExerciseData] = useState<{
+    exercise: WorkoutExercise;
+    routineId: string;
+    routineName: string;
+  } | null>(null);
 
   // Modal State for Creating/Editing Routine
   const [isRoutineModalOpen, setIsRoutineModalOpen] = useState(false);
@@ -235,6 +245,30 @@ export default function WorkoutsRoutineManager({
       ...plan,
       routines: nextRoutines,
       weeklyDaysCount: nextRoutines.length,
+      lastUpdated: new Date().toISOString()
+    });
+  };
+
+  // Handle replacing an exercise inside a routine via AI Advisor
+  const handleApplyExerciseReplacement = (newExercise: WorkoutExercise) => {
+    if (!plan || !consultingExerciseData) return;
+
+    const nextRoutines = plan.routines.map((r) => {
+      if (r.id === consultingExerciseData.routineId) {
+        const updatedExercises = r.exercises.map((ex) => {
+          if (ex.id === consultingExerciseData.exercise.id || ex.name === consultingExerciseData.exercise.name) {
+            return newExercise;
+          }
+          return ex;
+        });
+        return { ...r, exercises: updatedExercises };
+      }
+      return r;
+    });
+
+    onUpdatePlan({
+      ...plan,
+      routines: nextRoutines,
       lastUpdated: new Date().toISOString()
     });
   };
@@ -575,6 +609,26 @@ export default function WorkoutsRoutineManager({
             <strong>Asigna los días de la semana:</strong> Toca en qué día realizarás cada rutina. Se cargará automáticamente en tu <strong>Sesión Diaria</strong> el día programado.
           </div>
         </div>
+
+        {/* User Preferences & Directives Banner */}
+        {userProfile?.workoutPreferencesNotes && (
+          <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5 flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2 min-w-0">
+              <Sparkles className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">
+                <span className="font-bold text-gray-900 dark:text-white">Tus directivas para el plan: </span>
+                <span className="italic">"{userProfile.workoutPreferencesNotes}"</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onOpenPreferences}
+              className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold underline shrink-0 cursor-pointer"
+            >
+              Modificar
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 2. List of Routines with Clean Layout */}
@@ -771,6 +825,22 @@ export default function WorkoutsRoutineManager({
                                 </p>
                               )}
                             </div>
+
+                            {/* AI Consultation / Swap Button */}
+                            <button
+                              type="button"
+                              onClick={() => setConsultingExerciseData({
+                                exercise: ex,
+                                routineId: routine.id,
+                                routineName: routine.name
+                              })}
+                              className="shrink-0 px-2.5 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 border border-emerald-500/25 text-[10px] font-black transition flex items-center gap-1 cursor-pointer active:scale-95"
+                              title="Consultar con la IA o pedir un cambio para este ejercicio"
+                            >
+                              <Sparkles className="h-3 w-3" />
+                              <span className="hidden sm:inline">Consultar / Cambiar</span>
+                              <span className="sm:hidden">IA</span>
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -1348,6 +1418,20 @@ export default function WorkoutsRoutineManager({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Exercise AI Advisor / Change Modal */}
+      <ExerciseAiAdvisorModal
+        isOpen={!!consultingExerciseData}
+        onClose={() => setConsultingExerciseData(null)}
+        exercise={consultingExerciseData?.exercise || null}
+        routineName={consultingExerciseData?.routineName}
+        userProfile={userProfile || ({
+          equipment: userEquipment || [],
+          level: "intermediate"
+        } as any)}
+        apiKey={apiKey}
+        onApplyReplacement={handleApplyExerciseReplacement}
+      />
     </div>
   );
 }

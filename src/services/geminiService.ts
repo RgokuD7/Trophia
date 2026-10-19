@@ -567,6 +567,7 @@ export async function generateRoutineByIA(
     customJointPain?: string;
     requiresMedicalClearance?: boolean;
     weeklyTrainingDays?: number;
+    userNotesOrPreferences?: string;
   }
 ): Promise<WeeklyRoutinePlan> {
   const { 
@@ -578,7 +579,8 @@ export async function generateRoutineByIA(
     jointPainAreas = [], 
     customJointPain,
     requiresMedicalClearance,
-    weeklyTrainingDays = 4
+    weeklyTrainingDays = 4,
+    userNotesOrPreferences
   } = input;
 
   const targetDays = Math.min(6, Math.max(2, weeklyTrainingDays));
@@ -603,6 +605,15 @@ export async function generateRoutineByIA(
 
   if (customJointPain && customJointPain.trim()) {
     safetyInstructions += `\n- ¡MOLÉSTIAS O LESIONES ESPECÍFICAS DETALLADAS POR EL USUARIO!: "${customJointPain.trim()}". CRÍTICO: Diseña los ejercicios y rangos articulares garantizando protección absoluta para estas molestias particulares reportadas.`;
+  }
+
+  if (userNotesOrPreferences && userNotesOrPreferences.trim()) {
+    safetyInstructions += `\n- ¡PREFERENCIAS, DEPORTES SEMANALES Y DIRECTIVAS ESPECÍFICAS INDICADAS POR EL USUARIO!: "${userNotesOrPreferences.trim()}".
+CRÍTICO Y MÁXIMA PRIORIDAD:
+* Si el usuario indica que practica otros deportes en días determinados (por ejemplo: "juego a la pelota / fútbol los domingos y/o jueves"): NUNCA asignes el día de Piernas en esos días ni justo el día anterior o posterior para no causarle sobrecarga. Por ejemplo, sitúa la rutina de Piernas los lunes o martes.
+* Si el usuario manifiesta preferencia por ciertos tipos de equipamiento o ejercicios (por ejemplo: "tengo polea y prefiero hacer tríceps en polea en lugar de mancuernas"), prioriza rigurosamente ejercicios con ese equipamiento solicitado.
+* Si el usuario pide evitar o prescindir de algún ejercicio específico, respétalo absolutamente.
+* Adapta los días sugeridos de cada rutina (suggestedDay) y la selección de ejercicios respetando estas indicaciones.`;
   }
 
   const envText = environments && environments.length > 0
@@ -985,6 +996,166 @@ Debes responder estrictamente en formato JSON con la siguiente estructura:
     console.error("Gemini API error in adjustLoggedMealByChatByIA:", apiError);
     throw apiError;
   }
+}
+
+export interface ExerciseConsultationSuggestedExercise {
+  name: string;
+  trackingType: "reps" | "time";
+  sets: number;
+  reps: number;
+  weight: number;
+  caloriesBurnedPerSet: number;
+  primaryMuscles: string[];
+  secondaryMuscles?: string[];
+  techniqueTips: string;
+  equipmentNeeded: string;
+}
+
+export interface ExerciseConsultationAlternative {
+  name: string;
+  equipmentNeeded: string;
+  difficulty?: string;
+  repsText?: string;
+  justification: string;
+}
+
+export interface ExerciseConsultationResponse {
+  explanation: string;
+  suggestedExercise?: ExerciseConsultationSuggestedExercise;
+  alternativeOptions?: ExerciseConsultationAlternative[];
+}
+
+export async function consultAndAdjustExerciseByIA(
+  apiKey: string,
+  input: {
+    currentExercise: {
+      name: string;
+      sets: number;
+      reps: number;
+      weight?: number;
+      trackingType?: "reps" | "time" | "distance";
+      equipmentNeeded?: string;
+      primaryMuscles?: string[];
+      techniqueTips?: string;
+    };
+    routineName?: string;
+    userMessage: string;
+    equipmentList: string[];
+    level: ExperienceLevel;
+  }
+): Promise<ExerciseConsultationResponse> {
+  const { currentExercise, routineName, userMessage, equipmentList, level } = input;
+
+  const prompt = `Actúas como un Entrenador Deportivo de Élite, Fisiólogo y Biomecánico de la app Trophia.
+El usuario está analizando un ejercicio de su plan de entrenamiento y te ha escrito una consulta o solicitud de cambio en lenguaje natural.
+
+[CONTEXTO DEL EJERCICIO ACTUAL]:
+- Nombre: "${currentExercise.name}"
+- Rutina / Sesión: "${routineName || "Entrenamiento programado"}"
+- Series y Repeticiones actuales: ${currentExercise.sets} series × ${currentExercise.reps} reps, peso sugerido: ${currentExercise.weight || 0} kg
+- Implemento requerido actual: "${currentExercise.equipmentNeeded || "No especificado"}"
+- Músculos principales: ${(currentExercise.primaryMuscles || []).join(", ") || "No especificado"}
+- Pautas técnicas actuales: "${currentExercise.techniqueTips || "Ninguna"}"
+
+[PERFIL DEL USUARIO]:
+- Nivel de entrenamiento: ${level}
+- Equipamiento disponible: ${equipmentList.length > 0 ? equipmentList.join(", ") : "Peso corporal (sin equipamiento)"}
+
+[MENSAJE O CONSULTA DEL USUARIO]:
+"${userMessage}"
+
+[TU MISIÓN]:
+1. "explanation": Brinda una respuesta cercana, profesional y biomecánica (2 a 3 párrafos concisos, sin tecnicismos de IA).
+   - Si pregunta por qué se eligió el ejercicio original: explícale la ventaja biomecánica, curva de fuerza, estabilidad o activación muscular.
+   - Si solicita un cambio (por ejemplo, porque tiene polea en vez de mancuerna, o no le gusta el ejercicio, o le incomoda una articulación, o prefiere otra variante): valida su preferencia, explica por qué la nueva opción es excelente o cómo optimiza la tensión mecánica y el confort articular.
+2. "suggestedExercise": Si el usuario pide un cambio, menciona preferencia por otro implemento (ej: polea, barra, mancuerna), o expresa desagrado con el ejercicio actual, FORMULA el ejercicio de reemplazo ideal, completamente adaptado a su equipamiento y nivel. Si solo hizo una pregunta informativa sin pedir cambio, aún así puedes sugerir la mejor variante opcional.
+3. "alternativeOptions": Entrega 1 o 2 alternativas adicionales breves por si desea evaluar otras variantes.
+
+REGLAS DE ORO:
+- NUNCA menciones nombres de modelos de IA, APIs ni términos técnicos de programación.
+- El equipamiento del ejercicio sugerido DEBE pertenecer al equipamiento disponible del usuario (o peso corporal).
+- Responde estrictamente en formato JSON:
+{
+  "explanation": "Texto explicativo para el usuario...",
+  "suggestedExercise": {
+    "name": "Nombre exacto del nuevo ejercicio (ej: Extensión de tríceps en polea alta con cuerda)",
+    "trackingType": "reps",
+    "sets": 3,
+    "reps": 12,
+    "weight": 15,
+    "caloriesBurnedPerSet": 5,
+    "primaryMuscles": ["Tríceps braquial"],
+    "secondaryMuscles": ["Ancóneo", "Core"],
+    "techniqueTips": "Mantén los codos pegados a los costados y abre la cuerda al final de la extensión.",
+    "equipmentNeeded": "Poleas cruzadas / Cables ajustables"
+  },
+  "alternativeOptions": [
+    {
+      "name": "Fondos en banco o paralelas",
+      "equipmentNeeded": "Banco o paralelas",
+      "repsText": "3 series de 10-12 reps",
+      "justification": "Gran estímulo en la porción lateral del tríceps."
+    }
+  ]
+}`;
+
+  try {
+    const res = await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.5-flash", tier: "flash" });
+    if (res && res.explanation) {
+      return res;
+    }
+  } catch (err) {
+    console.warn("Fallback offline in consultAndAdjustExerciseByIA:", err);
+  }
+
+  // Fallback inteligente offline
+  const lowerMsg = userMessage.toLowerCase();
+  const lowerEx = currentExercise.name.toLowerCase();
+
+  let fallbackSuggestedName = `Variante adaptada de ${currentExercise.name}`;
+  let fallbackEquip = currentExercise.equipmentNeeded || "Mancuernas";
+  let fallbackExplanation = `He analizado tu consulta sobre "${currentExercise.name}". `;
+
+  if (lowerMsg.includes("polea") && (lowerEx.includes("trícep") || lowerEx.includes("tricep") || (currentExercise.primaryMuscles || []).some(m => m.toLowerCase().includes("trícep") || m.toLowerCase().includes("tricep")))) {
+    fallbackSuggestedName = "Extensión de tríceps en polea alta con cuerda";
+    fallbackEquip = "Poleas cruzadas / Cables ajustables";
+    fallbackExplanation = "¡Excelente observación biomecánica! La polea alta mantiene una tensión mecánica uniforme en todo el rango de movimiento del tríceps, especialmente en el punto de máxima contracción donde las mancuernas pierden resistencia por la gravedad. He configurado la variante con cuerda para mayor libertad articular de tus muñecas.";
+  } else if (lowerMsg.includes("polea")) {
+    fallbackSuggestedName = `${currentExercise.name} en polea`;
+    fallbackEquip = "Poleas cruzadas / Cables ajustables";
+    fallbackExplanation = "Trabajar en polea te ofrece una curva de resistencia constante y mayor protección articular frente al peso libre.";
+  } else if (lowerMsg.includes("por que") || lowerMsg.includes("por qué") || lowerMsg.includes("motivo") || lowerMsg.includes("razón")) {
+    fallbackExplanation = `Se recomendó "${currentExercise.name}" porque es uno de los ejercicios con mayor índice de activación muscular en ${(currentExercise.primaryMuscles || ["la zona"]).join(", ")}, permitiendo una sobrecarga progresiva segura y eficiente para tu nivel.`;
+  } else if (lowerMsg.includes("no me gusta") || lowerMsg.includes("odio") || lowerMsg.includes("cambi") || lowerMsg.includes("otra")) {
+    fallbackExplanation = `Entendido perfectamente. Si un ejercicio no te resulta cómodo o motivador, la adherencia disminuye. He seleccionado una alternativa biomecánica equivalente que trabaja el mismo grupo muscular con excelente estímulo.`;
+    fallbackSuggestedName = lowerEx.includes("press") ? "Flexiones de brazos o Press declinado" : lowerEx.includes("sentadilla") ? "Prensa de piernas o Sentadilla búlgara" : `Variante alternativa de ${currentExercise.name}`;
+  } else {
+    fallbackExplanation = `He adaptado el ejercicio a tus comentarios para que el estímulo sea óptimo y se ajuste con precisión a tus preferencias de entrenamiento.`;
+  }
+
+  return {
+    explanation: fallbackExplanation,
+    suggestedExercise: {
+      name: fallbackSuggestedName,
+      trackingType: currentExercise.trackingType === "time" ? "time" : "reps",
+      sets: currentExercise.sets || 3,
+      reps: currentExercise.reps || 10,
+      weight: currentExercise.weight || 0,
+      caloriesBurnedPerSet: 5,
+      primaryMuscles: currentExercise.primaryMuscles || ["Músculos principales"],
+      secondaryMuscles: ["Estabilizadores"],
+      techniqueTips: "Ejecuta con ritmo controlado: 2 segundos de bajada excéntrica y 1 segundo de subida concéntrica.",
+      equipmentNeeded: fallbackEquip
+    },
+    alternativeOptions: [
+      {
+        name: `Alternativa funcional para ${currentExercise.name}`,
+        equipmentNeeded: fallbackEquip,
+        repsText: "3 series de 10 a 12 reps",
+        justification: "Alternativa complementaria con foco en estabilidad y control postural."
+      }
+    ]
+  };
 }
 
 export async function suggestAlternativeExercisesByIA(

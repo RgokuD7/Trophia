@@ -25,6 +25,7 @@ import {
 import { SPORTS_METS, getLocalDateString, formatFriendlyDate, isSameDay } from "../utils/fitnessUtils";
 import WorkoutsOnboarding from "./WorkoutsOnboarding";
 import WorkoutsRoutineManager, { DAY_KEYS, DAY_LABEL_MAP } from "./WorkoutsRoutineManager";
+import ExerciseAiAdvisorModal from "./ExerciseAiAdvisorModal";
 
 export interface ExerciseGuideViewData {
   name: string;
@@ -265,8 +266,6 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
   // Phase 3 States
   const [calendarView, setCalendarView] = useState<"week" | "month">("week");
   const [exerciseForAlternatives, setExerciseForAlternatives] = useState<WorkoutExercise | null>(null);
-  const [alternativesList, setAlternativesList] = useState<any[]>([]);
-  const [loadingAlternatives, setLoadingAlternatives] = useState(false);
 
   // Custom Exercises DB Cache State
   const [customExercises, setCustomExercises] = useState<CustomExercise[]>([]);
@@ -443,6 +442,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     level: ExperienceLevel;
     jointPainAreas: ("knee" | "back" | "shoulder")[];
     customJointPain: string;
+    workoutPreferencesNotes?: string;
     weeklyTrainingDays: number;
   }) => {
     const updatedProfile: UserProfile = {
@@ -454,6 +454,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
       level: data.level,
       jointPainAreas: data.jointPainAreas,
       customJointPain: data.customJointPain,
+      workoutPreferencesNotes: data.workoutPreferencesNotes,
       weeklyTrainingDays: data.weeklyTrainingDays,
       isWorkoutsOnboardingCompleted: true
     };
@@ -475,6 +476,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
         equipment: updatedProfile.equipment,
         jointPainAreas: updatedProfile.jointPainAreas,
         customJointPain: updatedProfile.customJointPain,
+        userNotesOrPreferences: updatedProfile.workoutPreferencesNotes,
         requiresMedicalClearance: updatedProfile.requiresMedicalClearance,
         weeklyTrainingDays: updatedProfile.weeklyTrainingDays
       });
@@ -645,6 +647,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
         equipment: userProfile.equipment,
         jointPainAreas: userProfile.jointPainAreas,
         customJointPain: userProfile.customJointPain,
+        userNotesOrPreferences: userProfile.workoutPreferencesNotes,
         requiresMedicalClearance: userProfile.requiresMedicalClearance,
         weeklyTrainingDays: userProfile.weeklyTrainingDays
       });
@@ -679,6 +682,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
         equipment: userProfile.equipment,
         jointPainAreas: userProfile.jointPainAreas,
         customJointPain: userProfile.customJointPain,
+        userNotesOrPreferences: userProfile.workoutPreferencesNotes,
         requiresMedicalClearance: userProfile.requiresMedicalClearance,
         weeklyTrainingDays: userProfile.weeklyTrainingDays
       });
@@ -1154,45 +1158,16 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     });
   };
 
-  const handleOpenAlternatives = async (exercise: WorkoutExercise) => {
+  const handleOpenAlternatives = (exercise: WorkoutExercise) => {
     setExerciseForAlternatives(exercise);
-    setLoadingAlternatives(true);
-    setAlternativesList([]);
-    try {
-      const data = await suggestAlternativeExercisesByIA(
-        apiKey || "",
-        exercise.name,
-        userProfile.equipment,
-        userProfile.level
-      );
-      if (data && data.alternatives) {
-        setAlternativesList(data.alternatives);
-      } else {
-        setAlternativesList([]);
-      }
-    } catch (err) {
-      console.error("Error fetching alternatives", err);
-      setAlternativesList([]);
-    } finally {
-      setLoadingAlternatives(false);
-    }
   };
 
-  const handleReplaceExercise = (alternative: any) => {
+  const handleApplyExerciseReplacementInActiveSession = (newExercise: WorkoutExercise) => {
     if (!activeSession || !exerciseForAlternatives) return;
 
     const updatedExercises = activeSession.exercises.map(ex => {
-      if (ex.id === exerciseForAlternatives.id) {
-        return {
-          ...ex,
-          name: alternative.name,
-          completedSets: Array.from({ length: ex.sets }).map((_, sIdx) => ({
-            setIndex: sIdx,
-            completed: false,
-            reps: ex.reps,
-            weight: ex.weight
-          }))
-        };
+      if (ex.id === exerciseForAlternatives.id || ex.name === exerciseForAlternatives.name) {
+        return newExercise;
       }
       return ex;
     });
@@ -1201,7 +1176,6 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     onAddWorkout(updatedSession);
     setActiveSession(updatedSession);
     setExerciseForAlternatives(null);
-    setAlternativesList([]);
   };
 
   const getMonthlyStats = () => {
@@ -2065,10 +2039,10 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                             <button
                               onClick={() => handleOpenAlternatives(ex)}
                               className="text-[10px] font-black text-emerald-500 hover:text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-xl border border-emerald-500/20 flex items-center gap-1 transition cursor-pointer"
-                              title="Ver ejercicios alternativos para el mismo grupo muscular"
+                              title="Consultar con la IA o pedir cambio para este ejercicio"
                             >
-                              <RefreshCw className="h-3 w-3" />
-                              <span>Alternativas</span>
+                              <Sparkles className="h-3 w-3" />
+                              <span>Consultar / Cambiar</span>
                             </button>
                           </div>
                         </div>
@@ -2407,6 +2381,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
           apiKey={apiKey}
           userId={userId}
           userEquipment={userProfile.equipment}
+          userProfile={userProfile}
           customExercises={customExercises}
           onAddCustomExercise={(newEx) => setCustomExercises(prev => [newEx, ...prev])}
         />
@@ -2500,99 +2475,16 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
         )}
       </AnimatePresence>
 
-      {/* Alternatives Modal */}
-      <AnimatePresence>
-        {exerciseForAlternatives && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-[#12131d] border border-gray-200 dark:border-gray-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 text-left"
-            >
-              <div className="flex justify-between items-start">
-                <div>
-                  <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">Alternativas Inteligentes</span>
-                  <h3 className="text-base font-extrabold text-gray-900 dark:text-white mt-0.5">
-                    Reemplazar "{exerciseForAlternatives.name}"
-                  </h3>
-                </div>
-                <button
-                  onClick={() => { setExerciseForAlternatives(null); setAlternativesList([]); }}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-white transition cursor-pointer text-sm font-bold"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {loadingAlternatives ? (
-                <div className="py-12 flex flex-col items-center justify-center gap-3">
-                  <RefreshCw className="h-8 w-8 text-emerald-400 animate-spin" />
-                  <span className="text-xs text-gray-500 dark:text-gray-400 font-bold">Buscando ejercicios sustitutos...</span>
-                </div>
-              ) : alternativesList.length > 0 ? (
-                <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1 no-scrollbar">
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
-                    Sugerencias personalizadas para tu nivel (<b>{userProfile.level}</b>) y equipamiento (<b>{userProfile.equipment.join(", ") || "Peso Corporal"}</b>):
-                  </p>
-                  
-                  {alternativesList.map((alt, idx) => (
-                    <div 
-                      key={idx}
-                      className="bg-gray-50 dark:bg-[#161824] border border-gray-200 dark:border-gray-800 p-3.5 rounded-2xl space-y-2.5 hover:border-emerald-500/30 transition-all shadow-sm"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="text-xs font-black text-gray-900 dark:text-white">{alt.name}</h4>
-                          <span className="text-[9px] text-gray-450 dark:text-gray-500 font-bold block mt-0.5 font-mono">
-                            Equipamiento: {alt.equipmentNeeded}
-                          </span>
-                        </div>
-                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border font-mono ${
-                          alt.difficulty === "Fácil" 
-                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" 
-                            : alt.difficulty === "Medio" 
-                              ? "bg-amber-500/10 border-amber-500/20 text-amber-500" 
-                              : "bg-rose-500/10 border-rose-500/20 text-rose-500"
-                        }`}>
-                          {alt.difficulty}
-                        </span>
-                      </div>
-
-                      <div className="space-y-1">
-                        <span className="block text-[10px] text-gray-650 dark:text-gray-300 font-medium">
-                          {alt.justification}
-                        </span>
-                        <span className="block text-[9px] text-emerald-500 dark:text-emerald-400 font-bold font-mono">
-                          {alt.repsText}
-                        </span>
-                      </div>
-
-                      <button
-                        onClick={() => handleReplaceExercise(alt)}
-                        className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-black py-2 rounded-xl transition flex items-center justify-center gap-1 active:scale-98 shadow-sm cursor-pointer"
-                      >
-                        <Check className="h-3 w-3" />
-                        <span>Seleccionar y Reemplazar</span>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-6 text-center space-y-2">
-                  <p className="text-xs text-rose-450 dark:text-rose-400 font-bold">No se pudieron obtener alternativas</p>
-                  <button
-                    onClick={() => handleOpenAlternatives(exerciseForAlternatives)}
-                    className="mx-auto text-[10px] font-bold text-gray-600 dark:text-gray-400 underline cursor-pointer"
-                  >
-                    Reintentar búsqueda
-                  </button>
-                </div>
-              )}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* Exercise AI Advisor / Alternatives Modal */}
+      <ExerciseAiAdvisorModal
+        isOpen={!!exerciseForAlternatives}
+        onClose={() => setExerciseForAlternatives(null)}
+        exercise={exerciseForAlternatives}
+        routineName={activeSession?.name || "Sesión de hoy"}
+        userProfile={userProfile}
+        apiKey={apiKey}
+        onApplyReplacement={handleApplyExerciseReplacementInActiveSession}
+      />
 
       {/* Contextual Timer Modal */}
       <AnimatePresence>

@@ -61,6 +61,7 @@ export interface UserProfile {
   requiresMedicalClearance?: boolean;
   jointPainAreas?: ("knee" | "back" | "shoulder")[];
   customJointPain?: string;
+  workoutPreferencesNotes?: string;
   customEquipment?: string[];
   isWorkoutsOnboardingCompleted?: boolean;
   weeklyRoutinePlan?: WeeklyRoutinePlan;

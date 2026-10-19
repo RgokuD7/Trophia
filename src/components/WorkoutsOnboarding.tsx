@@ -25,6 +25,7 @@ export interface WorkoutsOnboardingProps {
     level: ExperienceLevel;
     jointPainAreas: ("knee" | "back" | "shoulder")[];
     customJointPain: string;
+    workoutPreferencesNotes?: string;
     weeklyTrainingDays: number;
   }) => void;
 }
@@ -139,6 +140,11 @@ export default function WorkoutsOnboarding({
   );
   const [customJointPainText, setCustomJointPainText] = useState<string>(
     userProfile.customJointPain || ""
+  );
+
+  // 4b. Preferences & weekly sports instructions for routine generation
+  const [workoutPreferencesNotes, setWorkoutPreferencesNotes] = useState<string>(
+    userProfile.workoutPreferencesNotes || ""
   );
 
   if (!isOpen) return null;
@@ -256,6 +262,7 @@ export default function WorkoutsOnboarding({
       level: trainingLevel,
       jointPainAreas: selectedJointPain,
       customJointPain: customJointPainText.trim(),
+      workoutPreferencesNotes: workoutPreferencesNotes.trim(),
       weeklyTrainingDays: weeklyDays
     });
   };
@@ -1102,6 +1109,73 @@ export default function WorkoutsOnboarding({
                   </div>
                 )}
               </div>
+
+              {/* Instructions and Weekly Sports Preferences for IA Routine Generation */}
+              <div className="p-4.5 rounded-3xl bg-white/[0.03] border border-white/10 space-y-2.5">
+                <label className="text-xs font-black text-white flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+                    <span>Deportes semanales o preferencias especiales para tu rutina</span>
+                  </span>
+                  <span className="text-[9px] text-white/40 font-mono">Opcional</span>
+                </label>
+
+                <p className="text-[11px] text-white/50 leading-relaxed">
+                  ¿Juegas fútbol u otros deportes ciertos días? ¿Prefieres poleas en vez de mancuernas para tríceps? Cuéntaselo al sistema para que programe tus días inteligentes (ej: alejar pierna de los días de fútbol) y adapte los ejercicios a tu gusto.
+                </p>
+
+                {/* Quick suggestions chips */}
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {[
+                    "⚽ Juego fútbol los domingos y jueves (alejar piernas)",
+                    "🔗 Prefiero poleas y cables para tríceps",
+                    "🚫 Evitar ejercicios con saltos o burpees",
+                    "⏱️ Sesiones dinámicas de 45 minutos",
+                    "🦾 Priorizar estímulo de torso y brazos"
+                  ].map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => {
+                        const cleanChip = chip.replace(/^[^\s]+\s/, "");
+                        setWorkoutPreferencesNotes(prev => {
+                          const trimmed = prev.trim();
+                          if (!trimmed) return cleanChip;
+                          if (trimmed.includes(cleanChip)) return trimmed;
+                          return `${trimmed}. ${cleanChip}`;
+                        });
+                      }}
+                      className="text-[10px] px-2.5 py-1 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-white/70 hover:text-emerald-300 border border-white/5 hover:border-emerald-500/30 transition cursor-pointer font-bold"
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+
+                <textarea
+                  value={workoutPreferencesNotes}
+                  onChange={(e) => setWorkoutPreferencesNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Ej: Juego a la pelota los domingos y a veces los jueves, por favor programa pierna a principios de semana para no sobrecargarme. Además, tengo polea y prefiero hacer tríceps en polea en lugar de mancuernas..."
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-black/40 border border-white/10 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-emerald-500 transition resize-none leading-relaxed"
+                />
+
+                {workoutPreferencesNotes.trim() && (
+                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-300 font-medium flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5">
+                      <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                      <span>El sistema adaptará los días semanales y ejercicios según estas indicaciones.</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setWorkoutPreferencesNotes("")}
+                      className="text-[10px] text-white/40 hover:text-rose-400 underline cursor-pointer"
+                    >
+                      Borrar
+                    </button>
+                  </div>
+                )}
+              </div>
             </motion.div>
           )}
 
@@ -1185,6 +1259,17 @@ export default function WorkoutsOnboarding({
                         "{customJointPainText.trim()}"
                       </p>
                     )}
+                  </div>
+                )}
+
+                {workoutPreferencesNotes.trim() && (
+                  <div className="pt-3 border-t border-white/5">
+                    <span className="text-[10px] text-emerald-400 uppercase font-mono font-bold block mb-1">
+                      Preferencias e Instrucciones para tu Plan
+                    </span>
+                    <p className="text-[11px] text-white/80 italic bg-black/30 p-2.5 rounded-xl border border-white/5 leading-relaxed">
+                      "{workoutPreferencesNotes.trim()}"
+                    </p>
                   </div>
                 )}
               </div>
