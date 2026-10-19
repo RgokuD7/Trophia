@@ -14,6 +14,7 @@ import FoodLogger from "./components/FoodLogger";
 import Auth from "./components/Auth";
 import RecipeAssistantModal from "./components/RecipeAssistantModal";
 import NutritionHub from "./components/NutritionHub";
+import Workouts from "./components/Workouts";
 import { getSuggestedMealTypeByTime } from "./utils/fitnessUtils";
 
 // Import Firebase services
@@ -422,22 +423,15 @@ export default function App() {
                 />
               )}
 
-              {activeTab === "workouts" && (
-                <div className="flex-1 flex flex-col items-center justify-center px-8 text-center space-y-5">
-                  <div className="w-20 h-20 rounded-full bg-white/[0.03] border border-white/10 flex items-center justify-center">
-                    <Lock className="h-8 w-8 text-white/20" />
-                  </div>
-                  <div className="space-y-2">
-                    <h2 className="text-lg font-black text-white tracking-tight">Próximamente</h2>
-                    <p className="text-[11px] text-white/40 leading-relaxed max-w-[260px] mx-auto">
-                      Estamos perfeccionando tu módulo de entrenamiento personalizado con IA. ¡Pronto estará disponible!
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                    <Dumbbell className="h-4 w-4 text-emerald-400" />
-                    <span className="text-[10px] font-bold text-emerald-400">Rutinas · Ejercicios · Progresión</span>
-                  </div>
-                </div>
+              {activeTab === "workouts" && user && profile && (
+                <Workouts
+                  apiKey={profile.apiKey}
+                  userProfile={profile}
+                  workoutHistory={workoutHistory}
+                  onAddWorkout={handleAddWorkout}
+                  onClearWorkouts={handleClearWorkouts}
+                  onUpdateProfile={handleUpdateProfile}
+                />
               )}
 
               {activeTab === "settings" && user && (
@@ -663,14 +657,11 @@ export default function App() {
 
             <button
               onClick={() => setActiveTab("workouts")}
-              className={`relative flex flex-col items-center gap-1 py-1.5 transition ${
+              className={`flex flex-col items-center gap-1 py-1.5 transition ${
                 activeTab === "workouts" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"
               }`}
             >
-              <div className="relative">
-                <Dumbbell className="h-5 w-5" />
-                <Lock className="h-2.5 w-2.5 absolute -top-1 -right-1.5 text-amber-400" />
-              </div>
+              <Dumbbell className="h-5 w-5" />
               <span className="text-[9px] font-bold uppercase tracking-wide">Rutinas</span>
             </button>
 

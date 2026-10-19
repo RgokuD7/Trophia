@@ -30,6 +30,7 @@ export interface UserProfile {
   fatTarget: number; // in grams
   apiKey?: string;
   usdaApiKey?: string;
+  muscleWikiApiKey?: string;
   isOnboardingCompleted: boolean;
   allergies?: string[];
   customAllergies?: string;
@@ -125,6 +126,12 @@ export interface WorkoutExercise {
     reps: number;
     weight: number;
   }[];
+  muscleWikiId?: number;
+  primaryMuscles?: string[];
+  videoUrl?: string;
+  sideVideoUrl?: string;
+  instructions?: string[];
+  tips?: string;
 }
 
 export interface WorkoutSession {
