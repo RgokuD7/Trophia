@@ -345,7 +345,7 @@ export default function WorkoutsOnboarding({
                   </div>
                   <div>
                     <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-widest block">
-                      Potenciado con Gemini 3.8 Flash
+                      Planificación Inteligente de Ejercicio
                     </span>
                     <h2 className="text-xl font-black text-white tracking-tight">
                       ¡Tu Gimnasio Inteligente te da la bienvenida!
@@ -365,7 +365,7 @@ export default function WorkoutsOnboarding({
                     <div>
                       <h3 className="text-xs font-black text-white">Rutinas IA 100% a Medida</h3>
                       <p className="text-[11px] text-white/60 mt-0.5 leading-relaxed">
-                        Gemini formulará sesiones óptimas basadas en las máquinas y herramientas que realmente tienes, modulando la fatiga por grupo muscular.
+                        El sistema formulará sesiones óptimas basadas en las máquinas y herramientas que realmente tienes, modulando la fatiga por grupo muscular.
                       </p>
                     </div>
                   </div>
@@ -1098,7 +1098,7 @@ export default function WorkoutsOnboarding({
                 {customJointPainText.trim() && (
                   <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-300 font-medium flex items-center gap-2">
                     <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                    <span>Esta información será enviada a Gemini como instrucción médica prioritaria.</span>
+                    <span>Esta información se tomará como prioridad médica para cuidar tus articulaciones.</span>
                   </div>
                 )}
               </div>
@@ -1123,7 +1123,7 @@ export default function WorkoutsOnboarding({
                   ¡Todo listo para crear tu rutina inteligente!
                 </h2>
                 <p className="text-xs text-white/60 mt-1">
-                  Revisa tu configuración. Al confirmar, Gemini 3.8 Flash diseñará una sesión completa con calentamiento, ejercicios de fuerza con series y pesos sugeridos, y estiramientos.
+                  Revisa tu configuración. Al confirmar, el sistema diseñará tus rutinas completas con calentamiento, ejercicios de fuerza adaptados y estiramientos.
                 </p>
               </div>
 
@@ -1197,7 +1197,7 @@ export default function WorkoutsOnboarding({
                 <div>
                   <h4 className="text-xs font-black text-white">Sesión personalizada lista para formular</h4>
                   <p className="text-[10px] text-white/60 mt-0.5">
-                    Al presionar el botón inferior, guardaremos tus preferencias y Gemini creará tu primera rutina en tiempo real.
+                    Al presionar el botón inferior, guardaremos tus preferencias y se creará tu plan de rutinas en tiempo real.
                   </p>
                 </div>
               </div>

@@ -69,74 +69,51 @@ export default function WorkoutsRoutineManager({
     return () => clearInterval(interval);
   }, [isGenerating]);
 
-  // If AI is formulating the routines, show beautiful animated loader
+  // If AI is formulating the routines, show compact, elegant animated loader
   if (isGenerating) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-lg mx-auto space-y-6 min-h-[60vh] my-auto">
-        {/* Animated Central Graphic */}
-        <div className="relative w-32 h-32 flex items-center justify-center">
-          {/* Outer glowing pulsing orb */}
+      <div className="flex-1 flex flex-col items-center justify-center py-6 px-4 text-center max-w-sm mx-auto space-y-4">
+        {/* Animated Central Graphic: compact and contained */}
+        <div className="relative w-16 h-16 flex items-center justify-center">
+          {/* Subtle pulse background */}
           <motion.div
-            animate={{ scale: [1, 1.25, 1], opacity: [0.3, 0.7, 0.3] }}
-            transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl pointer-events-none"
+            animate={{ scale: [1, 1.15, 1], opacity: [0.2, 0.5, 0.2] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute inset-0 rounded-2xl bg-emerald-500/20 blur-md pointer-events-none"
           />
 
-          {/* Outer rotating dashed ring */}
+          {/* Rotating dashed ring */}
           <motion.div
             animate={{ rotate: 360 }}
-            transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-            className="absolute inset-0 rounded-full border-2 border-emerald-500/30 border-dashed"
+            transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+            className="absolute -inset-1 rounded-2xl border border-emerald-500/30 border-dashed"
           />
 
-          {/* Middle fast spinning accent ring */}
-          <motion.div
-            animate={{ rotate: -360 }}
-            transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-            className="absolute inset-2 rounded-full border-2 border-t-emerald-400 border-r-teal-300 border-b-transparent border-l-transparent"
-          />
-
-          {/* Core circular badge */}
-          <motion.div
-            animate={{ scale: [1, 1.06, 1] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-            className="w-20 h-20 rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-2xl shadow-emerald-500/40 relative z-10"
-          >
-            <Sparkles className="h-9 w-9 text-white animate-pulse" />
-          </motion.div>
-
-          {/* Orbiting sparkles badge */}
-          <motion.div
-            animate={{
-              x: [0, 48, 0, -48, 0],
-              y: [-48, 0, 48, 0, -48]
-            }}
-            transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-            className="absolute z-20 w-7 h-7 rounded-full bg-[#0d0e15] border border-emerald-400 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/20"
-          >
-            <Dumbbell className="h-3.5 w-3.5" />
-          </motion.div>
+          {/* Core badge */}
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 relative z-10">
+            <Sparkles className="h-7 w-7 text-white animate-pulse" />
+          </div>
         </div>
 
         {/* Text Header */}
-        <div className="space-y-2 max-w-sm">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 dark:text-emerald-400 text-[10px] font-mono font-bold uppercase tracking-wider">
+        <div className="space-y-1.5">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
             <Sparkles className="h-3 w-3 animate-spin" />
-            <span>Gemini 3.8 Flash • IA Activa</span>
+            <span>Creando tus Rutinas</span>
           </div>
 
-          <h3 className="text-lg font-black text-gray-900 dark:text-white tracking-tight">
+          <h3 className="text-base font-black text-gray-900 dark:text-white tracking-tight">
             Diseñando tus Rutinas Personalizadas...
           </h3>
 
           <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-            Estamos creando una rutina inteligente para cada uno de tus días de entrenamiento, adaptada a tu equipamiento y articulaciones.
+            Adaptando la división muscular, ejercicios y series a tus días y equipamiento disponible.
           </p>
         </div>
 
         {/* Animated Progress Steps */}
-        <div className="w-full bg-white dark:bg-[#161824] border border-gray-200 dark:border-gray-800 p-4.5 rounded-3xl shadow-lg space-y-3 text-left">
-          <div className="space-y-2.5">
+        <div className="w-full bg-white dark:bg-[#161824] border border-gray-200 dark:border-gray-800 p-3.5 rounded-2xl shadow-md space-y-2 text-left">
+          <div className="space-y-2">
             {[
               { label: "Analizando entorno y equipamiento disponible", minStep: 0 },
               { label: "Optimizando división muscular según tus días", minStep: 1 },
@@ -149,7 +126,7 @@ export default function WorkoutsRoutineManager({
               return (
                 <div
                   key={sIdx}
-                  className={`flex items-center gap-3 p-2 rounded-xl transition-all duration-300 ${
+                  className={`flex items-center gap-2.5 p-1.5 rounded-lg transition-all duration-300 ${
                     isCurrent
                       ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold"
                       : isDone
@@ -159,15 +136,15 @@ export default function WorkoutsRoutineManager({
                 >
                   <div className="shrink-0">
                     {isDone ? (
-                      <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center">
-                        <Check className="h-3 w-3 stroke-[3]" />
+                      <div className="w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center">
+                        <Check className="h-2.5 w-2.5 stroke-[3]" />
                       </div>
                     ) : isCurrent ? (
-                      <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-400 flex items-center justify-center">
-                        <RefreshCw className="h-3 w-3 animate-spin" />
+                      <div className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-400 flex items-center justify-center">
+                        <RefreshCw className="h-2.5 w-2.5 animate-spin" />
                       </div>
                     ) : (
-                      <div className="w-5 h-5 rounded-full border border-gray-300 dark:border-gray-700 flex items-center justify-center text-[10px] text-gray-400 font-mono">
+                      <div className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-700 flex items-center justify-center text-[9px] text-gray-400 font-mono">
                         {sIdx + 1}
                       </div>
                     )}
@@ -179,7 +156,7 @@ export default function WorkoutsRoutineManager({
           </div>
 
           {/* Shimmer progress bar */}
-          <div className="w-full h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden mt-3 relative">
+          <div className="w-full h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden mt-2 relative">
             <motion.div
               animate={{
                 x: ["-100%", "100%"]
@@ -194,8 +171,8 @@ export default function WorkoutsRoutineManager({
           </div>
         </div>
 
-        <span className="text-[10px] text-gray-400 dark:text-gray-500 italic">
-          💡 En unos segundos aparecerán todas tus rutinas para que asignes qué día harás cada una.
+        <span className="text-[10px] text-gray-400 dark:text-gray-500 italic block">
+          💡 En unos segundos aparecerán tus rutinas para que asignes qué día harás cada una.
         </span>
       </div>
     );
@@ -250,7 +227,7 @@ export default function WorkoutsRoutineManager({
             Aún no tienes rutinas configuradas
           </h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
-            Completa la configuración con nuestro asistente de IA para que Gemini cree tu plan semanal dividido por días según tu equipamiento.
+            Completa la configuración con nuestro asistente inteligente para crear tu plan semanal dividido por días según tu equipamiento.
           </p>
         </div>
         <button
