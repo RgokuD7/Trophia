@@ -1624,25 +1624,34 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
               <div className="space-y-4">
                 
                 {/* Session title bar */}
-                <div className="bg-white dark:bg-[#161824] p-4 rounded-xl border border-gray-250 dark:border-gray-800 flex justify-between items-center shadow-md">
+                <div className="bg-white dark:bg-[#161824] p-4.5 rounded-2xl border border-gray-200 dark:border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md text-left">
                   <div>
-                    <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">Plan del día</span>
-                    <h3 className="text-sm font-extrabold text-gray-900 dark:text-white mt-0.5">{activeSession.name}</h3>
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">
+                        Plan del día
+                      </span>
+                      <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
+                        {activeSession.exercises.length} ejercicios · ~{activeSession.durationMinutes || 45} min
+                      </span>
+                    </div>
+                    <h3 className="text-base font-black text-gray-900 dark:text-white">
+                      {activeSession.name}
+                    </h3>
                   </div>
                   {activeSession.completed ? (
-                    <div className="flex items-center gap-1 text-xs font-bold text-emerald-400 bg-emerald-500/10 py-1 px-2.5 rounded-full border border-emerald-500/20">
-                      <Check className="h-3.5 w-3.5" />
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-500/10 py-1.5 px-3 rounded-xl border border-emerald-500/20 self-start sm:self-auto">
+                      <Check className="h-4 w-4 stroke-[3]" />
                       <span>Completado</span>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 self-start sm:self-auto">
                       <button
                         type="button"
                         onClick={() => setIsTimerModalOpen(true)}
-                        className="bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-800 dark:text-gray-200 text-xs font-bold py-1.5 px-3 rounded-lg transition flex items-center gap-1.5 cursor-pointer border border-gray-200 dark:border-white/10"
+                        className="bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-800 dark:text-gray-200 text-xs font-bold py-2 px-3 rounded-xl transition flex items-center gap-1.5 cursor-pointer border border-gray-200 dark:border-white/10"
                         title="Abrir cronómetro y temporizador de series"
                       >
-                        <Timer className="h-3.5 w-3.5 text-emerald-400" />
+                        <Timer className="h-4 w-4 text-emerald-400" />
                         <span>Temporizador</span>
                         {isTimerRunning && (
                           <span className="px-1.5 py-0.2 rounded-full bg-emerald-500 text-white text-[9px] font-mono animate-pulse">
@@ -1652,18 +1661,20 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                       </button>
                       <button
                         onClick={handleMarkSessionComplete}
-                        className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition cursor-pointer"
+                        className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black py-2 px-4 rounded-xl transition cursor-pointer shadow-md shadow-emerald-500/20 active:scale-95"
                       >
-                        Terminar
+                        Terminar Sesión
                       </button>
                     </div>
                   )}
                 </div>
 
                 {/* Warm up block */}
-                <div className="bg-white dark:bg-[#12131d] p-3 rounded-xl border border-gray-200 dark:border-gray-800/60 space-y-2">
-                  <span className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">1. Calentamiento (Movilidad)</span>
-                  <ul className="space-y-1 text-xs text-gray-750 dark:text-gray-300">
+                <div className="bg-white dark:bg-[#12131d] p-3.5 rounded-2xl border border-gray-200 dark:border-gray-800/60 space-y-2 text-left">
+                  <span className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    1. Calentamiento (Movilidad)
+                  </span>
+                  <ul className="space-y-1 text-xs text-gray-700 dark:text-gray-300">
                     {activeSession.warmup.map((w, idx) => (
                       <li key={idx} className="flex gap-1.5 items-start">
                         <span className="text-emerald-400 font-bold">•</span>
@@ -1674,8 +1685,10 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                 </div>
 
                 {/* Exercises Tracker Block */}
-                <div className="space-y-3">
-                  <span className="block text-xs font-bold text-gray-550 dark:text-gray-400 uppercase tracking-wide">2. Rutina Central (Ejercicios)</span>
+                <div className="space-y-3.5 text-left">
+                  <span className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    2. Rutina Central (Ejercicios)
+                  </span>
                   
                   {activeSession.exercises.map((ex) => {
                     const allCompleted = ex.completedSets.every(s => s.completed);
@@ -1684,124 +1697,144 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                     return (
                       <div 
                         key={ex.id}
-                        className={`bg-white dark:bg-[#161824] rounded-2xl border p-4 space-y-3 shadow-md transition ${
+                        className={`bg-white dark:bg-[#161824] rounded-3xl border p-4 sm:p-5 space-y-3.5 shadow-md transition text-left ${
                           allCompleted ? "border-emerald-500/30 bg-emerald-500/5 dark:bg-[#161824]/40" : "border-gray-200 dark:border-gray-800"
                         }`}
                       >
-                        <div className="flex justify-between items-start gap-2">
-                          <div className="flex gap-2">
+                        {/* Fila 1: Estrella + Nombre + Fav Badge a la izq | Pastilla de Calorías a la der */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
                             <button
                               onClick={() => handleToggleFavorite(ex.name)}
-                              className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                              className={`p-1.5 rounded-xl border transition-all cursor-pointer shrink-0 ${
                                 (userProfile.favoriteExercises || []).includes(ex.name)
-                                  ? "bg-amber-500/10 border-amber-500/30 text-amber-500"
+                                  ? "bg-amber-500/15 border-amber-500/30 text-amber-500 shadow-sm shadow-amber-500/10"
                                   : "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-400 hover:text-amber-500"
                               }`}
                               title="Marcar como favorito"
                             >
                               <Star className={`h-4 w-4 ${(userProfile.favoriteExercises || []).includes(ex.name) ? "fill-current" : ""}`} />
                             </button>
-                            <div>
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <h4 className="text-xs font-black text-gray-900 dark:text-white">
-                                  {ex.name}
-                                </h4>
-                                {(userProfile.favoriteExercises || []).includes(ex.name) && (
-                                  <span className="text-[9px] bg-amber-500/10 text-amber-500 font-black px-1.5 py-0.5 rounded-md border border-amber-500/20 font-mono">FAV</span>
-                                )}
-                                {ex.primaryMuscles && ex.primaryMuscles.length > 0 && (
-                                  <span className="text-[9px] bg-emerald-500/10 text-emerald-500 font-bold px-1.5 py-0.5 rounded-md border border-emerald-500/20 font-mono">
-                                    🎯 {ex.primaryMuscles[0]}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase">
-                                  {ex.sets} series × {ex.reps} {isTimeTracking ? "seg" : "reps"}
+
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <h4 className="text-sm font-black text-gray-900 dark:text-white truncate">
+                                {ex.name}
+                              </h4>
+                              {(userProfile.favoriteExercises || []).includes(ex.name) && (
+                                <span className="text-[9px] bg-amber-500/15 text-amber-500 font-black px-1.5 py-0.5 rounded-md border border-amber-500/20 font-mono shrink-0">
+                                  FAV
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleTrackingType(ex.id)}
-                                  className="text-[9px] font-bold text-gray-500 hover:text-emerald-400 bg-gray-100 dark:bg-white/5 hover:bg-emerald-500/10 px-1.5 py-0.5 rounded border border-gray-200 dark:border-white/10 transition cursor-pointer"
-                                  title="Alternar entre Repeticiones y Segundos de duración"
-                                >
-                                  {isTimeTracking ? "⏱️ Tiempo" : "🔄 Reps"}
-                                </button>
-                              </div>
+                              )}
                             </div>
                           </div>
-                          
-                          {/* Low calorie expenditure estimate & Alternatives button */}
-                          <div className="text-right flex flex-col items-end gap-1.5 flex-shrink-0">
-                            <div>
-                              <span className="text-xs font-bold text-amber-500 flex items-center justify-end gap-1">
-                                <Flame className="h-3.5 w-3.5" />
-                                <span>~{ex.sets * ex.caloriesBurnedPerSet} kcal</span>
+
+                          {/* Pastilla de Calorías quemadas */}
+                          <div className="px-2.5 py-1 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 shrink-0 flex items-center gap-1" title="Gasto calórico estimado conservador">
+                            <Flame className="h-3.5 w-3.5" />
+                            <span className="text-xs font-black">~{ex.sets * ex.caloriesBurnedPerSet} kcal</span>
+                          </div>
+                        </div>
+
+                        {/* Fila 2: Músculo + Series/Reps info + Toggle Tiempo/Reps | Acciones: Técnica y Alternativas */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-gray-100 dark:border-gray-800/40">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {ex.primaryMuscles && ex.primaryMuscles.length > 0 && (
+                              <span className="text-[10px] bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-lg border border-emerald-500/20">
+                                🎯 {ex.primaryMuscles[0]}
                               </span>
-                              <span className="text-[9px] text-gray-450 dark:text-gray-500 block">(Gasto conservador)</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleOpenTechniqueGuide(ex)}
-                                className="text-[9px] font-black text-blue-500 hover:text-blue-600 bg-blue-500/10 hover:bg-blue-500/20 px-2 py-1 rounded-lg border border-blue-500/20 flex items-center gap-1 transition cursor-pointer"
-                                title="Ver biomecánica y técnica del ejercicio"
-                              >
-                                <Sparkles className="h-2.5 w-2.5" />
-                                <span>Técnica</span>
-                              </button>
-                              <button
-                                onClick={() => handleOpenAlternatives(ex)}
-                                className="text-[9px] font-black text-emerald-500 hover:text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded-lg border border-emerald-500/20 flex items-center gap-1 transition cursor-pointer"
-                              >
-                                <RefreshCw className="h-2.5 w-2.5" />
-                                <span>Alternativas</span>
-                              </button>
-                            </div>
+                            )}
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase">
+                              {ex.sets} series × {ex.reps} {isTimeTracking ? "seg" : "reps"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleTrackingType(ex.id)}
+                              className="text-[9px] font-bold text-gray-600 dark:text-gray-300 hover:text-emerald-400 bg-gray-100 dark:bg-white/5 hover:bg-emerald-500/10 px-2 py-0.5 rounded-md border border-gray-200 dark:border-white/10 transition cursor-pointer"
+                              title="Alternar entre Repeticiones y Segundos de duración"
+                            >
+                              {isTimeTracking ? "⏱️ Tiempo" : "🔄 Reps"}
+                            </button>
+                          </div>
+
+                          {/* Acciones: Técnica + Alternativas */}
+                          <div className="flex items-center gap-1.5 ml-auto">
+                            <button
+                              onClick={() => handleOpenTechniqueGuide(ex)}
+                              className="text-[10px] font-black text-blue-500 hover:text-blue-600 bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-xl border border-blue-500/20 flex items-center gap-1 transition cursor-pointer"
+                              title="Ver biomecánica y técnica del ejercicio"
+                            >
+                              <Sparkles className="h-3 w-3" />
+                              <span>Técnica</span>
+                            </button>
+                            <button
+                              onClick={() => handleOpenAlternatives(ex)}
+                              className="text-[10px] font-black text-emerald-500 hover:text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-xl border border-emerald-500/20 flex items-center gap-1 transition cursor-pointer"
+                              title="Ver ejercicios alternativos para el mismo grupo muscular"
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                              <span>Alternativas</span>
+                            </button>
                           </div>
                         </div>
                           
-                        {/* Series table for Progressive Overload adjustments */}
-                        <div className="space-y-2 border-t border-gray-250 dark:border-gray-800/40 pt-2.5">
+                        {/* Tabla de Series con Columnas Claras */}
+                        <div className="space-y-1.5 border-t border-gray-100 dark:border-gray-800/60 pt-2.5">
+                          <div className="flex items-center justify-between text-[9px] font-mono uppercase font-bold text-gray-400 dark:text-gray-500 px-1 mb-1">
+                            <span>Serie</span>
+                            <div className="flex items-center gap-4 sm:gap-6 mr-6 sm:mr-8">
+                              <span>{isTimeTracking ? "Duración" : "Repeticiones"}</span>
+                              <span>Carga (kg)</span>
+                            </div>
+                            <span>Listo</span>
+                          </div>
+
                           {ex.completedSets.map((set) => (
                             <div 
                               key={set.setIndex}
-                              className="flex items-center justify-between text-xs py-1"
+                              className={`flex items-center justify-between p-1.5 rounded-xl transition ${
+                                set.completed 
+                                  ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-300"
+                                  : "bg-gray-50/70 dark:bg-[#0f101a] border border-gray-200/70 dark:border-gray-800/70"
+                              }`}
                             >
+                              <span className="font-mono text-[11px] font-black text-gray-500 dark:text-gray-400 pl-1">
+                                SET {set.setIndex + 1}
+                              </span>
+                              
                               <div className="flex items-center gap-2">
-                                <span className="font-mono text-[10px] text-gray-450 dark:text-gray-500 font-bold">SET {set.setIndex + 1}</span>
-                                
                                 {/* Edit Reps / Seconds */}
-                                <div className="flex items-center gap-1 bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-lg px-2 py-0.5">
+                                <div className="flex items-center gap-1 bg-white dark:bg-black/30 border border-gray-200 dark:border-gray-700/60 rounded-lg px-2 py-1 shadow-inner">
                                   <input
                                     type="number"
                                     value={set.reps}
                                     onChange={(e) => handleUpdateSetWeightOrReps(ex.id, set.setIndex, set.weight, Math.max(1, Number(e.target.value) || set.reps))}
-                                    className="w-10 text-center text-xs bg-transparent text-gray-900 dark:text-white focus:outline-none"
+                                    className="w-10 text-center text-xs font-bold bg-transparent text-gray-900 dark:text-white focus:outline-none"
                                   />
-                                  <span className="text-[9px] text-gray-400 dark:text-gray-500">{isTimeTracking ? "seg" : "rep"}</span>
+                                  <span className="text-[9px] text-gray-400 font-semibold">{isTimeTracking ? "seg" : "reps"}</span>
                                 </div>
 
                                 {/* Edit Weight */}
-                                <div className="flex items-center gap-1 bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-lg px-2 py-0.5">
+                                <div className="flex items-center gap-1 bg-white dark:bg-black/30 border border-gray-200 dark:border-gray-700/60 rounded-lg px-2 py-1 shadow-inner">
                                   <input
                                     type="number"
                                     value={set.weight}
                                     onChange={(e) => handleUpdateSetWeightOrReps(ex.id, set.setIndex, Math.max(0, Number(e.target.value) || 0), set.reps)}
-                                    className="w-10 text-center text-xs bg-transparent text-gray-900 dark:text-white focus:outline-none"
+                                    className="w-10 text-center text-xs font-bold bg-transparent text-gray-900 dark:text-white focus:outline-none"
                                   />
-                                  <span className="text-[9px] text-gray-400 dark:text-gray-500">kg</span>
+                                  <span className="text-[9px] text-gray-400 font-semibold">kg</span>
                                 </div>
                               </div>
 
                               <button
                                 onClick={() => handleToggleSet(ex.id, set.setIndex)}
-                                className={`w-6 h-6 rounded-lg border flex items-center justify-center transition cursor-pointer ${
+                                className={`w-7 h-7 rounded-xl border flex items-center justify-center transition cursor-pointer shadow-sm ${
                                   set.completed
-                                    ? "bg-emerald-500 border-emerald-400 text-white"
-                                    : "bg-gray-100 dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-450 dark:text-gray-600 hover:text-gray-800 dark:hover:text-white"
+                                    ? "bg-emerald-500 border-emerald-400 text-white shadow-emerald-500/20"
+                                    : "bg-white dark:bg-[#161824] border-gray-300 dark:border-gray-700 text-gray-400 hover:text-emerald-400 hover:border-emerald-400"
                                 }`}
+                                title={set.completed ? "Serie completada" : "Marcar como completada"}
                               >
-                                {set.completed ? <Check className="h-3.5 w-3.5" /> : <Play className="h-2.5 w-2.5 fill-current" />}
+                                {set.completed ? <Check className="h-4 w-4 stroke-[3]" /> : <Play className="h-3 w-3 fill-current ml-0.5" />}
                               </button>
                             </div>
                           ))}
@@ -1813,7 +1846,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                             <button
                               type="button"
                               onClick={() => handleAddSet(ex.id)}
-                              className="px-2 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 font-bold rounded-lg transition flex items-center gap-1 cursor-pointer"
+                              className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 font-bold rounded-lg transition flex items-center gap-1 cursor-pointer"
                             >
                               <Plus className="h-3 w-3 text-emerald-400" />
                               <span>Serie</span>
@@ -1822,7 +1855,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                               <button
                                 type="button"
                                 onClick={() => handleRemoveSet(ex.id)}
-                                className="px-2 py-1 bg-gray-100 hover:bg-rose-500/10 dark:bg-white/5 dark:hover:bg-rose-500/20 text-gray-500 hover:text-rose-400 font-bold rounded-lg transition cursor-pointer"
+                                className="px-2.5 py-1 bg-gray-100 hover:bg-rose-500/10 dark:bg-white/5 dark:hover:bg-rose-500/20 text-gray-500 hover:text-rose-400 font-bold rounded-lg transition cursor-pointer"
                                 title="Eliminar última serie"
                               >
                                 - Serie
@@ -1832,10 +1865,10 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                           <button
                             type="button"
                             onClick={() => handleRemoveExercise(ex.id)}
-                            className="p-1 text-gray-400 hover:text-rose-400 transition cursor-pointer"
+                            className="p-1 text-gray-400 hover:text-rose-500 transition cursor-pointer"
                             title="Eliminar este ejercicio de la sesión"
                           >
-                            <Trash className="h-3.5 w-3.5" />
+                            <Trash className="h-4 w-4" />
                           </button>
                         </div>
                       </div>
@@ -2075,6 +2108,11 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
           }}
           onOpenPreferences={() => setIsWorkoutsOnboardingOpen(true)}
           onGoToDailySession={() => setActiveTab("routine")}
+          apiKey={apiKey}
+          userId={userId}
+          userEquipment={userProfile.equipment}
+          customExercises={customExercises}
+          onAddCustomExercise={(newEx) => setCustomExercises(prev => [newEx, ...prev])}
         />
       )}
 
