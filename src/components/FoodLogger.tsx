@@ -883,54 +883,84 @@ export default function FoodLogger({
           </div>
         )}
 
-        {/* Tab Selection */}
+        {/* Tab Selection: 2 rows of 3 columns */}
         {selectedFood === null && (
-          <div className="px-3 sm:px-5 pt-3 flex border-b border-gray-100 dark:border-white/5 flex-shrink-0 z-10 overflow-x-auto no-scrollbar gap-1">
-            <button
-              onClick={() => setActiveTab("search")}
-              className={`flex-1 py-3 px-2 text-xs font-extrabold border-b-2 text-center transition cursor-pointer whitespace-nowrap ${
-                activeTab === "search" ? "border-emerald-500 text-emerald-500 dark:text-emerald-400" : "border-transparent text-gray-500 dark:text-white/40"
-              }`}
-            >
-              Buscar
-            </button>
-            <button
-              onClick={() => setActiveTab("ia_text")}
-              className={`flex-1 py-3 px-2 text-xs font-extrabold border-b-2 text-center transition flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                activeTab === "ia_text" ? "border-emerald-500 text-emerald-500 dark:text-emerald-400" : "border-transparent text-gray-500 dark:text-white/40"
-              }`}
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              <span>Describir</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("camera")}
-              className={`flex-1 py-3 px-2 text-xs font-extrabold border-b-2 text-center transition flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                activeTab === "camera" ? "border-emerald-500 text-emerald-500 dark:text-emerald-400" : "border-transparent text-gray-500 dark:text-white/40"
-              }`}
-            >
-              <Camera className="h-3.5 w-3.5" />
-              <span>Foto</span>
-            </button>
-            {mode !== "pantry" && (
+          <div className="px-3 sm:px-5 pt-3 pb-2 border-b border-gray-100 dark:border-white/5 flex-shrink-0 z-10">
+            <div className="grid grid-cols-3 gap-1.5">
               <button
+                type="button"
+                onClick={() => setActiveTab("search")}
+                className={`py-2 px-2 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border ${
+                  activeTab === "search"
+                    ? "bg-emerald-500 text-black border-emerald-400 font-black shadow-sm"
+                    : "bg-gray-100 dark:bg-white/[0.03] text-gray-700 dark:text-white/70 border-gray-200 dark:border-white/5 hover:bg-gray-200 dark:hover:bg-white/[0.06]"
+                }`}
+              >
+                <Search className="h-3.5 w-3.5" />
+                <span>Buscar</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("ia_text")}
+                className={`py-2 px-2 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border ${
+                  activeTab === "ia_text"
+                    ? "bg-emerald-500 text-black border-emerald-400 font-black shadow-sm"
+                    : "bg-gray-100 dark:bg-white/[0.03] text-gray-700 dark:text-white/70 border-gray-200 dark:border-white/5 hover:bg-gray-200 dark:hover:bg-white/[0.06]"
+                }`}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Describir</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("camera")}
+                className={`py-2 px-2 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border ${
+                  activeTab === "camera"
+                    ? "bg-emerald-500 text-black border-emerald-400 font-black shadow-sm"
+                    : "bg-gray-100 dark:bg-white/[0.03] text-gray-700 dark:text-white/70 border-gray-200 dark:border-white/5 hover:bg-gray-200 dark:hover:bg-white/[0.06]"
+                }`}
+              >
+                <Camera className="h-3.5 w-3.5" />
+                <span>Foto</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setActiveTab("pantry")}
-                className={`flex-1 py-3 px-2 text-xs font-extrabold border-b-2 text-center transition flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                  activeTab === "pantry" ? "border-emerald-500 text-emerald-500 dark:text-emerald-400" : "border-transparent text-gray-500 dark:text-white/40"
+                className={`py-2 px-2 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border ${
+                  activeTab === "pantry"
+                    ? "bg-emerald-500 text-black border-emerald-400 font-black shadow-sm"
+                    : "bg-gray-100 dark:bg-white/[0.03] text-gray-700 dark:text-white/70 border-gray-200 dark:border-white/5 hover:bg-gray-200 dark:hover:bg-white/[0.06]"
                 }`}
               >
                 <Package className="h-3.5 w-3.5" />
                 <span>Despensa</span>
               </button>
-            )}
-            <button
-              onClick={() => setActiveTab("personal")}
-              className={`flex-1 py-3 px-2 text-xs font-extrabold border-b-2 text-center transition cursor-pointer whitespace-nowrap ${
-                activeTab === "personal" ? "border-emerald-500 text-emerald-500 dark:text-emerald-400" : "border-transparent text-gray-500 dark:text-white/40"
-              }`}
-            >
-              Frecuentes
-            </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("personal")}
+                className={`py-2 px-2 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border ${
+                  activeTab === "personal"
+                    ? "bg-emerald-500 text-black border-emerald-400 font-black shadow-sm"
+                    : "bg-gray-100 dark:bg-white/[0.03] text-gray-700 dark:text-white/70 border-gray-200 dark:border-white/5 hover:bg-gray-200 dark:hover:bg-white/[0.06]"
+                }`}
+              >
+                <Star className="h-3.5 w-3.5" />
+                <span>Frecuentes</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsScannerOpen(true)}
+                className="py-2 px-2 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 border-emerald-500/30"
+              >
+                <Barcode className="h-3.5 w-3.5" />
+                <span>Escanear</span>
+              </button>
+            </div>
           </div>
         )}
 

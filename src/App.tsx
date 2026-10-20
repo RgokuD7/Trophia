@@ -226,7 +226,8 @@ export default function App() {
         fat: mealData.fat,
         type: mealData.type,
         servingSize: mealData.servingSize || "",
-        timestamp: tempMeal.timestamp
+        timestamp: tempMeal.timestamp,
+        compositeIngredients: mealData.compositeIngredients
       });
       setLoggedMeals(prev => prev.map(m => m.id === tempId ? newMeal : m));
     } catch (e) {

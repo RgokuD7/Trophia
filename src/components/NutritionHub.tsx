@@ -235,14 +235,23 @@ export default function NutritionHub({
     const servingStr = (meal.servingSize || "").trim();
     setEditServingSize(servingStr);
 
-    // Parse base portion amount and unit
+    // Parse base portion amount and unit safely
     let parsedAmount = 1;
     let parsedUnit = "porción";
-    if (servingStr) {
+    const isComposite = Boolean(
+      (meal.compositeIngredients && meal.compositeIngredients.length > 0) ||
+      servingStr.includes(" + ")
+    );
+
+    if (isComposite) {
+      parsedAmount = 1;
+      parsedUnit = "porción";
+    } else if (servingStr) {
       const match = servingStr.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
       if (match && parseFloat(match[1]) > 0) {
         parsedAmount = parseFloat(match[1]);
-        parsedUnit = match[2].trim() || (servingStr.toLowerCase().includes("g") ? "g" : "porción");
+        const rawUnit = match[2].trim();
+        parsedUnit = rawUnit.length > 10 || rawUnit.includes("+") ? "porción" : (rawUnit || "porción");
       } else if (servingStr.toLowerCase().includes("g")) {
         const numMatch = servingStr.match(/(\d+(?:\.\d+)?)/);
         if (numMatch) {
@@ -257,7 +266,9 @@ export default function NutritionHub({
       protein: meal.protein,
       carbs: meal.carbs,
       fat: meal.fat,
-      servingSize: servingStr || `${parsedAmount} ${parsedUnit}`,
+      servingSize: isComposite 
+        ? `${meal.compositeIngredients?.length || "Plato"} ing (${meal.calories} kcal)`
+        : (servingStr.length > 25 ? `${parsedAmount} ${parsedUnit}` : servingStr || `${parsedAmount} ${parsedUnit}`),
       baseAmount: parsedAmount,
       unit: parsedUnit,
     });
@@ -1683,10 +1694,10 @@ export default function NutritionHub({
                     </div>
 
                     {/* Original Reference Box */}
-                    <div className="bg-black/30 rounded-xl p-2 border border-white/5 text-[9.5px] text-gray-400 flex items-center justify-between flex-wrap gap-1">
-                      <span>Registrado inicialmente:</span>
-                      <span className="text-white font-bold font-mono">
-                        {baseMealRef.servingSize || `${baseMealRef.baseAmount} ${baseMealRef.unit}`} ({baseMealRef.calories} kcal)
+                    <div className="bg-black/30 rounded-xl p-2 border border-white/5 text-[9.5px] text-gray-400 flex items-center justify-between gap-2 overflow-hidden">
+                      <span className="shrink-0">Registrado inicialmente:</span>
+                      <span className="text-white font-bold font-mono truncate text-right">
+                        {baseMealRef.servingSize}
                       </span>
                     </div>
 
@@ -1710,7 +1721,7 @@ export default function NutritionHub({
 
                     {/* Custom Amount Input */}
                     <div className="flex items-center gap-2 pt-1">
-                      <span className="text-[9px] text-gray-400 uppercase font-bold shrink-0">
+                      <span className="text-[9px] text-gray-400 uppercase font-bold shrink-0 truncate max-w-[130px]">
                         Cantidad ({baseMealRef.unit}):
                       </span>
                       <div className="flex-1">

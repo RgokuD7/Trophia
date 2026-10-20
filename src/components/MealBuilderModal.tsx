@@ -119,6 +119,39 @@ export default function MealBuilderModal({
       setSelectedMealType(initialMeal.type || defaultMealType);
       if (initialMeal.compositeIngredients && initialMeal.compositeIngredients.length > 0) {
         setIngredients(initialMeal.compositeIngredients);
+      } else if (initialMeal.servingSize && initialMeal.servingSize.includes(" + ")) {
+        // Parse parts from "2 rebanadas Pan + 1 lata Atún + 15g Mayo"
+        const parts = initialMeal.servingSize.split(" + ");
+        const frac = 1 / Math.max(1, parts.length);
+        const parsedIngs: MealBuilderIngredient[] = parts.map((part, idx) => {
+          const trimmed = part.trim();
+          const match = trimmed.match(/^(\d+(?:\.\d+)?)\s*(?:([a-zA-ZáéíóúñÁÉÍÓÚÑ]+)\s+)?(.*)$/);
+          const amount = match && parseFloat(match[1]) > 0 ? parseFloat(match[1]) : 1;
+          const unitLabel = match && match[2] ? match[2] : "porción";
+          const ingName = match && match[3] ? match[3].trim() : trimmed;
+          const cals = Math.round(initialMeal.calories * frac);
+          const p = Math.round((initialMeal.protein * frac) * 10) / 10;
+          const c = Math.round((initialMeal.carbs * frac) * 10) / 10;
+          const f = Math.round((initialMeal.fat * frac) * 10) / 10;
+          return {
+            id: "ing_parsed_" + idx + "_" + Date.now(),
+            name: ingName || trimmed,
+            amount: amount,
+            unit: "unit" as const,
+            unitLabel: unitLabel,
+            equivalentGrams: 50,
+            calories: cals,
+            protein: p,
+            carbs: c,
+            fat: f,
+            raw100gCalories: cals * 2,
+            raw100gProtein: p * 2,
+            raw100gCarbs: c * 2,
+            raw100gFat: f * 2,
+            unitWeight: 50
+          };
+        });
+        setIngredients(parsedIngs);
       } else {
         const synthIng: MealBuilderIngredient = {
           id: "ing_" + Date.now(),
@@ -555,80 +588,80 @@ export default function MealBuilderModal({
                   Agregar Ingredientes
                 </span>
 
-                {/* Tabs Bar */}
-                <div className="grid grid-cols-6 gap-1 bg-white/[0.02] p-1 rounded-2xl border border-white/5">
+                {/* Tabs Bar: 2 rows of 3 columns */}
+                <div className="grid grid-cols-3 gap-1.5">
                   <button
                     type="button"
                     onClick={() => setAddMode("search")}
-                    className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
+                    className={`py-2 px-2 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border ${
                       addMode === "search"
                         ? "bg-emerald-500 text-black border-emerald-400 font-black shadow-sm"
-                        : "bg-transparent hover:bg-white/[0.04] text-white/70 border-transparent"
+                        : "bg-white/[0.03] text-white/70 border-white/5 hover:bg-white/[0.06]"
                     }`}
                   >
                     <Search className="h-3.5 w-3.5" />
-                    <span className="truncate text-[9.5px]">Buscar</span>
+                    <span>Buscar</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setAddMode("ia_text")}
-                    className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
+                    className={`py-2 px-2 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border ${
                       addMode === "ia_text"
                         ? "bg-emerald-500 text-black border-emerald-400 font-black shadow-sm"
-                        : "bg-transparent hover:bg-white/[0.04] text-white/70 border-transparent"
+                        : "bg-white/[0.03] text-white/70 border-white/5 hover:bg-white/[0.06]"
                     }`}
                   >
                     <Sparkles className="h-3.5 w-3.5" />
-                    <span className="truncate text-[9.5px]">Describir</span>
+                    <span>Describir</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setAddMode("camera")}
-                    className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
+                    className={`py-2 px-2 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border ${
                       addMode === "camera"
                         ? "bg-emerald-500 text-black border-emerald-400 font-black shadow-sm"
-                        : "bg-transparent hover:bg-white/[0.04] text-white/70 border-transparent"
+                        : "bg-white/[0.03] text-white/70 border-white/5 hover:bg-white/[0.06]"
                     }`}
                   >
                     <Camera className="h-3.5 w-3.5" />
-                    <span className="truncate text-[9.5px]">Foto</span>
+                    <span>Foto</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setAddMode("pantry")}
-                    className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
+                    className={`py-2 px-2 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border ${
                       addMode === "pantry"
                         ? "bg-emerald-500 text-black border-emerald-400 font-black shadow-sm"
-                        : "bg-transparent hover:bg-white/[0.04] text-white/70 border-transparent"
+                        : "bg-white/[0.03] text-white/70 border-white/5 hover:bg-white/[0.06]"
                     }`}
                   >
                     <Package className="h-3.5 w-3.5" />
-                    <span className="truncate text-[9.5px]">Despensa</span>
+                    <span>Despensa</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setAddMode("custom")}
-                    className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
+                    className={`py-2 px-2 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border ${
                       addMode === "custom"
                         ? "bg-emerald-500 text-black border-emerald-400 font-black shadow-sm"
-                        : "bg-transparent hover:bg-white/[0.04] text-white/70 border-transparent"
+                        : "bg-white/[0.03] text-white/70 border-white/5 hover:bg-white/[0.06]"
                     }`}
                   >
                     <Star className="h-3.5 w-3.5" />
-                    <span className="truncate text-[9.5px]">Frecuentes</span>
+                    <span>Frecuentes</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setIsScannerOpen(true)}
-                    className="py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/25"
+                    className="py-2 px-2 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/25"
                   >
                     <Barcode className="h-3.5 w-3.5" />
-                    <span className="truncate text-[9.5px]">Escanear</span>
+                    <span>Escanear</span>
                   </button>
                 </div>
 
@@ -950,21 +983,25 @@ export default function MealBuilderModal({
                     {ingredients.map((ing) => (
                       <div
                         key={ing.id}
-                        className="p-3 bg-white/[0.03] border border-white/10 rounded-2xl flex items-center justify-between gap-2.5 transition hover:border-white/20"
+                        className="p-3 bg-white/[0.03] border border-white/10 rounded-2xl flex items-center justify-between gap-3 transition hover:border-white/20"
                       >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-white truncate">
-                              {ing.name}
-                            </span>
-                            <span className="text-[10px] font-bold text-white/60 bg-white/5 px-2 py-0.5 rounded-lg font-mono">
+                        {/* Info Column */}
+                        <div className="min-w-0 flex-1 space-y-1">
+                          {/* Row 1: Porción (pill en la parte superior) */}
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md font-mono">
                               {ing.amount} {ing.unit === "unit" ? (ing.amount === 1 ? ing.unitLabel : ing.unitLabel + "s") : ing.unit}
-                              {ing.unit === "unit" ? ` (${ing.equivalentGrams}g)` : ""}
+                              {ing.unit === "unit" && ing.equivalentGrams ? ` · ${ing.equivalentGrams}g` : ""}
                             </span>
                           </div>
 
-                          {/* Distinct color-coded macro badges */}
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {/* Row 2: Nombre del Alimento */}
+                          <span className="text-xs font-black text-white block truncate">
+                            {ing.name}
+                          </span>
+
+                          {/* Row 3: Macros con colores */}
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             <span className="text-[9.5px] font-black font-mono text-orange-400">
                               🔥 {ing.calories} kcal
                             </span>
@@ -980,30 +1017,30 @@ export default function MealBuilderModal({
                           </div>
                         </div>
 
-                        {/* Actions: Pencil (Edit) & Trash (Delete) */}
-                        <div className="flex items-center gap-1 shrink-0">
+                        {/* Actions: Pencil (Edit) on top, Trash (Delete) below */}
+                        <div className="flex flex-col gap-1 items-center shrink-0">
                           <button
                             type="button"
                             onClick={() => handleStartEditIngredient(ing)}
-                            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-emerald-400 transition cursor-pointer"
+                            className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-emerald-400 transition cursor-pointer"
                             title="Editar porción"
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
 
                           {confirmDeleteId === ing.id ? (
-                            <div className="flex items-center gap-1">
+                            <div className="flex flex-col gap-1">
                               <button
                                 type="button"
                                 onClick={() => handleRemoveIngredient(ing.id)}
-                                className="px-2 py-1 rounded-xl bg-rose-500 text-white font-bold text-[9px] hover:bg-rose-600 transition cursor-pointer"
+                                className="px-1.5 py-0.5 rounded-lg bg-rose-500 text-white font-bold text-[9px] hover:bg-rose-600 transition cursor-pointer"
                               >
-                                ¿Borrar?
+                                Borrar
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setConfirmDeleteId(null)}
-                                className="px-1.5 py-1 rounded-xl bg-white/10 text-white/60 hover:text-white text-[9px] transition cursor-pointer"
+                                className="px-1 py-0.5 rounded-lg bg-white/10 text-white/60 hover:text-white text-[8px] transition cursor-pointer text-center"
                               >
                                 ✕
                               </button>
@@ -1012,7 +1049,7 @@ export default function MealBuilderModal({
                             <button
                               type="button"
                               onClick={() => setConfirmDeleteId(ing.id)}
-                              className="p-2 rounded-xl bg-white/5 hover:bg-rose-500/20 text-white/40 hover:text-rose-400 transition cursor-pointer"
+                              className="p-1.5 rounded-xl bg-white/5 hover:bg-rose-500/20 text-white/40 hover:text-rose-400 transition cursor-pointer"
                               title="Eliminar ingrediente"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -1043,7 +1080,6 @@ export default function MealBuilderModal({
                 className="flex-1 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:bg-white/5 disabled:text-white/30 text-black text-xs font-black flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
               >
                 <span>Armar Plato</span>
-                <span className="font-mono">({ingredients.length} ing · {totalCalories} kcal)</span>
                 <span>→</span>
               </button>
             </div>
@@ -1090,33 +1126,6 @@ export default function MealBuilderModal({
                     <span className="text-[8.5px] font-bold text-amber-400 uppercase block">Grasas</span>
                     <span className="text-sm font-black text-white font-mono">{totalFat}g</span>
                   </div>
-                </div>
-              </div>
-
-              {/* Ingredient Breakdown Card */}
-              <div className="space-y-2">
-                <span className="text-[9.5px] font-bold text-white/50 uppercase tracking-wider block">
-                  Desglose de Ingredientes ({ingredients.length})
-                </span>
-
-                <div className="divide-y divide-white/5 bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden p-2">
-                  {ingredients.map((ing) => (
-                    <div key={ing.id} className="py-2 px-2 flex items-center justify-between text-xs">
-                      <div>
-                        <span className="font-bold text-white block">{ing.name}</span>
-                        <span className="text-[10px] text-white/50 font-mono">
-                          {ing.amount} {ing.unit === "unit" ? (ing.amount === 1 ? ing.unitLabel : ing.unitLabel + "s") : ing.unit}
-                          {ing.unit === "unit" ? ` (${ing.equivalentGrams}g)` : ""}
-                        </span>
-                      </div>
-                      <div className="text-right font-mono">
-                        <span className="text-xs font-bold text-emerald-400">{ing.calories} kcal</span>
-                        <span className="text-[9px] text-white/40 block">
-                          P:{ing.protein}g · C:{ing.carbs}g · G:{ing.fat}g
-                        </span>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
 
