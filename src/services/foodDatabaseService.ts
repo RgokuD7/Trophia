@@ -24,18 +24,32 @@ export const getUsdaApiKey = (): string => {
 };
 
 /**
+ * Helper to safely parse nutrient numbers handling commas (e.g. "25,4"), spaces, and strings.
+ */
+function parseNutrientValue(val: any): number {
+  if (val === undefined || val === null) return 0;
+  if (typeof val === "number") return isNaN(val) ? 0 : val;
+  if (typeof val === "string") {
+    const cleaned = val.replace(",", ".").replace(/[^\d.-]/g, "");
+    const parsed = parseFloat(cleaned);
+    return isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+}
+
+/**
  * Resolves the real serving size string and normalized 100g/100ml macros from an Open Food Facts product object.
  */
 function parseOffProduct(p: any, barcode?: string): FoodItem {
   const nut = p.nutriments || {};
 
-  let calories = Number(nut["energy-kcal_100g"]) || Number(nut["energy-kcal"]) || 0;
-  if (calories === 0 && Number(nut["energy-kj_100g"]) > 0) {
-    calories = Math.round(Number(nut["energy-kj_100g"]) / 4.184);
+  let calories = parseNutrientValue(nut["energy-kcal_100g"] ?? nut["energy-kcal"]);
+  if (calories === 0 && parseNutrientValue(nut["energy-kj_100g"]) > 0) {
+    calories = Math.round(parseNutrientValue(nut["energy-kj_100g"]) / 4.184);
   }
-  let protein = Number(nut.proteins_100g) || Number(nut.proteins) || 0;
-  let carbs = Number(nut.carbohydrates_100g) || Number(nut.carbohydrates) || 0;
-  let fat = Number(nut.fat_100g) || Number(nut.fat) || 0;
+  let protein = parseNutrientValue(nut.proteins_100g ?? nut.proteins);
+  let carbs = parseNutrientValue(nut.carbohydrates_100g ?? nut.carbohydrates);
+  let fat = parseNutrientValue(nut.fat_100g ?? nut.fat);
 
   // Extract serving size
   let servingSize = "100g";
@@ -52,15 +66,41 @@ function parseOffProduct(p: any, barcode?: string): FoodItem {
   }
 
   // If 100g macros were missing but serving macros exist, calculate the 100g base from the serving size
-  if (calories === 0 && Number(nut["energy-kcal_serving"]) > 0) {
+  if (calories === 0 && parseNutrientValue(nut["energy-kcal_serving"]) > 0) {
     const servingMatch = servingSize.match(/(\d+(?:\.\d+)?)\s*(?:g|ml)/i);
     const servingGrams = servingMatch ? parseFloat(servingMatch[1]) : (Number(p.serving_quantity) || 0);
     if (servingGrams > 0) {
       const factor = 100 / servingGrams;
-      calories = Math.round(Number(nut["energy-kcal_serving"]) * factor);
-      protein = Number(((Number(nut.proteins_serving) || 0) * factor).toFixed(1));
-      carbs = Number(((Number(nut.carbohydrates_serving) || 0) * factor).toFixed(1));
-      fat = Number(((Number(nut.fat_serving) || 0) * factor).toFixed(1));
+      calories = Math.round(parseNutrientValue(nut["energy-kcal_serving"]) * factor);
+      protein = Number((parseNutrientValue(nut.proteins_serving) * factor).toFixed(1));
+      carbs = Number((parseNutrientValue(nut.carbohydrates_serving) * factor).toFixed(1));
+      fat = Number((parseNutrientValue(nut.fat_serving) * factor).toFixed(1));
+    }
+  }
+
+  // Heuristic safeguard for Open Food Facts comma-stripping bugs (e.g. 25,0g carbs entered as 250g)
+  // In 100g of food, carbs, protein, and fat cannot physically exceed 100g.
+  if (carbs > 100 && carbs <= 1000) carbs = carbs / 10;
+  if (protein > 100 && protein <= 1000) protein = protein / 10;
+  if (fat > 100 && fat <= 1000) fat = fat / 10;
+  // In 100g of food, max calories is 900 kcal (pure fat).
+  if (calories > 900 && calories <= 9000) calories = Math.round(calories / 10);
+
+  // Parse portion metrics
+  let unitWeight = 100;
+  let unitLabel = "porción";
+  let portionGrams = 100;
+  let portionValue = 100;
+  let portionUnit: "g" | "ml" | "unit" = "g";
+
+  const servingMatch = servingSize.match(/(\d+(?:\.\d+)?)\s*(g|ml)/i);
+  if (servingMatch) {
+    const parsedG = parseFloat(servingMatch[1]);
+    if (parsedG > 0 && parsedG !== 100) {
+      portionGrams = parsedG;
+      unitWeight = parsedG;
+      portionValue = parsedG;
+      portionUnit = servingMatch[2].toLowerCase() === "ml" ? "ml" : "g";
     }
   }
 
@@ -74,7 +114,16 @@ function parseOffProduct(p: any, barcode?: string): FoodItem {
     carbs: Number(carbs.toFixed(1)),
     fat: Number(fat.toFixed(1)),
     servingSize: servingSize,
-    source: "off" as const
+    source: "off" as const,
+    raw100gCalories: Math.round(calories),
+    raw100gProtein: Number(protein.toFixed(1)),
+    raw100gCarbs: Number(carbs.toFixed(1)),
+    raw100gFat: Number(fat.toFixed(1)),
+    portionGrams: portionGrams,
+    portionValue: portionValue,
+    portionUnit: portionUnit,
+    unitWeight: unitWeight,
+    unitLabel: unitLabel
   };
 }
 
@@ -153,6 +202,10 @@ export const getProductByBarcode = async (barcode: string): Promise<FoodItem | n
   try {
     const communityProduct = await getBarcodeCorrection(cleanCode);
     if (communityProduct && communityProduct.name) {
+      const uWeight = communityProduct.unitWeight && communityProduct.unitWeight > 0 ? communityProduct.unitWeight : 100;
+      const uLabel = communityProduct.unitLabel || "porción";
+      const isCustomPortion = uWeight !== 100;
+
       return {
         name: communityProduct.name,
         brand: communityProduct.brand || "Comunidad Trophia",
@@ -160,15 +213,18 @@ export const getProductByBarcode = async (barcode: string): Promise<FoodItem | n
         protein: communityProduct.protein,
         carbs: communityProduct.carbs,
         fat: communityProduct.fat,
-        servingSize: communityProduct.servingSize || "1 porción",
+        servingSize: communityProduct.servingSize || (isCustomPortion ? `${uWeight}g` : "100g"),
         barcode: cleanCode,
         source: "local" as const,
         raw100gCalories: communityProduct.calories,
         raw100gProtein: communityProduct.protein,
         raw100gCarbs: communityProduct.carbs,
         raw100gFat: communityProduct.fat,
-        unitWeight: communityProduct.unitWeight,
-        unitLabel: communityProduct.unitLabel
+        portionGrams: uWeight,
+        portionValue: uWeight,
+        portionUnit: "g" as const,
+        unitWeight: uWeight,
+        unitLabel: uLabel
       };
     }
   } catch (dbErr) {

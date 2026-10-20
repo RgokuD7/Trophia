@@ -10,7 +10,7 @@ import { searchAllFoods, getProductByBarcode } from "../services/foodDatabaseSer
 import { getDefaultServingInfo } from "./FoodLogger";
 import BarcodeScannerModal from "./BarcodeScannerModal";
 import AddMissingBarcodeModal from "./AddMissingBarcodeModal";
-import { addCustomFood } from "../services/dbService";
+import { addCustomFood, getBarcodeCorrection } from "../services/dbService";
 import { createTimestampForDate } from "../utils/fitnessUtils";
 import { estimateMacrosFromDescription, analyzeFoodByIA } from "../services/geminiService";
 
@@ -55,7 +55,9 @@ export default function MealBuilderModal({
   const [ingredients, setIngredients] = useState<MealBuilderIngredient[]>([]);
   const [saveAsCustom, setSaveAsCustom] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [ingredientToDelete, setIngredientToDelete] = useState<MealBuilderIngredient | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [lastAddedName, setLastAddedName] = useState<string | null>(null);
 
   // Ingredient currently being edited in modal
   const [editingIngredient, setEditingIngredient] = useState<MealBuilderIngredient | null>(null);
@@ -156,12 +158,23 @@ export default function MealBuilderModal({
           }
         }
 
+        // Safeguard for OpenFoodFacts comma stripping errors in historical logs
+        if (raw100gCarbs && raw100gCarbs > 100 && raw100gCarbs <= 1000) raw100gCarbs = raw100gCarbs / 10;
+        if (raw100gProtein && raw100gProtein > 100 && raw100gProtein <= 1000) raw100gProtein = raw100gProtein / 10;
+        if (raw100gFat && raw100gFat > 100 && raw100gFat <= 1000) raw100gFat = raw100gFat / 10;
+        if (raw100gCalories && raw100gCalories > 900 && raw100gCalories <= 9000) raw100gCalories = Math.round(raw100gCalories / 10);
+
+        const calculatedCals = portionGrams > 0 ? Math.round((raw100gCalories * portionGrams) / 100) : latestMeal.calories;
+        const calculatedProtein = portionGrams > 0 ? Number(((raw100gProtein * portionGrams) / 100).toFixed(1)) : latestMeal.protein;
+        const calculatedCarbs = portionGrams > 0 ? Number(((raw100gCarbs * portionGrams) / 100).toFixed(1)) : latestMeal.carbs;
+        const calculatedFat = portionGrams > 0 ? Number(((raw100gFat * portionGrams) / 100).toFixed(1)) : latestMeal.fat;
+
         return {
           name: latestMeal.name,
-          calories: latestMeal.calories,
-          protein: latestMeal.protein,
-          carbs: latestMeal.carbs,
-          fat: latestMeal.fat,
+          calories: calculatedCals,
+          protein: calculatedProtein,
+          carbs: calculatedCarbs,
+          fat: calculatedFat,
           servingSize: latestMeal.servingSize || (portionGrams > 0 ? `${portionGrams}g` : "1 porción"),
           count,
           raw100gCalories,
@@ -255,7 +268,7 @@ export default function MealBuilderModal({
     setPhotoDescription("");
     setScannerError(null);
     setIaError(null);
-    setConfirmDeleteId(null);
+    setIngredientToDelete(null);
     setEditingIngredient(null);
     isProcessingBarcodeRef.current = false;
   }, [isOpen, initialMeal, defaultMealType]);
@@ -280,7 +293,7 @@ export default function MealBuilderModal({
     };
   };
 
-  const handleAddFoodAsIngredient = (food: {
+  const handleAddFoodAsIngredient = async (food: {
     name: string;
     calories: number;
     protein: number;
@@ -298,27 +311,57 @@ export default function MealBuilderModal({
     unitWeight?: number;
     unitLabel?: string;
   }) => {
-    const info = getDefaultServingInfo(food.name, food.servingSize || "100g");
-    const unit = food.portionUnit || info.defaultUnit;
-    const unitWeight = food.unitWeight || info.unitWeight;
-    const unitLabel = food.unitLabel || info.unitLabel;
+    let targetFood = { ...food };
 
-    const raw100g = {
-      calories: food.raw100gCalories !== undefined ? food.raw100gCalories : food.calories,
-      protein: food.raw100gProtein !== undefined ? food.raw100gProtein : food.protein,
-      carbs: food.raw100gCarbs !== undefined ? food.raw100gCarbs : food.carbs,
-      fat: food.raw100gFat !== undefined ? food.raw100gFat : food.fat,
+    // If barcode exists, check community correction to get the freshest validated macros
+    if (food.barcode) {
+      try {
+        const corr = await getBarcodeCorrection(food.barcode);
+        if (corr) {
+          const uW = corr.unitWeight && corr.unitWeight > 0 ? corr.unitWeight : 100;
+          targetFood.raw100gCalories = corr.calories;
+          targetFood.raw100gProtein = corr.protein;
+          targetFood.raw100gCarbs = corr.carbs;
+          targetFood.raw100gFat = corr.fat;
+          targetFood.unitWeight = uW;
+          targetFood.portionGrams = uW;
+          targetFood.portionValue = uW;
+          targetFood.portionUnit = "g";
+          targetFood.unitLabel = corr.unitLabel || "porción";
+          targetFood.servingSize = corr.servingSize || `${uW}g`;
+        }
+      } catch (err) {
+        console.warn("Could not check barcode correction for ingredient:", err);
+      }
+    }
+
+    const info = getDefaultServingInfo(targetFood.name, targetFood.servingSize || "100g");
+    const unit = targetFood.portionUnit || info.defaultUnit;
+    const unitWeight = targetFood.unitWeight || info.unitWeight;
+    const unitLabel = targetFood.unitLabel || info.unitLabel;
+
+    let raw100g = {
+      calories: targetFood.raw100gCalories !== undefined ? targetFood.raw100gCalories : targetFood.calories,
+      protein: targetFood.raw100gProtein !== undefined ? targetFood.raw100gProtein : targetFood.protein,
+      carbs: targetFood.raw100gCarbs !== undefined ? targetFood.raw100gCarbs : targetFood.carbs,
+      fat: targetFood.raw100gFat !== undefined ? targetFood.raw100gFat : targetFood.fat,
     };
 
-    const initialAmount = food.portionValue !== undefined
-      ? food.portionValue
-      : (unit === "unit" ? (food.name.toLowerCase().includes("pan ") ? 2 : 1) : (unitWeight || 100));
+    // 10x safeguard for corrupt barcode data
+    if (raw100g.carbs > 100 && raw100g.carbs <= 1000) raw100g.carbs = raw100g.carbs / 10;
+    if (raw100g.protein > 100 && raw100g.protein <= 1000) raw100g.protein = raw100g.protein / 10;
+    if (raw100g.fat > 100 && raw100g.fat <= 1000) raw100g.fat = raw100g.fat / 10;
+    if (raw100g.calories > 900 && raw100g.calories <= 9000) raw100g.calories = Math.round(raw100g.calories / 10);
+
+    const initialAmount = targetFood.portionValue !== undefined
+      ? targetFood.portionValue
+      : (unit === "unit" ? (targetFood.name.toLowerCase().includes("pan ") ? 2 : 1) : (unitWeight || 100));
 
     const calculated = calculateMacros(initialAmount, unit, unitWeight, raw100g);
 
     const newIng: MealBuilderIngredient = {
       id: "ing_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
-      name: food.name,
+      name: targetFood.name,
       amount: initialAmount,
       unit: unit,
       unitLabel: unitLabel,
@@ -332,11 +375,18 @@ export default function MealBuilderModal({
       raw100gCarbs: raw100g.carbs,
       raw100gFat: raw100g.fat,
       unitWeight: unitWeight,
-      barcode: food.barcode,
+      barcode: targetFood.barcode,
     };
 
     setIngredients(prev => [...prev, newIng]);
-    setConfirmDeleteId(null);
+    
+    // Tactile & Visual Feedback
+    const unitStr = newIng.unit === "unit" ? (newIng.amount === 1 ? newIng.unitLabel : newIng.unitLabel + "s") : newIng.unit;
+    setToastMessage(`¡Agregado! ${newIng.name} (${newIng.amount} ${unitStr} · ${newIng.calories} kcal)`);
+    setLastAddedName(food.name);
+    if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(40);
+    setTimeout(() => setToastMessage(null), 2500);
+    setTimeout(() => setLastAddedName(null), 1500);
   };
 
   const handleStartEditIngredient = (ing: MealBuilderIngredient) => {
@@ -375,7 +425,6 @@ export default function MealBuilderModal({
 
   const handleRemoveIngredient = (id: string) => {
     setIngredients(prev => prev.filter(ing => ing.id !== id));
-    setConfirmDeleteId(null);
   };
 
   const handleSearchFoods = async (q: string) => {
@@ -602,8 +651,23 @@ export default function MealBuilderModal({
         initial={{ opacity: 0, scale: 0.95, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
-        className="w-full max-w-lg bg-[#12131d] border border-white/10 rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden"
+        className="w-full max-w-lg bg-[#12131d] border border-white/10 rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden relative"
       >
+        {/* Floating Toast Notification */}
+        <AnimatePresence>
+          {toastMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              className="absolute top-16 left-1/2 -translate-x-1/2 z-50 bg-emerald-500 text-black px-4 py-2 rounded-2xl shadow-2xl flex items-center gap-2 font-black text-xs pointer-events-none max-w-[90%] truncate"
+            >
+              <Check className="h-4 w-4 stroke-[3] shrink-0" />
+              <span className="truncate">{toastMessage}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-white/5 flex items-center justify-between bg-white/[0.01]">
           <div className="flex items-center gap-2.5">
@@ -774,22 +838,35 @@ export default function MealBuilderModal({
                         </div>
                       ) : searchResults.length > 0 ? (
                         <div className="max-h-44 overflow-y-auto space-y-1 no-scrollbar divide-y divide-white/5">
-                          {searchResults.map((f, i) => (
-                            <button
-                              key={i}
-                              type="button"
-                              onClick={() => handleAddFoodAsIngredient(f)}
-                              className="w-full text-left p-2 rounded-xl hover:bg-emerald-500/10 transition flex items-center justify-between gap-2 cursor-pointer"
-                            >
-                              <div className="min-w-0">
-                                <span className="text-xs font-bold text-white block truncate">{f.name}</span>
-                                <span className="text-[9px] text-white/40">{f.brand ? `${f.brand} · ` : ""}{f.servingSize}</span>
-                              </div>
-                              <span className="text-xs font-black text-emerald-400 shrink-0 font-mono">
-                                + {f.calories} kcal
-                              </span>
-                            </button>
-                          ))}
+                          {searchResults.map((f, i) => {
+                            const isAdded = lastAddedName === f.name;
+                            return (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => handleAddFoodAsIngredient(f)}
+                                className={`w-full text-left p-2 rounded-xl transition flex items-center justify-between gap-2 cursor-pointer border ${
+                                  isAdded
+                                    ? "bg-emerald-500/20 border-emerald-400 ring-2 ring-emerald-400/50"
+                                    : "hover:bg-emerald-500/10 border-transparent"
+                                }`}
+                              >
+                                <div className="min-w-0">
+                                  <span className="text-xs font-bold text-white block truncate">{f.name}</span>
+                                  <span className="text-[9px] text-white/40">{f.brand ? `${f.brand} · ` : ""}{f.servingSize}</span>
+                                </div>
+                                {isAdded ? (
+                                  <span className="text-[10px] font-black text-emerald-400 flex items-center gap-1 bg-emerald-500/20 px-2 py-0.5 rounded-full shrink-0">
+                                    <Check className="h-3 w-3 stroke-[3]" /> ¡Agregado!
+                                  </span>
+                                ) : (
+                                  <span className="text-xs font-black text-emerald-400 shrink-0 font-mono">
+                                    + {f.calories} kcal
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
                         </div>
                       ) : searchQuery.trim() ? (
                         <p className="text-[10px] text-white/40 text-center py-2">No se encontraron resultados.</p>
@@ -914,27 +991,40 @@ export default function MealBuilderModal({
                           if (list.length === 0) {
                             return <p className="text-[10px] text-white/40 text-center py-3">No hay productos en tu despensa {pantryFilter ? "que coincidan" : ""}.</p>;
                           }
-                          return list.map((p, i) => (
-                            <button
-                              key={p.id || i}
-                              type="button"
-                              onClick={() => handleAddFoodAsIngredient({
-                                name: p.name,
-                                calories: p.calories,
-                                protein: p.protein,
-                                carbs: p.carbs,
-                                fat: p.fat,
-                                servingSize: p.quantity || "100g"
-                              })}
-                              className="w-full text-left p-2 rounded-xl hover:bg-emerald-500/10 transition flex items-center justify-between gap-2 cursor-pointer border border-white/5"
-                            >
-                              <div className="min-w-0">
-                                <span className="text-xs font-bold text-white block truncate">{p.name}</span>
-                                <span className="text-[9px] text-white/40 font-mono">Disponible: {p.quantity}</span>
-                              </div>
-                              <span className="text-xs font-black text-emerald-400 shrink-0 font-mono">+ {p.calories} kcal</span>
-                            </button>
-                          ));
+                          return list.map((p, i) => {
+                            const isAdded = lastAddedName === p.name;
+                            return (
+                              <button
+                                key={p.id || i}
+                                type="button"
+                                onClick={() => handleAddFoodAsIngredient({
+                                  name: p.name,
+                                  calories: p.calories,
+                                  protein: p.protein,
+                                  carbs: p.carbs,
+                                  fat: p.fat,
+                                  servingSize: p.quantity || "100g"
+                                })}
+                                className={`w-full text-left p-2 rounded-xl transition flex items-center justify-between gap-2 cursor-pointer border ${
+                                  isAdded
+                                    ? "bg-emerald-500/20 border-emerald-400 ring-2 ring-emerald-400/50"
+                                    : "hover:bg-emerald-500/10 border-white/5"
+                                }`}
+                              >
+                                <div className="min-w-0">
+                                  <span className="text-xs font-bold text-white block truncate">{p.name}</span>
+                                  <span className="text-[9px] text-white/40 font-mono">Disponible: {p.quantity}</span>
+                                </div>
+                                {isAdded ? (
+                                  <span className="text-[10px] font-black text-emerald-400 flex items-center gap-1 bg-emerald-500/20 px-2 py-0.5 rounded-full shrink-0">
+                                    <Check className="h-3 w-3 stroke-[3]" /> ¡Agregado!
+                                  </span>
+                                ) : (
+                                  <span className="text-xs font-black text-emerald-400 shrink-0 font-mono">+ {p.calories} kcal</span>
+                                )}
+                              </button>
+                            );
+                          });
                         })()}
                       </div>
                     </div>
@@ -965,27 +1055,40 @@ export default function MealBuilderModal({
                             if (list.length === 0) {
                               return <p className="text-[9px] text-white/30 italic py-1">Sin alimentos guardados.</p>;
                             }
-                            return list.map((c) => (
-                              <button
-                                key={c.id}
-                                type="button"
-                                onClick={() => handleAddFoodAsIngredient({
-                                  name: c.name,
-                                  calories: c.calories,
-                                  protein: c.protein,
-                                  carbs: c.carbs,
-                                  fat: c.fat,
-                                  servingSize: c.servingSize
-                                })}
-                                className="w-full text-left p-2 rounded-xl hover:bg-emerald-500/10 transition flex items-center justify-between gap-2 cursor-pointer border border-white/5"
-                              >
-                                <div className="min-w-0">
-                                  <span className="text-xs font-bold text-white block truncate">{c.name}</span>
-                                  <span className="text-[9px] text-white/40 font-mono">{c.servingSize}</span>
-                                </div>
-                                <span className="text-xs font-black text-emerald-400 shrink-0 font-mono">+ {c.calories} kcal</span>
-                              </button>
-                            ));
+                            return list.map((c) => {
+                              const isAdded = lastAddedName === c.name;
+                              return (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() => handleAddFoodAsIngredient({
+                                    name: c.name,
+                                    calories: c.calories,
+                                    protein: c.protein,
+                                    carbs: c.carbs,
+                                    fat: c.fat,
+                                    servingSize: c.servingSize
+                                  })}
+                                  className={`w-full text-left p-2 rounded-xl transition flex items-center justify-between gap-2 cursor-pointer border ${
+                                    isAdded
+                                      ? "bg-emerald-500/20 border-emerald-400 ring-2 ring-emerald-400/50"
+                                      : "hover:bg-emerald-500/10 border-white/5"
+                                  }`}
+                                >
+                                  <div className="min-w-0">
+                                    <span className="text-xs font-bold text-white block truncate">{c.name}</span>
+                                    <span className="text-[9px] text-white/40 font-mono">{c.servingSize}</span>
+                                  </div>
+                                  {isAdded ? (
+                                    <span className="text-[10px] font-black text-emerald-400 flex items-center gap-1 bg-emerald-500/20 px-2 py-0.5 rounded-full shrink-0">
+                                      <Check className="h-3 w-3 stroke-[3]" /> ¡Agregado!
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs font-black text-emerald-400 shrink-0 font-mono">+ {c.calories} kcal</span>
+                                  )}
+                                </button>
+                              );
+                            });
                           })()}
                         </div>
 
@@ -999,27 +1102,40 @@ export default function MealBuilderModal({
                             if (list.length === 0) {
                               return <p className="text-[9px] text-white/30 italic py-1">Sin historial de diario aún.</p>;
                             }
-                            return list.map((f, i) => (
-                              <button
-                                key={i}
-                                type="button"
-                                onClick={() => handleAddFoodAsIngredient(f)}
-                                className="w-full text-left p-2 rounded-xl hover:bg-emerald-500/10 transition flex items-center justify-between gap-2 cursor-pointer border border-white/5"
-                              >
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-xs font-bold text-white truncate">{f.name}</span>
-                                    {f.count > 1 && (
-                                      <span className="text-[8px] bg-emerald-500/15 text-emerald-400 font-mono px-1 rounded-sm font-bold">
-                                        x{f.count}
-                                      </span>
-                                    )}
+                            return list.map((f, i) => {
+                              const isAdded = lastAddedName === f.name;
+                              return (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  onClick={() => handleAddFoodAsIngredient(f)}
+                                  className={`w-full text-left p-2 rounded-xl transition flex items-center justify-between gap-2 cursor-pointer border ${
+                                    isAdded
+                                      ? "bg-emerald-500/20 border-emerald-400 ring-2 ring-emerald-400/50"
+                                      : "hover:bg-emerald-500/10 border-white/5"
+                                  }`}
+                                >
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs font-bold text-white truncate">{f.name}</span>
+                                      {f.count > 1 && (
+                                        <span className="text-[8px] bg-emerald-500/15 text-emerald-400 font-mono px-1 rounded-sm font-bold">
+                                          x{f.count}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[9px] text-white/40 font-mono">{f.servingSize}</span>
                                   </div>
-                                  <span className="text-[9px] text-white/40 font-mono">{f.servingSize}</span>
-                                </div>
-                                <span className="text-xs font-black text-emerald-400 shrink-0 font-mono">+ {f.calories} kcal</span>
-                              </button>
-                            ));
+                                  {isAdded ? (
+                                    <span className="text-[10px] font-black text-emerald-400 flex items-center gap-1 bg-emerald-500/20 px-2 py-0.5 rounded-full shrink-0">
+                                      <Check className="h-3 w-3 stroke-[3]" /> ¡Agregado!
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs font-black text-emerald-400 shrink-0 font-mono">+ {f.calories} kcal</span>
+                                  )}
+                                </button>
+                              );
+                            });
                           })()}
                         </div>
                       </div>
@@ -1114,33 +1230,14 @@ export default function MealBuilderModal({
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
 
-                          {confirmDeleteId === ing.id ? (
-                            <div className="flex flex-col gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveIngredient(ing.id)}
-                                className="px-1.5 py-0.5 rounded-lg bg-rose-500 text-white font-bold text-[9px] hover:bg-rose-600 transition cursor-pointer"
-                              >
-                                Borrar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDeleteId(null)}
-                                className="px-1 py-0.5 rounded-lg bg-white/10 text-white/60 hover:text-white text-[8px] transition cursor-pointer text-center"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(ing.id)}
-                              className="p-1.5 rounded-xl bg-white/5 hover:bg-rose-500/20 text-white/40 hover:text-rose-400 transition cursor-pointer"
-                              title="Eliminar ingrediente"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => setIngredientToDelete(ing)}
+                            className="p-1.5 rounded-xl bg-white/5 hover:bg-rose-500/20 text-white/40 hover:text-rose-400 transition cursor-pointer"
+                            title="Eliminar ingrediente"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -1416,6 +1513,57 @@ export default function MealBuilderModal({
         apiKey={apiKey}
         userName={userId}
       />
+
+      {/* Confirmation Modal: Delete Ingredient */}
+      <AnimatePresence>
+        {ingredientToDelete && (
+          <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-fadeIn">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#12131d] border border-rose-500/20 rounded-3xl p-5 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">¿Quitar ingrediente?</h3>
+                  <p className="text-[11px] text-white/50">Se descontará del plato y de los macros totales.</p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-white/[0.03] border border-white/5 rounded-2xl space-y-1">
+                <span className="text-xs font-bold text-white block">{ingredientToDelete.name}</span>
+                <span className="text-[10px] text-emerald-400 font-mono">
+                  {ingredientToDelete.amount} {ingredientToDelete.unit === "unit" ? (ingredientToDelete.amount === 1 ? ingredientToDelete.unitLabel : ingredientToDelete.unitLabel + "s") : ingredientToDelete.unit} · {ingredientToDelete.calories} kcal
+                </span>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIngredientToDelete(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleRemoveIngredient(ingredientToDelete.id);
+                    setIngredientToDelete(null);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-black transition cursor-pointer shadow-lg shadow-rose-500/20"
+                >
+                  Sí, Quitar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -278,7 +278,7 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
           <div className="text-[9px] text-gray-400 dark:text-white/20 font-mono tracking-wider">
             <span>by Richard Bouryssieres</span>
             <span className="mx-1.5">•</span>
-            <span>v0.1.36</span>
+            <span>v0.1.37</span>
           </div>
         </div>
       </div>

@@ -420,10 +420,15 @@ export default function FoodLogger({
       setPortionValue(food.portionValue || (food.portionUnit === "unit" ? 1 : food.portionGrams));
       setPortionGrams(food.portionGrams);
 
-      setCustomCalories(food.portionCalories !== undefined ? food.portionCalories : Math.round((food.calories * food.portionGrams) / 100));
-      setCustomProtein(food.portionProtein !== undefined ? food.portionProtein : Number(((food.protein * food.portionGrams) / 100).toFixed(1)));
-      setCustomCarbs(food.portionCarbs !== undefined ? food.portionCarbs : Number(((food.carbs * food.portionGrams) / 100).toFixed(1)));
-      setCustomFat(food.portionFat !== undefined ? food.portionFat : Number(((food.fat * food.portionGrams) / 100).toFixed(1)));
+      const base100gCal = food.raw100gCalories !== undefined ? food.raw100gCalories : food.calories;
+      const base100gProt = food.raw100gProtein !== undefined ? food.raw100gProtein : food.protein;
+      const base100gCarb = food.raw100gCarbs !== undefined ? food.raw100gCarbs : food.carbs;
+      const base100gFat = food.raw100gFat !== undefined ? food.raw100gFat : food.fat;
+
+      setCustomCalories(food.portionCalories !== undefined ? food.portionCalories : Math.round((base100gCal * food.portionGrams) / 100));
+      setCustomProtein(food.portionProtein !== undefined ? food.portionProtein : Number(((base100gProt * food.portionGrams) / 100).toFixed(1)));
+      setCustomCarbs(food.portionCarbs !== undefined ? food.portionCarbs : Number(((base100gCarb * food.portionGrams) / 100).toFixed(1)));
+      setCustomFat(food.portionFat !== undefined ? food.portionFat : Number(((base100gFat * food.portionGrams) / 100).toFixed(1)));
     } else {
       // Standard search / API item flow
       const info = getDefaultServingInfo(food.name, food.servingSize);
@@ -442,18 +447,61 @@ export default function FoodLogger({
       setCustomFat(Number((food.fat * scale).toFixed(1)));
     }
 
-    // Check Firestore for community correction if it has a barcode
-    if (food.barcode) {
+    // Check Firestore for community correction only if not already loaded from community DB
+    if (food.barcode && food.source !== "local") {
       getBarcodeCorrection(food.barcode).then((correction) => {
         if (correction) {
+          const isUserContributor = Boolean(userId && (correction.contributedBy === userId || correction.contributedBy?.toLowerCase().includes("trophia")));
           const netVotes = (correction.yesVotes || 0) - (correction.noVotes || 0);
-          if (netVotes >= 0) {
+
+          if (isUserContributor || netVotes > 0) {
+            handleApplyCorrectionDirectly(correction);
+          } else {
             setCommunityCorrection(correction);
             setShowCommunityPrompt(true);
           }
         }
       }).catch((err) => console.error("Error checking barcode correction:", err));
     }
+  };
+
+  const handleApplyCorrectionDirectly = (correction: BarcodeCorrection) => {
+    setShowCommunityPrompt(false);
+    const uWeight = correction.unitWeight && correction.unitWeight > 0 ? correction.unitWeight : 100;
+    const uLabel = correction.unitLabel || "porción";
+    const isCustomPortion = uWeight !== 100;
+
+    setUnitWeight(uWeight);
+    setUnitLabel(uLabel);
+    setPortionUnit("g");
+    setPortionValue(uWeight);
+    setPortionGrams(uWeight);
+
+    const scale = uWeight / 100;
+    setCustomCalories(Math.round(correction.calories * scale));
+    setCustomProtein(Number((correction.protein * scale).toFixed(1)));
+    setCustomCarbs(Number((correction.carbs * scale).toFixed(1)));
+    setCustomFat(Number((correction.fat * scale).toFixed(1)));
+
+    setSelectedFood(prev => prev ? {
+      ...prev,
+      name: correction.name || prev.name,
+      brand: correction.brand || prev.brand,
+      calories: correction.calories,
+      protein: correction.protein,
+      carbs: correction.carbs,
+      fat: correction.fat,
+      raw100gCalories: correction.calories,
+      raw100gProtein: correction.protein,
+      raw100gCarbs: correction.carbs,
+      raw100gFat: correction.fat,
+      portionGrams: uWeight,
+      portionValue: uWeight,
+      portionUnit: "g",
+      unitWeight: uWeight,
+      unitLabel: uLabel,
+      servingSize: correction.servingSize || (isCustomPortion ? `${uWeight}g` : "100g")
+    } : null);
   };
 
   const updatePortion = (val: number, unit = portionUnit) => {
@@ -541,22 +589,7 @@ export default function FoodLogger({
 
   const handleAcceptCommunityCorrection = async () => {
     if (!communityCorrection || !selectedFood?.barcode) return;
-    setShowCommunityPrompt(false);
-    
-    const scale = portionUnit === "unit" ? unitWeight / 100 : portionValue / 100;
-    setCustomCalories(Math.round(communityCorrection.calories * scale));
-    setCustomProtein(Number((communityCorrection.protein * scale).toFixed(1)));
-    setCustomCarbs(Number((communityCorrection.carbs * scale).toFixed(1)));
-    setCustomFat(Number((communityCorrection.fat * scale).toFixed(1)));
-    
-    setSelectedFood(prev => prev ? {
-      ...prev,
-      calories: communityCorrection.calories,
-      protein: communityCorrection.protein,
-      carbs: communityCorrection.carbs,
-      fat: communityCorrection.fat
-    } : null);
-
+    handleApplyCorrectionDirectly(communityCorrection);
     voteBarcodeCorrection(selectedFood.barcode, true).catch(err => console.error(err));
   };
 
