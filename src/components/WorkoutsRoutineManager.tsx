@@ -808,64 +808,69 @@ export default function WorkoutsRoutineManager({
                         {routine.exercises.map((ex, exIdx) => (
                           <div
                             key={ex.id || exIdx}
-                            className="p-3 rounded-2xl bg-white dark:bg-[#12131d] border border-gray-200 dark:border-gray-800 shadow-sm flex items-start justify-between gap-3"
+                            className="p-3.5 rounded-2xl bg-white dark:bg-[#12131d] border border-gray-200 dark:border-gray-800 shadow-sm flex flex-col gap-2"
                           >
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-black text-gray-900 dark:text-white">
+                            {/* Fila 1: Nombre y Badges a la izquierda | Botón IA en la esquina superior derecha */}
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs font-black text-gray-900 dark:text-white truncate">
                                   {exIdx + 1}. {ex.name}
                                 </span>
                                 {ex.trackingType === "time" ? (
-                                  <span className="text-[9px] px-1.5 py-0.2 bg-blue-500/15 text-blue-400 rounded font-bold">
+                                  <span className="text-[9px] px-1.5 py-0.2 bg-blue-500/15 text-blue-400 rounded font-bold shrink-0">
                                     Tiempo
                                   </span>
                                 ) : (
-                                  <span className="text-[9px] px-1.5 py-0.2 bg-emerald-500/15 text-emerald-400 rounded font-bold">
+                                  <span className="text-[9px] px-1.5 py-0.2 bg-emerald-500/15 text-emerald-400 rounded font-bold shrink-0">
                                     Reps
                                   </span>
                                 )}
                               </div>
-                              <div className="flex flex-wrap items-center gap-2 mt-1">
-                                <span className="text-[10px] font-bold text-emerald-500 dark:text-emerald-400">
-                                  {ex.sets || 3} series × {ex.reps || 10} {ex.trackingType === "time" ? "seg" : "reps"}
+
+                              {/* AI Consultation / Swap Button */}
+                              <button
+                                type="button"
+                                onClick={() => setConsultingExerciseData({
+                                  exercise: ex,
+                                  routineId: routine.id,
+                                  routineName: routine.name
+                                })}
+                                className="shrink-0 px-2.5 py-1 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 border border-emerald-500/25 text-[10px] font-black transition flex items-center gap-1 cursor-pointer active:scale-95"
+                                title="Consultar con la IA o pedir un cambio para este ejercicio"
+                              >
+                                <Sparkles className="h-3 w-3" />
+                                <span className="hidden sm:inline">Consultar / Cambiar</span>
+                                <span className="sm:hidden">IA</span>
+                              </button>
+                            </div>
+
+                            {/* Fila 2: Series, reps, peso e implemento */}
+                            <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                              <span className="font-bold text-emerald-500 dark:text-emerald-400">
+                                {ex.sets || 3} series × {ex.reps || 10} {ex.trackingType === "time" ? "seg" : "reps"}
+                              </span>
+                              {ex.weight > 0 ? (
+                                <span className="text-gray-500 dark:text-gray-400">
+                                  · {ex.weight} kg sugeridos
                                 </span>
-                                {ex.weight > 0 ? (
-                                  <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                                    · {ex.weight} kg sugeridos
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] text-gray-400 dark:text-gray-500">
-                                    · Peso corporal
-                                  </span>
-                                )}
-                                {ex.equipmentNeeded && (
-                                  <span className="text-[10px] text-gray-400 dark:text-gray-500">
-                                    · {ex.equipmentNeeded}
-                                  </span>
-                                )}
-                              </div>
-                              {ex.techniqueTips && (
-                                <p className="text-[10px] text-gray-500 dark:text-gray-400 italic mt-1 bg-gray-50 dark:bg-white/[0.02] p-1.5 rounded-lg border border-gray-100 dark:border-white/5">
-                                  💡 {ex.techniqueTips}
-                                </p>
+                              ) : (
+                                <span className="text-gray-400 dark:text-gray-500">
+                                  · Peso corporal
+                                </span>
+                              )}
+                              {ex.equipmentNeeded && (
+                                <span className="text-gray-400 dark:text-gray-500">
+                                  · {ex.equipmentNeeded}
+                                </span>
                               )}
                             </div>
 
-                            {/* AI Consultation / Swap Button */}
-                            <button
-                              type="button"
-                              onClick={() => setConsultingExerciseData({
-                                exercise: ex,
-                                routineId: routine.id,
-                                routineName: routine.name
-                              })}
-                              className="shrink-0 px-2.5 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 border border-emerald-500/25 text-[10px] font-black transition flex items-center gap-1 cursor-pointer active:scale-95"
-                              title="Consultar con la IA o pedir un cambio para este ejercicio"
-                            >
-                              <Sparkles className="h-3 w-3" />
-                              <span className="hidden sm:inline">Consultar / Cambiar</span>
-                              <span className="sm:hidden">IA</span>
-                            </button>
+                            {/* Fila 3: Técnica y consejos a todo el ancho (sin huecos vacíos debajo del botón) */}
+                            {ex.techniqueTips && (
+                              <p className="text-[10px] text-gray-500 dark:text-gray-400 italic bg-gray-50 dark:bg-white/[0.02] p-2 rounded-xl border border-gray-100 dark:border-white/5 leading-relaxed w-full">
+                                💡 {ex.techniqueTips}
+                              </p>
+                            )}
                           </div>
                         ))}
                       </div>
