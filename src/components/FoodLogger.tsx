@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, Camera, Plus, History, Trash, AlertCircle, Check, X, RefreshCw, Star, Barcode, Sparkles, HelpCircle } from "lucide-react";
+import { Search, Camera, Plus, History, Trash, AlertCircle, Check, X, RefreshCw, Star, Barcode, Sparkles, HelpCircle, Package } from "lucide-react";
 import { LoggedMeal, FoodItem, MealType, BarcodeCorrection, CustomFood, PantryItem } from "../types";
 import { GLOBAL_FOODS_DB, getLocalDateString, formatFriendlyDate, createTimestampForDate } from "../utils/fitnessUtils";
 import { analyzeFoodByIA, estimateMacrosFromDescription, getVisualServingSizesByIA, analyzeNutritionLabelByIA } from "../services/geminiService";
@@ -157,9 +157,10 @@ export default function FoodLogger({
   pantryItems = []
 }: FoodLoggerProps) {
   const effectiveApiKey = apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || (typeof localStorage !== "undefined" ? localStorage.getItem("trophia_api_key") : "") || "";
-  const [activeTab, setActiveTab] = useState<"search" | "ia_text" | "camera" | "personal">("search");
+  const [activeTab, setActiveTab] = useState<"search" | "ia_text" | "camera" | "pantry" | "personal">("search");
   const [isMealBuilderOpen, setIsMealBuilderOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [pantrySearchQuery, setPantrySearchQuery] = useState("");
   const [selectedMealType, setSelectedMealType] = useState<MealType>(defaultMealType || "lunch");
 
   useEffect(() => {
@@ -256,25 +257,32 @@ export default function FoodLogger({
       setSelectedMealType("dinner");
     }
 
-    // Load personal history of foods from loggedMeals
-    const uniqueFoods: FoodItem[] = [];
-    const seenNames = new Set<string>();
-
+    // Load personal history sorted by frequency of consumption
+    const freqMap = new Map<string, { count: number; meal: LoggedMeal }>();
     loggedMeals.forEach(m => {
-      if (!seenNames.has(m.name.toLowerCase())) {
-        seenNames.add(m.name.toLowerCase());
-        uniqueFoods.push({
-          name: m.name,
-          calories: m.calories,
-          protein: m.protein,
-          carbs: m.carbs,
-          fat: m.fat,
-          servingSize: "1 Ración"
-        });
+      const key = m.name.trim().toLowerCase();
+      const existing = freqMap.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        freqMap.set(key, { count: 1, meal: m });
       }
     });
 
-    setPersonalHistory(uniqueFoods);
+    const frequentList = Array.from(freqMap.values())
+      .sort((a, b) => b.count - a.count)
+      .map(({ count, meal }) => ({
+        name: meal.name,
+        calories: meal.calories,
+        protein: meal.protein,
+        carbs: meal.carbs,
+        fat: meal.fat,
+        servingSize: meal.servingSize || "1 porción",
+        source: "local" as const,
+        description: count > 1 ? `Consumido ${count} veces` : undefined
+      }));
+
+    setPersonalHistory(frequentList);
   }, [loggedMeals]);
 
   useEffect(() => {
@@ -904,6 +912,17 @@ export default function FoodLogger({
               <Camera className="h-3.5 w-3.5" />
               <span>Foto</span>
             </button>
+            {mode !== "pantry" && (
+              <button
+                onClick={() => setActiveTab("pantry")}
+                className={`flex-1 py-3 px-2 text-xs font-extrabold border-b-2 text-center transition flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  activeTab === "pantry" ? "border-emerald-500 text-emerald-500 dark:text-emerald-400" : "border-transparent text-gray-500 dark:text-white/40"
+                }`}
+              >
+                <Package className="h-3.5 w-3.5" />
+                <span>Despensa</span>
+              </button>
+            )}
             <button
               onClick={() => setActiveTab("personal")}
               className={`flex-1 py-3 px-2 text-xs font-extrabold border-b-2 text-center transition cursor-pointer whitespace-nowrap ${
@@ -1222,6 +1241,74 @@ export default function FoodLogger({
                 </div>
               )}
 
+              {activeTab === "pantry" && (
+                <div className="space-y-3 max-h-[380px] overflow-y-auto no-scrollbar">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-gray-400 dark:text-white/40" />
+                    <input
+                      type="text"
+                      value={pantrySearchQuery}
+                      onChange={(e) => setPantrySearchQuery(e.target.value)}
+                      placeholder="Buscar en mi despensa..."
+                      className="w-full pl-9 pr-3 py-2 bg-gray-100 dark:bg-black/40 border border-gray-200 dark:border-white/10 rounded-xl text-xs text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-white/30 focus:outline-none focus:border-emerald-500/40 font-medium"
+                    />
+                  </div>
+
+                  {(() => {
+                    const filtered = (pantryItems || []).filter(p => 
+                      !pantrySearchQuery.trim() || p.name.toLowerCase().includes(pantrySearchQuery.toLowerCase())
+                    );
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="text-center py-6 text-[10px] text-gray-400 dark:text-white/30 bg-gray-50 dark:bg-transparent border border-dashed border-gray-200 dark:border-white/5 rounded-2xl space-y-1">
+                          <Package className="h-6 w-6 mx-auto text-gray-300 dark:text-white/20" />
+                          <p className="font-bold">No hay alimentos en tu despensa {pantrySearchQuery ? "que coincidan" : ""}.</p>
+                          <p className="text-[9px]">Puedes agregar productos desde la pestaña Despensa en Nutrición.</p>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="divide-y divide-gray-150 dark:divide-white/5 border border-gray-200 dark:border-white/5 rounded-2xl overflow-hidden bg-gray-50 dark:bg-black/30 shadow-inner">
+                        {filtered.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => handleSelectFood({
+                              name: item.name,
+                              calories: Math.round(item.calories),
+                              protein: Number(item.protein) || 0,
+                              carbs: Number(item.carbs) || 0,
+                              fat: Number(item.fat) || 0,
+                              servingSize: item.quantity || "100g",
+                              source: "local"
+                            })}
+                            className="w-full p-3 text-left hover:bg-gray-100 dark:hover:bg-white/5 transition flex justify-between items-center cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-base">
+                                {item.category === "protein" ? "💪" : item.category === "carb" ? "⚡" : item.category === "fat" ? "🥑" : item.category === "supplement" ? "🥤" : "📦"}
+                              </span>
+                              <div>
+                                <span className="block text-xs font-black text-gray-900 dark:text-white uppercase tracking-tight">{item.name}</span>
+                                <span className="text-[9px] text-gray-400 dark:text-white/30 font-medium">
+                                  Disponible: {item.quantity}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="block text-xs font-black text-emerald-500 dark:text-emerald-400">{Math.round(item.calories)} kcal</span>
+                              <span className="text-[9px] text-gray-400 dark:text-white/40 font-mono">
+                                P:{formatMacro(item.protein)}g C:{formatMacro(item.carbs)}g F:{formatMacro(item.fat)}g
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
               {activeTab === "personal" && (
                 <div className="space-y-4 max-h-[380px] overflow-y-auto no-scrollbar">
                   {/* Mis Comidas templates (Saved custom foods) */}
@@ -1276,7 +1363,7 @@ export default function FoodLogger({
                   {/* Últimos Agregados (logged meals history) */}
                   <div className="space-y-2">
                     <h4 className="text-[9.5px] font-black text-white/40 uppercase tracking-wider">
-                      Últimos Agregados (Historial)
+                      Alimentos Más Frecuentes (Historial)
                     </h4>
                     {personalHistory.length > 0 ? (
                       <div className="divide-y divide-gray-150 dark:divide-white/5 border border-gray-200 dark:border-white/5 rounded-2xl overflow-hidden bg-gray-50 dark:bg-black/30 shadow-inner">
@@ -1289,7 +1376,12 @@ export default function FoodLogger({
                           >
                             <div className="flex items-center gap-2">
                               <History className="h-3.5 w-3.5 text-gray-400" />
-                              <span className="text-xs font-bold text-gray-900 dark:text-white">{food.name}</span>
+                              <div>
+                                <span className="text-xs font-bold text-gray-900 dark:text-white block">{food.name}</span>
+                                {food.description && (
+                                  <span className="text-[9px] text-emerald-400 font-bold font-mono">{food.description}</span>
+                                )}
+                              </div>
                             </div>
                             <div className="text-right">
                               <span className="block text-xs font-bold text-emerald-500 dark:text-emerald-400">{food.calories} kcal</span>
@@ -1985,6 +2077,7 @@ export default function FoodLogger({
         }}
         pantryItems={pantryItems}
         customFoods={customFoodsList}
+        loggedMeals={loggedMeals}
         userId={userId}
         targetDate={targetDate}
         defaultMealType={selectedMealType}

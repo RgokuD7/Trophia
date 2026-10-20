@@ -22,14 +22,19 @@ export default function BarcodeScannerModal({
   const [successCode, setSuccessCode] = useState<string | null>(null);
 
   const qrCodeRef = useRef<Html5Qrcode | null>(null);
+  const hasScannedRef = useRef(false);
   const viewportId = "scanner-viewport";
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      hasScannedRef.current = false;
+      return;
+    }
 
     // Reset success state
     setSuccessCode(null);
     setScannerError(null);
+    hasScannedRef.current = false;
 
     // Initialize scanner
     const startScanner = async () => {
@@ -49,17 +54,29 @@ export default function BarcodeScannerModal({
             }
           },
           (decodedText) => {
+            if (hasScannedRef.current) return;
+            hasScannedRef.current = true;
+
             // Vibrate if supported
             if (navigator.vibrate) {
               navigator.vibrate(100);
             }
             setSuccessCode(decodedText);
+
+            // Pause further camera scanning immediately to prevent duplicate triggers
+            if (qrCodeRef.current && qrCodeRef.current.isScanning) {
+              try {
+                qrCodeRef.current.pause(true);
+              } catch (e) {
+                // Ignore pause error
+              }
+            }
             
             // Wait brief moment for visual success state before returning
             setTimeout(() => {
               onScanSuccess(decodedText);
               handleClose();
-            }, 800);
+            }, 400);
           },
           () => {
             // Ignore normal scanning logs
@@ -104,7 +121,8 @@ export default function BarcodeScannerModal({
 
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (manualCode.trim() !== "") {
+    if (manualCode.trim() !== "" && !hasScannedRef.current) {
+      hasScannedRef.current = true;
       onScanSuccess(manualCode.trim());
       handleClose();
     }

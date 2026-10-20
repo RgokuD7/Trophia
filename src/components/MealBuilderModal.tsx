@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   X, Plus, Trash2, Barcode, Search, Sparkles, Check, 
-  Utensils, ChefHat, Package, Layers, Star, AlertCircle, RefreshCw,
-  Camera, Upload
+  ChefHat, Package, Layers, Star, AlertCircle, RefreshCw,
+  Camera, Pencil, ArrowLeft, History, Flame
 } from "lucide-react";
 import { MealType, LoggedMeal, FoodItem, PantryItem, CustomFood, MealBuilderIngredient } from "../types";
 import { searchAllFoods, getProductByBarcode } from "../services/foodDatabaseService";
@@ -23,6 +23,7 @@ export interface MealBuilderModalProps {
   initialMeal?: LoggedMeal | null;
   pantryItems?: PantryItem[];
   customFoods?: CustomFood[];
+  loggedMeals?: LoggedMeal[];
   userId?: string;
   targetDate?: string;
   defaultMealType?: MealType;
@@ -37,12 +38,16 @@ export default function MealBuilderModal({
   initialMeal,
   pantryItems = [],
   customFoods = [],
+  loggedMeals = [],
   userId,
   targetDate,
   defaultMealType = "lunch",
   apiKey
 }: MealBuilderModalProps) {
   const effectiveApiKey = apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || (typeof localStorage !== "undefined" ? localStorage.getItem("trophia_api_key") : "") || "";
+
+  // Step state: "build" (adding and listing ingredients) or "summary" (final totals and save)
+  const [step, setStep] = useState<"build" | "summary">("build");
 
   const [dishName, setDishName] = useState("");
   const [selectedMealType, setSelectedMealType] = useState<MealType>(defaultMealType);
@@ -51,13 +56,23 @@ export default function MealBuilderModal({
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  // Ingredient adding drawer / picker state
-  const [addMode, setAddMode] = useState<"search" | "ia_text" | "camera" | "pantry" | "custom" | null>(null);
+  // Ingredient currently being edited in modal
+  const [editingIngredient, setEditingIngredient] = useState<MealBuilderIngredient | null>(null);
+  const [editAmount, setEditAmount] = useState<number>(1);
+  const [editUnit, setEditUnit] = useState<"g" | "ml" | "unit">("unit");
+
+  // Ingredient adding drawer / picker state (default to "search")
+  const [addMode, setAddMode] = useState<"search" | "ia_text" | "camera" | "pantry" | "custom" | null>("search");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<FoodItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
+  const isProcessingBarcodeRef = useRef(false);
+
+  // Sub-filters
+  const [pantryFilter, setPantryFilter] = useState("");
+  const [frequentFilter, setFrequentFilter] = useState("");
 
   // IA Text Description state
   const [iaDescription, setIaDescription] = useState("");
@@ -69,16 +84,42 @@ export default function MealBuilderModal({
   const [photoDescription, setPhotoDescription] = useState("");
   const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
 
+  // Calculate genuine frequent foods from loggedMeals
+  const frequentHistory = React.useMemo(() => {
+    const freqMap = new Map<string, { count: number; meal: LoggedMeal }>();
+    (loggedMeals || []).forEach(m => {
+      const key = m.name.trim().toLowerCase();
+      const existing = freqMap.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        freqMap.set(key, { count: 1, meal: m });
+      }
+    });
+
+    return Array.from(freqMap.values())
+      .sort((a, b) => b.count - a.count)
+      .map(({ count, meal }) => ({
+        name: meal.name,
+        calories: meal.calories,
+        protein: meal.protein,
+        carbs: meal.carbs,
+        fat: meal.fat,
+        servingSize: meal.servingSize || "1 porción",
+        count
+      }));
+  }, [loggedMeals]);
+
   // Initialize or reset when modal opens or initialMeal changes
   useEffect(() => {
     if (!isOpen) return;
+    setStep("build");
     if (initialMeal) {
       setDishName(initialMeal.name || "");
       setSelectedMealType(initialMeal.type || defaultMealType);
       if (initialMeal.compositeIngredients && initialMeal.compositeIngredients.length > 0) {
         setIngredients(initialMeal.compositeIngredients);
       } else {
-        // Synthesize single initial ingredient from meal data if none saved
         const synthIng: MealBuilderIngredient = {
           id: "ing_" + Date.now(),
           name: initialMeal.name,
@@ -103,15 +144,19 @@ export default function MealBuilderModal({
       setSelectedMealType(defaultMealType);
       setIngredients([]);
     }
-    setAddMode(null);
+    setAddMode("search");
     setSearchQuery("");
     setSearchResults([]);
+    setPantryFilter("");
+    setFrequentFilter("");
     setIaDescription("");
     setPhotoData(null);
     setPhotoDescription("");
     setScannerError(null);
     setIaError(null);
     setConfirmDeleteId(null);
+    setEditingIngredient(null);
+    isProcessingBarcodeRef.current = false;
   }, [isOpen, initialMeal, defaultMealType]);
 
   if (!isOpen) return null;
@@ -173,36 +218,41 @@ export default function MealBuilderModal({
     };
 
     setIngredients(prev => [...prev, newIng]);
-    setAddMode(null);
-    setSearchQuery("");
-    setSearchResults([]);
-    setIaDescription("");
-    setPhotoData(null);
-    setPhotoDescription("");
     setConfirmDeleteId(null);
   };
 
-  const handleUpdateIngredientAmount = (id: string, newAmount: number) => {
-    const validAmount = Math.max(0.1, newAmount);
+  const handleStartEditIngredient = (ing: MealBuilderIngredient) => {
+    setEditingIngredient(ing);
+    setEditAmount(ing.amount);
+    setEditUnit(ing.unit);
+  };
+
+  const handleSaveEditedIngredient = () => {
+    if (!editingIngredient) return;
+    const validAmount = Math.max(0.1, Number(editAmount) || 1);
+    const calculated = calculateMacros(
+      validAmount,
+      editUnit,
+      editingIngredient.unitWeight,
+      {
+        calories: editingIngredient.raw100gCalories,
+        protein: editingIngredient.raw100gProtein,
+        carbs: editingIngredient.raw100gCarbs,
+        fat: editingIngredient.raw100gFat
+      }
+    );
+
     setIngredients(prev => prev.map(ing => {
-      if (ing.id !== id) return ing;
-      const calculated = calculateMacros(
-        validAmount,
-        ing.unit,
-        ing.unitWeight,
-        {
-          calories: ing.raw100gCalories,
-          protein: ing.raw100gProtein,
-          carbs: ing.raw100gCarbs,
-          fat: ing.raw100gFat
-        }
-      );
+      if (ing.id !== editingIngredient.id) return ing;
       return {
         ...ing,
         amount: validAmount,
+        unit: editUnit,
         ...calculated
       };
     }));
+
+    setEditingIngredient(null);
   };
 
   const handleRemoveIngredient = (id: string) => {
@@ -228,6 +278,8 @@ export default function MealBuilderModal({
   };
 
   const handleBarcodeScanSuccess = async (barcode: string) => {
+    if (isProcessingBarcodeRef.current) return;
+    isProcessingBarcodeRef.current = true;
     setIsScannerOpen(false);
     setScannerError(null);
     try {
@@ -240,6 +292,10 @@ export default function MealBuilderModal({
     } catch (err) {
       console.error("Error barcode in meal builder:", err);
       setScannerError("Error al escanear producto.");
+    } finally {
+      setTimeout(() => {
+        isProcessingBarcodeRef.current = false;
+      }, 600);
     }
   };
 
@@ -259,6 +315,7 @@ export default function MealBuilderModal({
           fat: Number(result.fat) || 0,
           servingSize: result.servingSize || "1 porción"
         });
+        setIaDescription("");
       } else {
         setIaError("No pudimos estimar los macros del ingrediente. Intenta ser más descriptivo.");
       }
@@ -329,6 +386,8 @@ export default function MealBuilderModal({
           fat: Number(data.fat) || 0,
           servingSize: data.servingSize || `${estimatedGrams}g`
         });
+        setPhotoData(null);
+        setPhotoDescription("");
       } else {
         setIaError("No se pudo identificar el alimento en la imagen.");
       }
@@ -353,12 +412,11 @@ export default function MealBuilderModal({
   }).join(" + ");
 
   const handleSaveCompositeMeal = async () => {
-    const finalName = dishName.trim() || (initialMeal ? initialMeal.name : "Sándwich de atún con huevo");
+    const finalName = dishName.trim() || (initialMeal ? initialMeal.name : "Sándwich o Plato Compuesto");
     if (ingredients.length === 0) return;
 
     setIsSaving(true);
     try {
-      // 1. Optionally save to personal custom foods
       if (saveAsCustom && userId) {
         await addCustomFood(userId, {
           name: finalName,
@@ -372,7 +430,6 @@ export default function MealBuilderModal({
         });
       }
 
-      // 2. Either update existing meal or create new one
       if (initialMeal && onUpdateMeal) {
         onUpdateMeal({
           ...initialMeal,
@@ -407,6 +464,19 @@ export default function MealBuilderModal({
     }
   };
 
+  // Preview calculations for the ingredient being edited in modal
+  const editingPreview = editingIngredient ? calculateMacros(
+    Math.max(0.1, Number(editAmount) || 1),
+    editUnit,
+    editingIngredient.unitWeight,
+    {
+      calories: editingIngredient.raw100gCalories,
+      protein: editingIngredient.raw100gProtein,
+      carbs: editingIngredient.raw100gCarbs,
+      fat: editingIngredient.raw100gFat
+    }
+  ) : null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
       <motion.div
@@ -418,18 +488,37 @@ export default function MealBuilderModal({
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-white/5 flex items-center justify-between bg-white/[0.01]">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-              <ChefHat className="h-5 w-5" />
-            </div>
+            {step === "summary" ? (
+              <button
+                type="button"
+                onClick={() => setStep("build")}
+                className="w-9 h-9 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white/70 hover:text-white transition cursor-pointer"
+                title="Volver a los ingredientes"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+            ) : (
+              <div className="w-9 h-9 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                <ChefHat className="h-5 w-5" />
+              </div>
+            )}
             <div>
               <h3 className="text-sm font-black text-white tracking-wide flex items-center gap-1.5">
-                <span>{initialMeal ? "Editar Sándwich o Plato" : "Armar Sándwich o Plato"}</span>
+                <span>
+                  {step === "summary" 
+                    ? "Resumen del Plato" 
+                    : initialMeal 
+                      ? "Editar Sándwich o Plato" 
+                      : "Armar Sándwich o Plato"}
+                </span>
                 <span className="text-[9px] bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full font-mono uppercase">
-                  {initialMeal ? "Edición" : "Multicompuesto"}
+                  {step === "summary" ? "Resumen" : initialMeal ? "Edición" : "Multicompuesto"}
                 </span>
               </h3>
               <p className="text-[10px] text-white/50">
-                Combina varios ingredientes (pan, atún, huevo...) y regístralos como 1 sola comida
+                {step === "summary"
+                  ? "Revisa los macros consolidados antes de registrar en tu diario"
+                  : "Agrega varios ingredientes y regístralos como 1 sola comida limpia"}
               </p>
             </div>
           </div>
@@ -441,516 +530,778 @@ export default function MealBuilderModal({
           </button>
         </div>
 
-        {/* Scrollable Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 no-scrollbar">
+        {/* ─── STEP 1: BUILD (Add Ingredients & View Ingredients) ─── */}
+        {step === "build" && (
+          <>
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 no-scrollbar">
 
-          {/* Dish Name Input */}
-          <div className="space-y-1">
-            <label className="text-[9.5px] font-bold text-white/50 uppercase tracking-wider block">
-              Nombre de tu plato o preparación
-            </label>
-            <input
-              type="text"
-              value={dishName}
-              onChange={(e) => setDishName(e.target.value)}
-              placeholder="Ej: Sándwich de atún con huevo y mayo"
-              className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-2xl text-xs text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/40 transition font-bold"
-            />
-          </div>
-
-          {/* Ingredient List */}
-          <div className="space-y-2 pt-1">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black text-white/60 uppercase tracking-wider flex items-center gap-1.5">
-                <Layers className="h-3.5 w-3.5 text-emerald-400" />
-                Ingredientes ({ingredients.length})
-              </span>
-              <span className="text-[10px] text-emerald-400 font-bold font-mono">
-                {totalCalories} kcal acumuladas
-              </span>
-            </div>
-
-            {ingredients.length === 0 ? (
-              <div className="p-6 rounded-2xl bg-white/[0.02] border border-dashed border-white/10 text-center space-y-2">
-                <p className="text-xs text-white/60 font-medium">
-                  Aún no has agregado ingredientes.
-                </p>
-                <p className="text-[10px] text-white/40">
-                  Usa cualquiera de las opciones de abajo para añadir pan, atún, huevo, salsas, etc.
-                </p>
+              {/* Dish Name Input */}
+              <div className="space-y-1">
+                <label className="text-[9.5px] font-bold text-white/50 uppercase tracking-wider block">
+                  Nombre de tu plato o preparación
+                </label>
+                <input
+                  type="text"
+                  value={dishName}
+                  onChange={(e) => setDishName(e.target.value)}
+                  placeholder="Ej: Sándwich de atún con huevo y mayo"
+                  className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-2xl text-xs text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/40 transition font-bold"
+                />
               </div>
-            ) : (
-              <div className="space-y-2">
-                {ingredients.map((ing) => (
-                  <div
-                    key={ing.id}
-                    className="p-3 bg-white/[0.03] border border-white/5 rounded-2xl flex items-center justify-between gap-2.5 transition hover:border-white/10"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <span className="block text-xs font-bold text-white truncate">
-                        {ing.name}
-                      </span>
-                      <span className="block text-[10px] text-emerald-400 font-mono mt-0.5">
-                        {ing.calories} kcal · P: {ing.protein}g · C: {ing.carbs}g · G: {ing.fat}g
-                      </span>
-                    </div>
 
-                    {/* Amount adjuster */}
-                    <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 px-2.5 py-1 rounded-xl shrink-0">
-                      <input
-                        type="number"
-                        step={ing.unit === "unit" ? "1" : "5"}
-                        min="0.1"
-                        value={ing.amount}
-                        onChange={(e) => handleUpdateIngredientAmount(ing.id, parseFloat(e.target.value) || 1)}
-                        className="w-12 text-center text-xs font-bold font-mono text-white bg-transparent focus:outline-none"
-                      />
-                      <span className="text-[10px] text-white/50 font-bold">
-                        {ing.unit === "unit" ? ing.unitLabel : ing.unit}
-                      </span>
-                    </div>
+              {/* 1. SECTION: AGREGAR INGREDIENTES (Tabs like FoodLogger) */}
+              <div className="space-y-2 pt-1 border-t border-white/5">
+                <span className="text-[9.5px] font-bold text-white/50 uppercase tracking-wider block">
+                  Agregar Ingredientes
+                </span>
 
-                    {/* Safeguard delete: two-tap confirmation to prevent accidental taps */}
-                    {confirmDeleteId === ing.id ? (
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveIngredient(ing.id)}
-                          className="px-2 py-1 rounded-lg bg-rose-500 text-white font-bold text-[9px] hover:bg-rose-600 transition cursor-pointer"
-                        >
-                          ¿Borrar?
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDeleteId(null)}
-                          className="px-1.5 py-1 rounded-lg bg-white/10 text-white/60 hover:text-white text-[9px] transition cursor-pointer"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDeleteId(ing.id)}
-                        className="p-1.5 text-white/30 hover:text-rose-400 transition cursor-pointer"
-                        title="Eliminar ingrediente"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Full Tools to Add Ingredients */}
-          <div className="space-y-2 pt-2 border-t border-white/5">
-            <span className="text-[9.5px] font-bold text-white/40 uppercase tracking-wider block">
-              Agregar ingrediente al plato:
-            </span>
-
-            {/* Quick Mode Buttons */}
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-              <button
-                type="button"
-                onClick={() => setAddMode(addMode === "search" ? null : "search")}
-                className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
-                  addMode === "search"
-                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                    : "bg-white/[0.03] hover:bg-white/[0.06] text-white/70 border-white/5"
-                }`}
-              >
-                <Search className="h-3.5 w-3.5" />
-                <span>Buscar</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setAddMode(addMode === "ia_text" ? null : "ia_text")}
-                className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
-                  addMode === "ia_text"
-                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                    : "bg-white/[0.03] hover:bg-white/[0.06] text-white/70 border-white/5"
-                }`}
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>Describir</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setAddMode(addMode === "camera" ? null : "camera")}
-                className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
-                  addMode === "camera"
-                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                    : "bg-white/[0.03] hover:bg-white/[0.06] text-white/70 border-white/5"
-                }`}
-              >
-                <Camera className="h-3.5 w-3.5" />
-                <span>Foto</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setAddMode(addMode === "pantry" ? null : "pantry")}
-                className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
-                  addMode === "pantry"
-                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                    : "bg-white/[0.03] hover:bg-white/[0.06] text-white/70 border-white/5"
-                }`}
-              >
-                <Package className="h-3.5 w-3.5" />
-                <span>Despensa</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setAddMode(addMode === "custom" ? null : "custom")}
-                className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
-                  addMode === "custom"
-                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                    : "bg-white/[0.03] hover:bg-white/[0.06] text-white/70 border-white/5"
-                }`}
-              >
-                <Star className="h-3.5 w-3.5" />
-                <span>Frecuentes</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsScannerOpen(true)}
-                className="py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/25"
-              >
-                <Barcode className="h-3.5 w-3.5" />
-                <span>Escanear</span>
-              </button>
-            </div>
-
-            {/* Active Drawer Sub-view */}
-            {addMode && (
-              <div className="p-3.5 bg-white/[0.03] border border-white/10 rounded-2xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider flex items-center gap-1.5">
-                    {addMode === "search" && <><Search className="h-3 w-3 text-emerald-400" /> Buscar en catálogo</>}
-                    {addMode === "ia_text" && <><Sparkles className="h-3 w-3 text-emerald-400" /> Describir con IA</>}
-                    {addMode === "camera" && <><Camera className="h-3 w-3 text-emerald-400" /> Foto o Etiqueta con IA</>}
-                    {addMode === "pantry" && <><Package className="h-3 w-3 text-emerald-400" /> Mi despensa ({pantryItems.length})</>}
-                    {addMode === "custom" && <><Star className="h-3 w-3 text-emerald-400" /> Frecuentes y Guardados ({customFoods.length})</>}
-                  </span>
+                {/* Tabs Bar */}
+                <div className="grid grid-cols-6 gap-1 bg-white/[0.02] p-1 rounded-2xl border border-white/5">
                   <button
                     type="button"
-                    onClick={() => { setAddMode(null); setSearchResults([]); setIaError(null); }}
-                    className="text-white/40 hover:text-white text-xs font-bold transition cursor-pointer"
+                    onClick={() => setAddMode("search")}
+                    className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
+                      addMode === "search"
+                        ? "bg-emerald-500 text-black border-emerald-400 font-black shadow-sm"
+                        : "bg-transparent hover:bg-white/[0.04] text-white/70 border-transparent"
+                    }`}
                   >
-                    Cerrar
+                    <Search className="h-3.5 w-3.5" />
+                    <span className="truncate text-[9.5px]">Buscar</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAddMode("ia_text")}
+                    className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
+                      addMode === "ia_text"
+                        ? "bg-emerald-500 text-black border-emerald-400 font-black shadow-sm"
+                        : "bg-transparent hover:bg-white/[0.04] text-white/70 border-transparent"
+                    }`}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span className="truncate text-[9.5px]">Describir</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAddMode("camera")}
+                    className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
+                      addMode === "camera"
+                        ? "bg-emerald-500 text-black border-emerald-400 font-black shadow-sm"
+                        : "bg-transparent hover:bg-white/[0.04] text-white/70 border-transparent"
+                    }`}
+                  >
+                    <Camera className="h-3.5 w-3.5" />
+                    <span className="truncate text-[9.5px]">Foto</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAddMode("pantry")}
+                    className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
+                      addMode === "pantry"
+                        ? "bg-emerald-500 text-black border-emerald-400 font-black shadow-sm"
+                        : "bg-transparent hover:bg-white/[0.04] text-white/70 border-transparent"
+                    }`}
+                  >
+                    <Package className="h-3.5 w-3.5" />
+                    <span className="truncate text-[9.5px]">Despensa</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAddMode("custom")}
+                    className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
+                      addMode === "custom"
+                        ? "bg-emerald-500 text-black border-emerald-400 font-black shadow-sm"
+                        : "bg-transparent hover:bg-white/[0.04] text-white/70 border-transparent"
+                    }`}
+                  >
+                    <Star className="h-3.5 w-3.5" />
+                    <span className="truncate text-[9.5px]">Frecuentes</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsScannerOpen(true)}
+                    className="py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/25"
+                  >
+                    <Barcode className="h-3.5 w-3.5" />
+                    <span className="truncate text-[9.5px]">Escanear</span>
                   </button>
                 </div>
 
-                {/* Mode 1: Search Catalog */}
-                {addMode === "search" && (
-                  <div className="space-y-2">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-white/40" />
-                      <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => handleSearchFoods(e.target.value)}
-                        placeholder="Escribe el ingrediente (ej: pan, atún, huevo, palta)..."
-                        className="w-full pl-9 pr-3 py-2 bg-black/40 border border-white/10 rounded-xl text-xs text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/40 font-medium"
-                      />
-                    </div>
-
-                    {isSearching ? (
-                      <div className="text-center py-3 text-[10px] text-white/40 flex items-center justify-center gap-1.5">
-                        <RefreshCw className="h-3 w-3 animate-spin text-emerald-400" />
-                        <span>Buscando alimentos...</span>
-                      </div>
-                    ) : searchResults.length > 0 ? (
-                      <div className="max-h-48 overflow-y-auto space-y-1 no-scrollbar divide-y divide-white/5">
-                        {searchResults.map((f, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => handleAddFoodAsIngredient(f)}
-                            className="w-full text-left p-2 rounded-xl hover:bg-emerald-500/10 transition flex items-center justify-between gap-2 cursor-pointer"
-                          >
-                            <div className="min-w-0">
-                              <span className="text-xs font-bold text-white block truncate">{f.name}</span>
-                              <span className="text-[9px] text-white/40">{f.brand ? `${f.brand} · ` : ""}{f.servingSize}</span>
-                            </div>
-                            <span className="text-xs font-black text-emerald-400 shrink-0 font-mono">{f.calories} kcal</span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : searchQuery.trim() ? (
-                      <p className="text-[10px] text-white/40 text-center py-2">No se encontraron resultados.</p>
-                    ) : null}
-                  </div>
-                )}
-
-                {/* Mode 2: Describe with IA */}
-                {addMode === "ia_text" && (
-                  <div className="space-y-2">
-                    <textarea
-                      value={iaDescription}
-                      onChange={(e) => setIaDescription(e.target.value)}
-                      placeholder="Describe el ingrediente, ej: 1 lata de atún al agua, 2 cucharadas de mayonesa light, 50g de queso gauda..."
-                      rows={2}
-                      className="w-full p-2.5 bg-black/40 border border-white/10 rounded-xl text-xs text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/40 font-medium resize-none"
-                    />
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        disabled={!iaDescription.trim() || isIaEstimating}
-                        onClick={handleEstimateWithIa}
-                        className="py-2 px-3 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black text-[11px] font-black rounded-xl transition flex items-center gap-1.5 cursor-pointer"
-                      >
-                        {isIaEstimating ? (
-                          <>
-                            <RefreshCw className="h-3 w-3 animate-spin" />
-                            <span>Calculando macros...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="h-3.5 w-3.5" />
-                            <span>Añadir Ingrediente con IA</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Mode 3: Photo IA */}
-                {addMode === "camera" && (
-                  <div className="space-y-2.5">
-                    {photoData ? (
-                      <div className="space-y-2">
-                        <div className="relative rounded-xl overflow-hidden border border-white/10 max-h-36 flex items-center justify-center bg-black/50">
-                          <img src={photoData} alt="Preview" className="w-full h-36 object-contain" />
-                          <button
-                            type="button"
-                            onClick={() => setPhotoData(null)}
-                            className="absolute top-2 right-2 p-1 rounded-full bg-black/70 text-white hover:text-rose-400"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
+                {/* Tab Content Drawer */}
+                <div className="p-3 bg-white/[0.03] border border-white/10 rounded-2xl space-y-2.5">
+                  {/* Mode 1: Search Catalog */}
+                  {addMode === "search" && (
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-white/40" />
                         <input
                           type="text"
-                          value={photoDescription}
-                          onChange={(e) => setPhotoDescription(e.target.value)}
-                          placeholder="Contexto adicional opcional (ej: pechuga de pavo cocida)..."
-                          className="w-full px-3 py-1.5 bg-black/40 border border-white/10 rounded-xl text-[11px] text-white placeholder-white/30 focus:outline-none"
+                          value={searchQuery}
+                          onChange={(e) => handleSearchFoods(e.target.value)}
+                          placeholder="Buscar ingrediente (ej: pan, atún, huevo, palta)..."
+                          className="w-full pl-9 pr-3 py-2 bg-black/40 border border-white/10 rounded-xl text-xs text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/40 font-medium"
                         />
+                      </div>
+
+                      {isSearching ? (
+                        <div className="text-center py-3 text-[10px] text-white/40 flex items-center justify-center gap-1.5">
+                          <RefreshCw className="h-3 w-3 animate-spin text-emerald-400" />
+                          <span>Buscando alimentos...</span>
+                        </div>
+                      ) : searchResults.length > 0 ? (
+                        <div className="max-h-44 overflow-y-auto space-y-1 no-scrollbar divide-y divide-white/5">
+                          {searchResults.map((f, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => handleAddFoodAsIngredient(f)}
+                              className="w-full text-left p-2 rounded-xl hover:bg-emerald-500/10 transition flex items-center justify-between gap-2 cursor-pointer"
+                            >
+                              <div className="min-w-0">
+                                <span className="text-xs font-bold text-white block truncate">{f.name}</span>
+                                <span className="text-[9px] text-white/40">{f.brand ? `${f.brand} · ` : ""}{f.servingSize}</span>
+                              </div>
+                              <span className="text-xs font-black text-emerald-400 shrink-0 font-mono">
+                                + {f.calories} kcal
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : searchQuery.trim() ? (
+                        <p className="text-[10px] text-white/40 text-center py-2">No se encontraron resultados.</p>
+                      ) : (
+                        <p className="text-[10px] text-white/40 text-center py-2">Escribe para buscar ingredientes en la base de datos.</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Mode 2: Describe with IA */}
+                  {addMode === "ia_text" && (
+                    <div className="space-y-2">
+                      <textarea
+                        value={iaDescription}
+                        onChange={(e) => setIaDescription(e.target.value)}
+                        placeholder="Describe el ingrediente, ej: 1 lata de atún al agua, 2 cucharadas de mayonesa light, 50g de queso..."
+                        rows={2}
+                        className="w-full p-2.5 bg-black/40 border border-white/10 rounded-xl text-xs text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/40 font-medium resize-none"
+                      />
+                      <div className="flex justify-end">
                         <button
                           type="button"
-                          disabled={isAnalyzingPhoto}
-                          onClick={handleAnalyzePhoto}
-                          className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black text-xs font-black rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                          disabled={!iaDescription.trim() || isIaEstimating}
+                          onClick={handleEstimateWithIa}
+                          className="py-1.5 px-3 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black text-[11px] font-black rounded-xl transition flex items-center gap-1.5 cursor-pointer"
                         >
-                          {isAnalyzingPhoto ? (
+                          {isIaEstimating ? (
                             <>
-                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                              <span>Analizando con IA...</span>
+                              <RefreshCw className="h-3 w-3 animate-spin" />
+                              <span>Calculando...</span>
                             </>
                           ) : (
                             <>
-                              <Check className="h-3.5 w-3.5 stroke-[3]" />
-                              <span>Analizar y Añadir al Plato</span>
+                              <Sparkles className="h-3.5 w-3.5" />
+                              <span>Añadir Ingrediente con IA</span>
                             </>
                           )}
                         </button>
                       </div>
-                    ) : (
-                      <label className="p-4 rounded-xl border border-dashed border-white/20 hover:border-emerald-500/40 bg-black/20 flex flex-col items-center justify-center gap-2 cursor-pointer transition">
-                        <Camera className="h-6 w-6 text-emerald-400" />
-                        <span className="text-xs font-bold text-white/80">
-                          Toma o sube una foto del ingrediente o etiqueta
-                        </span>
-                        <span className="text-[10px] text-white/40">
-                          La IA detectará automáticamente el alimento y sus macros
-                        </span>
+                    </div>
+                  )}
+
+                  {/* Mode 3: Photo IA */}
+                  {addMode === "camera" && (
+                    <div className="space-y-2.5">
+                      {photoData ? (
+                        <div className="space-y-2">
+                          <div className="relative rounded-xl overflow-hidden border border-white/10 max-h-32 flex items-center justify-center bg-black/50">
+                            <img src={photoData} alt="Preview" className="w-full h-32 object-contain" />
+                            <button
+                              type="button"
+                              onClick={() => setPhotoData(null)}
+                              className="absolute top-2 right-2 p-1 rounded-full bg-black/70 text-white hover:text-rose-400"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          <input
+                            type="text"
+                            value={photoDescription}
+                            onChange={(e) => setPhotoDescription(e.target.value)}
+                            placeholder="Contexto opcional (ej: atún con mayonesa)..."
+                            className="w-full px-3 py-1.5 bg-black/40 border border-white/10 rounded-xl text-[11px] text-white placeholder-white/30 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            disabled={isAnalyzingPhoto}
+                            onClick={handleAnalyzePhoto}
+                            className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black text-xs font-black rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            {isAnalyzingPhoto ? (
+                              <>
+                                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                <span>Analizando...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Check className="h-3.5 w-3.5 stroke-[3]" />
+                                <span>Analizar y Añadir al Plato</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="p-4 rounded-xl border border-dashed border-white/20 hover:border-emerald-500/40 bg-black/20 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition">
+                          <Camera className="h-5 w-5 text-emerald-400" />
+                          <span className="text-xs font-bold text-white/80">
+                            Toma o sube una foto del ingrediente o etiqueta
+                          </span>
+                          <span className="text-[10px] text-white/40">
+                            La IA extraerá el alimento y sus macronutrientes
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={handlePhotoUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Mode 4: Pantry Items */}
+                  {addMode === "pantry" && (
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-white/40" />
                         <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          onChange={handlePhotoUpload}
-                          className="hidden"
+                          type="text"
+                          value={pantryFilter}
+                          onChange={(e) => setPantryFilter(e.target.value)}
+                          placeholder="Filtrar despensa..."
+                          className="w-full pl-9 pr-3 py-1.5 bg-black/40 border border-white/10 rounded-xl text-xs text-white placeholder-white/30 focus:outline-none font-medium"
                         />
-                      </label>
-                    )}
-                  </div>
-                )}
+                      </div>
 
-                {/* Mode 4: Pantry Items */}
-                {addMode === "pantry" && (
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto no-scrollbar">
-                    {pantryItems.length > 0 ? (
-                      pantryItems.map((p, i) => (
-                        <button
-                          key={p.id || i}
-                          type="button"
-                          onClick={() => handleAddFoodAsIngredient({
-                            name: p.name,
-                            calories: p.calories,
-                            protein: p.protein,
-                            carbs: p.carbs,
-                            fat: p.fat,
-                            servingSize: p.quantity || "100g"
-                          })}
-                          className="w-full text-left p-2 rounded-xl hover:bg-emerald-500/10 transition flex items-center justify-between gap-2 cursor-pointer border border-white/5"
-                        >
-                          <div className="min-w-0">
-                            <span className="text-xs font-bold text-white block truncate">{p.name}</span>
-                            <span className="text-[9px] text-white/40 font-mono">Disponibles: {p.quantity}</span>
+                      <div className="space-y-1 max-h-44 overflow-y-auto no-scrollbar">
+                        {(() => {
+                          const list = pantryItems.filter(p => !pantryFilter.trim() || p.name.toLowerCase().includes(pantryFilter.toLowerCase()));
+                          if (list.length === 0) {
+                            return <p className="text-[10px] text-white/40 text-center py-3">No hay productos en tu despensa {pantryFilter ? "que coincidan" : ""}.</p>;
+                          }
+                          return list.map((p, i) => (
+                            <button
+                              key={p.id || i}
+                              type="button"
+                              onClick={() => handleAddFoodAsIngredient({
+                                name: p.name,
+                                calories: p.calories,
+                                protein: p.protein,
+                                carbs: p.carbs,
+                                fat: p.fat,
+                                servingSize: p.quantity || "100g"
+                              })}
+                              className="w-full text-left p-2 rounded-xl hover:bg-emerald-500/10 transition flex items-center justify-between gap-2 cursor-pointer border border-white/5"
+                            >
+                              <div className="min-w-0">
+                                <span className="text-xs font-bold text-white block truncate">{p.name}</span>
+                                <span className="text-[9px] text-white/40 font-mono">Disponible: {p.quantity}</span>
+                              </div>
+                              <span className="text-xs font-black text-emerald-400 shrink-0 font-mono">+ {p.calories} kcal</span>
+                            </button>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mode 5: Frecuentes y Guardados */}
+                  {addMode === "custom" && (
+                    <div className="space-y-2.5">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-white/40" />
+                        <input
+                          type="text"
+                          value={frequentFilter}
+                          onChange={(e) => setFrequentFilter(e.target.value)}
+                          placeholder="Filtrar favoritos o frecuentes..."
+                          className="w-full pl-9 pr-3 py-1.5 bg-black/40 border border-white/10 rounded-xl text-xs text-white placeholder-white/30 focus:outline-none font-medium"
+                        />
+                      </div>
+
+                      <div className="max-h-48 overflow-y-auto space-y-3 no-scrollbar">
+                        {/* 1. Mis Comidas Guardadas / Favoritos */}
+                        <div className="space-y-1">
+                          <span className="text-[9px] font-black text-emerald-400 uppercase tracking-wider block">
+                            ⭐ Mis Alimentos Guardados ({customFoods.length})
+                          </span>
+                          {(() => {
+                            const list = customFoods.filter(c => !frequentFilter.trim() || c.name.toLowerCase().includes(frequentFilter.toLowerCase()));
+                            if (list.length === 0) {
+                              return <p className="text-[9px] text-white/30 italic py-1">Sin alimentos guardados.</p>;
+                            }
+                            return list.map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => handleAddFoodAsIngredient({
+                                  name: c.name,
+                                  calories: c.calories,
+                                  protein: c.protein,
+                                  carbs: c.carbs,
+                                  fat: c.fat,
+                                  servingSize: c.servingSize
+                                })}
+                                className="w-full text-left p-2 rounded-xl hover:bg-emerald-500/10 transition flex items-center justify-between gap-2 cursor-pointer border border-white/5"
+                              >
+                                <div className="min-w-0">
+                                  <span className="text-xs font-bold text-white block truncate">{c.name}</span>
+                                  <span className="text-[9px] text-white/40 font-mono">{c.servingSize}</span>
+                                </div>
+                                <span className="text-xs font-black text-emerald-400 shrink-0 font-mono">+ {c.calories} kcal</span>
+                              </button>
+                            ));
+                          })()}
+                        </div>
+
+                        {/* 2. Alimentos Más Frecuentes del Diario */}
+                        <div className="space-y-1 pt-1 border-t border-white/5">
+                          <span className="text-[9px] font-black text-sky-400 uppercase tracking-wider block">
+                            🔁 Más Frecuentes de tu Diario ({frequentHistory.length})
+                          </span>
+                          {(() => {
+                            const list = frequentHistory.filter(f => !frequentFilter.trim() || f.name.toLowerCase().includes(frequentFilter.toLowerCase()));
+                            if (list.length === 0) {
+                              return <p className="text-[9px] text-white/30 italic py-1">Sin historial de diario aún.</p>;
+                            }
+                            return list.map((f, i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => handleAddFoodAsIngredient(f)}
+                                className="w-full text-left p-2 rounded-xl hover:bg-emerald-500/10 transition flex items-center justify-between gap-2 cursor-pointer border border-white/5"
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-bold text-white truncate">{f.name}</span>
+                                    {f.count > 1 && (
+                                      <span className="text-[8px] bg-emerald-500/15 text-emerald-400 font-mono px-1 rounded-sm font-bold">
+                                        x{f.count}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[9px] text-white/40 font-mono">{f.servingSize}</span>
+                                </div>
+                                <span className="text-xs font-black text-emerald-400 shrink-0 font-mono">+ {f.calories} kcal</span>
+                              </button>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error messages */}
+                  {iaError && (
+                    <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-[10px] flex items-center gap-1.5">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                      <span>{iaError}</span>
+                    </div>
+                  )}
+
+                  {scannerError && (
+                    <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-[10px] flex items-center gap-1.5">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                      <span>{scannerError}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 2. SECTION: INGREDIENTES DEL PLATO (Placed below Agregar Ingredientes) */}
+              <div className="space-y-2 pt-2 border-t border-white/5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black text-white/70 uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers className="h-3.5 w-3.5 text-emerald-400" />
+                    Ingredientes del Plato ({ingredients.length})
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-bold font-mono">
+                    {totalCalories} kcal acumuladas
+                  </span>
+                </div>
+
+                {ingredients.length === 0 ? (
+                  <div className="p-6 rounded-2xl bg-white/[0.02] border border-dashed border-white/10 text-center space-y-1.5">
+                    <p className="text-xs text-white/70 font-bold">
+                      Aún no has agregado ingredientes.
+                    </p>
+                    <p className="text-[10px] text-white/40 max-w-xs mx-auto">
+                      Usa el buscador, describe con IA, toma foto, escanea o elige de tu despensa arriba para armar el plato.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {ingredients.map((ing) => (
+                      <div
+                        key={ing.id}
+                        className="p-3 bg-white/[0.03] border border-white/10 rounded-2xl flex items-center justify-between gap-2.5 transition hover:border-white/20"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-white truncate">
+                              {ing.name}
+                            </span>
+                            <span className="text-[10px] font-bold text-white/60 bg-white/5 px-2 py-0.5 rounded-lg font-mono">
+                              {ing.amount} {ing.unit === "unit" ? (ing.amount === 1 ? ing.unitLabel : ing.unitLabel + "s") : ing.unit}
+                              {ing.unit === "unit" ? ` (${ing.equivalentGrams}g)` : ""}
+                            </span>
                           </div>
-                          <span className="text-xs font-black text-emerald-400 shrink-0 font-mono">{p.calories} kcal</span>
-                        </button>
-                      ))
-                    ) : (
-                      <p className="text-[10px] text-white/40 text-center py-3">Tu despensa está vacía.</p>
-                    )}
-                  </div>
-                )}
 
-                {/* Mode 5: Custom / Frequent Foods */}
-                {addMode === "custom" && (
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto no-scrollbar">
-                    {customFoods.length > 0 ? (
-                      customFoods.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => handleAddFoodAsIngredient({
-                            name: c.name,
-                            calories: c.calories,
-                            protein: c.protein,
-                            carbs: c.carbs,
-                            fat: c.fat,
-                            servingSize: c.servingSize
-                          })}
-                          className="w-full text-left p-2 rounded-xl hover:bg-emerald-500/10 transition flex items-center justify-between gap-2 cursor-pointer border border-white/5"
-                        >
-                          <div className="min-w-0">
-                            <span className="text-xs font-bold text-white block truncate">{c.name}</span>
-                            <span className="text-[9px] text-white/40 font-mono">{c.servingSize}</span>
+                          {/* Distinct color-coded macro badges */}
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className="text-[9.5px] font-black font-mono text-orange-400">
+                              🔥 {ing.calories} kcal
+                            </span>
+                            <span className="text-[9.5px] font-bold font-mono text-emerald-400">
+                              🥩 P: {ing.protein}g
+                            </span>
+                            <span className="text-[9.5px] font-bold font-mono text-sky-400">
+                              ⚡ C: {ing.carbs}g
+                            </span>
+                            <span className="text-[9.5px] font-bold font-mono text-amber-400">
+                              🥑 G: {ing.fat}g
+                            </span>
                           </div>
-                          <span className="text-xs font-black text-emerald-400 shrink-0 font-mono">{c.calories} kcal</span>
-                        </button>
-                      ))
-                    ) : (
-                      <p className="text-[10px] text-white/40 text-center py-3">No tienes alimentos guardados aún.</p>
-                    )}
-                  </div>
-                )}
+                        </div>
 
-                {/* IA Error message */}
-                {iaError && (
-                  <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-[10px] flex items-center gap-1.5">
-                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                    <span>{iaError}</span>
+                        {/* Actions: Pencil (Edit) & Trash (Delete) */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditIngredient(ing)}
+                            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-emerald-400 transition cursor-pointer"
+                            title="Editar porción"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+
+                          {confirmDeleteId === ing.id ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveIngredient(ing.id)}
+                                className="px-2 py-1 rounded-xl bg-rose-500 text-white font-bold text-[9px] hover:bg-rose-600 transition cursor-pointer"
+                              >
+                                ¿Borrar?
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="px-1.5 py-1 rounded-xl bg-white/10 text-white/60 hover:text-white text-[9px] transition cursor-pointer"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(ing.id)}
+                              className="p-2 rounded-xl bg-white/5 hover:bg-rose-500/20 text-white/40 hover:text-rose-400 transition cursor-pointer"
+                              title="Eliminar ingrediente"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
-            )}
-          </div>
-
-          {/* Scanner Error */}
-          {scannerError && (
-            <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-xs flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{scannerError}</span>
             </div>
-          )}
 
-          {/* Totals Summary Card */}
-          {ingredients.length > 0 && (
-            <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider">
-                  Total Consolidado del Plato
+            {/* Footer Step 1: Armar Plato action */}
+            <div className="p-4 border-t border-white/5 bg-[#121420] flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="py-3 px-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                disabled={ingredients.length === 0}
+                onClick={() => setStep("summary")}
+                className="flex-1 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:bg-white/5 disabled:text-white/30 text-black text-xs font-black flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
+              >
+                <span>Armar Plato</span>
+                <span className="font-mono">({ingredients.length} ing · {totalCalories} kcal)</span>
+                <span>→</span>
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ─── STEP 2: SUMMARY (Resumen del Plato & Registrar) ─── */}
+        {step === "summary" && (
+          <>
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 no-scrollbar">
+
+              {/* Dish Name Card */}
+              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1">
+                <span className="text-[9px] font-bold text-white/40 uppercase tracking-wider block">
+                  Nombre del Plato
                 </span>
-                <span className="text-sm font-black text-white font-mono">
-                  🔥 {totalCalories} kcal
+                <h4 className="text-base font-black text-white">
+                  {dishName.trim() || (initialMeal ? initialMeal.name : "Sándwich o Plato Compuesto")}
+                </h4>
+              </div>
+
+              {/* Consolidated Macros Banner */}
+              <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider">
+                    Total Consolidado
+                  </span>
+                  <span className="text-lg font-black text-white font-mono flex items-center gap-1">
+                    <Flame className="h-4 w-4 text-orange-400 fill-orange-400" />
+                    {totalCalories} kcal
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="p-2.5 rounded-xl bg-black/40 border border-emerald-500/20">
+                    <span className="text-[8.5px] font-bold text-emerald-400 uppercase block">Proteína</span>
+                    <span className="text-sm font-black text-white font-mono">{totalProtein}g</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-black/40 border border-sky-500/20">
+                    <span className="text-[8.5px] font-bold text-sky-400 uppercase block">Carbos</span>
+                    <span className="text-sm font-black text-white font-mono">{totalCarbs}g</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-black/40 border border-amber-500/20">
+                    <span className="text-[8.5px] font-bold text-amber-400 uppercase block">Grasas</span>
+                    <span className="text-sm font-black text-white font-mono">{totalFat}g</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Ingredient Breakdown Card */}
+              <div className="space-y-2">
+                <span className="text-[9.5px] font-bold text-white/50 uppercase tracking-wider block">
+                  Desglose de Ingredientes ({ingredients.length})
                 </span>
+
+                <div className="divide-y divide-white/5 bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden p-2">
+                  {ingredients.map((ing) => (
+                    <div key={ing.id} className="py-2 px-2 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="font-bold text-white block">{ing.name}</span>
+                        <span className="text-[10px] text-white/50 font-mono">
+                          {ing.amount} {ing.unit === "unit" ? (ing.amount === 1 ? ing.unitLabel : ing.unitLabel + "s") : ing.unit}
+                          {ing.unit === "unit" ? ` (${ing.equivalentGrams}g)` : ""}
+                        </span>
+                      </div>
+                      <div className="text-right font-mono">
+                        <span className="text-xs font-bold text-emerald-400">{ing.calories} kcal</span>
+                        <span className="text-[9px] text-white/40 block">
+                          P:{ing.protein}g · C:{ing.carbs}g · G:{ing.fat}g
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="p-2 rounded-xl bg-black/30 border border-white/5">
-                  <span className="text-[8.5px] font-bold text-emerald-400 uppercase block">Proteína</span>
-                  <span className="text-xs font-black text-white font-mono">{totalProtein}g</span>
-                </div>
-                <div className="p-2 rounded-xl bg-black/30 border border-white/5">
-                  <span className="text-[8.5px] font-bold text-blue-400 uppercase block">Carbos</span>
-                  <span className="text-xs font-black text-white font-mono">{totalCarbs}g</span>
-                </div>
-                <div className="p-2 rounded-xl bg-black/30 border border-white/5">
-                  <span className="text-[8.5px] font-bold text-amber-400 uppercase block">Grasas</span>
-                  <span className="text-xs font-black text-white font-mono">{totalFat}g</span>
-                </div>
-              </div>
-
-              {/* Breakdown Preview */}
-              <div className="text-[9.5px] text-white/50 leading-relaxed font-mono bg-black/20 p-2 rounded-xl border border-white/5">
-                <strong className="text-white/70">Desglose:</strong> {ingredientsSummary}
-              </div>
-
-              {/* Save as favorite custom food (only if creating new) */}
+              {/* Save as favorite toggle (if creating new) */}
               {!initialMeal && (
-                <label className="flex items-center gap-2 text-xs text-white/80 cursor-pointer pt-1">
+                <label className="flex items-center gap-2.5 text-xs text-white/80 cursor-pointer p-3 bg-white/[0.02] border border-white/5 rounded-2xl hover:border-white/10 transition">
                   <input
                     type="checkbox"
                     checked={saveAsCustom}
                     onChange={(e) => setSaveAsCustom(e.target.checked)}
                     className="rounded border-white/20 text-emerald-500 focus:ring-0 w-4 h-4"
                   />
-                  <span className="flex items-center gap-1 font-medium">
-                    <Star className="h-3.5 w-3.5 text-amber-400" />
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <Star className="h-4 w-4 text-amber-400 fill-amber-400/20" />
                     Guardar como plato favorito para registrarlo en 1 click otro día
                   </span>
                 </label>
               )}
             </div>
-          )}
-        </div>
 
-        {/* Footer Actions */}
-        <div className="p-4 border-t border-white/5 bg-[#121420] flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="py-3 px-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
-          >
-            Cancelar
-          </button>
+            {/* Footer Step 2: Final Save to Diary */}
+            <div className="p-4 border-t border-white/5 bg-[#121420] flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setStep("build")}
+                className="py-3 px-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
+              >
+                Volver
+              </button>
 
-          <button
-            type="button"
-            disabled={ingredients.length === 0 || isSaving}
-            onClick={handleSaveCompositeMeal}
-            className="flex-1 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:bg-white/5 disabled:text-white/30 text-black text-xs font-black flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
-          >
-            {isSaving ? (
-              <>
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                <span>Guardando plato...</span>
-              </>
-            ) : initialMeal ? (
-              <>
-                <Check className="h-4 w-4 stroke-[3]" />
-                <span>Guardar Cambios ({totalCalories} kcal)</span>
-              </>
-            ) : (
-              <>
-                <Check className="h-4 w-4 stroke-[3]" />
-                <span>Registrar en mi Diario ({totalCalories} kcal)</span>
-              </>
-            )}
-          </button>
-        </div>
+              <button
+                type="button"
+                disabled={ingredients.length === 0 || isSaving}
+                onClick={handleSaveCompositeMeal}
+                className="flex-1 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:bg-white/5 disabled:text-white/30 text-black text-xs font-black flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
+              >
+                {isSaving ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span>Guardando...</span>
+                  </>
+                ) : initialMeal ? (
+                  <>
+                    <Check className="h-4 w-4 stroke-[3]" />
+                    <span>Guardar Cambios ({totalCalories} kcal)</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 stroke-[3]" />
+                    <span>Registrar en mi Diario ({totalCalories} kcal)</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </>
+        )}
       </motion.div>
+
+      {/* ─── INGREDIENT EDIT SUB-MODAL ─── */}
+      <AnimatePresence>
+        {editingIngredient && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-fadeIn">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#151624] border border-white/10 rounded-3xl p-5 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                    <Pencil className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-white uppercase tracking-wider">
+                      Editar Porción
+                    </h3>
+                    <p className="text-[10px] text-white/50 truncate max-w-[200px]">
+                      {editingIngredient.name}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingIngredient(null)}
+                  className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* Amount & Unit selection */}
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[9.5px] font-bold text-white/50 uppercase tracking-wider block mb-1">
+                    Cantidad
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step={editUnit === "unit" ? "1" : "5"}
+                      min="0.1"
+                      value={editAmount}
+                      onChange={(e) => setEditAmount(parseFloat(e.target.value) || 1)}
+                      className="flex-1 px-3 py-2 bg-black/40 border border-white/10 rounded-xl text-sm font-bold font-mono text-white focus:outline-none focus:border-emerald-500"
+                    />
+                    <span className="text-xs font-bold text-white/70 px-2 py-2 bg-white/5 rounded-xl border border-white/5">
+                      {editUnit === "unit" ? editingIngredient.unitLabel : editUnit}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Unit Switcher if applicable */}
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setEditUnit("unit")}
+                    className={`flex-1 py-1.5 rounded-xl text-[10px] font-bold border transition ${
+                      editUnit === "unit"
+                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                        : "bg-white/5 text-white/50 border-white/5"
+                    }`}
+                  >
+                    Porción / {editingIngredient.unitLabel}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditUnit("g")}
+                    className={`flex-1 py-1.5 rounded-xl text-[10px] font-bold border transition ${
+                      editUnit === "g"
+                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                        : "bg-white/5 text-white/50 border-white/5"
+                    }`}
+                  >
+                    Gramos (g)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditUnit("ml")}
+                    className={`flex-1 py-1.5 rounded-xl text-[10px] font-bold border transition ${
+                      editUnit === "ml"
+                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                        : "bg-white/5 text-white/50 border-white/5"
+                    }`}
+                  >
+                    Mililitros (ml)
+                  </button>
+                </div>
+
+                {/* Live Macro Preview */}
+                {editingPreview && (
+                  <div className="p-3 bg-black/40 border border-white/5 rounded-2xl space-y-1.5 text-center">
+                    <span className="text-sm font-black font-mono text-orange-400 block">
+                      🔥 {editingPreview.calories} kcal
+                    </span>
+                    <div className="grid grid-cols-3 gap-1 text-[10px] font-mono font-bold">
+                      <span className="text-emerald-400">P: {editingPreview.protein}g</span>
+                      <span className="text-sky-400">C: {editingPreview.carbs}g</span>
+                      <span className="text-amber-400">G: {editingPreview.fat}g</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setEditingIngredient(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEditedIngredient}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black transition shadow-lg shadow-emerald-500/20"
+                >
+                  Guardar Porción
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Barcode Scanner Modal for Ingredients */}
       <BarcodeScannerModal

@@ -2152,6 +2152,7 @@ export default function NutritionHub({
         }}
         pantryItems={household ? household.pantry : (profile.pantry || [])}
         customFoods={customFoods}
+        loggedMeals={loggedMeals}
         userId={userId}
         targetDate={selectedDate}
         apiKey={profile.apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || ""}
