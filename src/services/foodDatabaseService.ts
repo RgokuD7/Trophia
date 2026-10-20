@@ -266,6 +266,19 @@ export const getProductByBarcode = async (barcode: string): Promise<FoodItem | n
 };
 
 /**
+ * Normalizes text removing accents, diacritics and casing for reliable searching.
+ * (e.g. "limon" matches "Limón", "oregano" matches "Orégano")
+ */
+export function normalizeFoodName(str: string): string {
+  if (!str) return "";
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+/**
  * Performs a combined search across Local Staple DB, History, USDA, and Open Food Facts.
  * Prioritizes staple raw/cooked ingredients at the top with smart ranking.
  */
@@ -274,15 +287,19 @@ export const searchAllFoods = async (
   localHistory: FoodItem[] = [],
   customUsdaKey?: string
 ): Promise<FoodItem[]> => {
-  const trimmed = query.trim().toLowerCase();
-  if (trimmed === "") return [];
+  const trimmed = query.trim();
+  const normQuery = normalizeFoodName(trimmed);
+  if (normQuery === "") return [];
 
   // 1. Search Local Staples DB (sorted by relevance: items starting with query first)
-  const stapleMatches = STAPLE_FOODS_DB.filter((food) =>
-    food.name.toLowerCase().includes(trimmed)
-  ).sort((a, b) => {
-    const aStarts = a.name.toLowerCase().startsWith(trimmed);
-    const bStarts = b.name.toLowerCase().startsWith(trimmed);
+  const stapleMatches = STAPLE_FOODS_DB.filter((food) => {
+    const normName = normalizeFoodName(food.name);
+    return normName.includes(normQuery);
+  }).sort((a, b) => {
+    const aNorm = normalizeFoodName(a.name);
+    const bNorm = normalizeFoodName(b.name);
+    const aStarts = aNorm.startsWith(normQuery);
+    const bStarts = bNorm.startsWith(normQuery);
     if (aStarts && !bStarts) return -1;
     if (!aStarts && bStarts) return 1;
     return a.name.localeCompare(b.name);
@@ -292,17 +309,18 @@ export const searchAllFoods = async (
   }));
 
   // 2. Search Global general DB
-  const localDbMatches = GLOBAL_FOODS_DB.filter((food) =>
-    food.name.toLowerCase().includes(trimmed) &&
-    !stapleMatches.some(s => s.name.toLowerCase() === food.name.toLowerCase())
-  ).map((food) => ({
+  const localDbMatches = GLOBAL_FOODS_DB.filter((food) => {
+    const normName = normalizeFoodName(food.name);
+    return normName.includes(normQuery) &&
+      !stapleMatches.some(s => normalizeFoodName(s.name) === normName);
+  }).map((food) => ({
     ...food,
     source: "local" as const
   }));
 
   // 3. Search Local History
   const historyMatches = localHistory.filter((food) =>
-    food.name.toLowerCase().includes(trimmed)
+    normalizeFoodName(food.name).includes(normQuery)
   ).map((food) => ({
     ...food,
     source: "history" as const

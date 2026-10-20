@@ -10,7 +10,8 @@ import {
   Save,
   ArrowRight,
   RefreshCw,
-  Barcode
+  Barcode,
+  Pencil
 } from "lucide-react";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
@@ -40,6 +41,7 @@ export default function AddMissingBarcodeModal({
   const [nutritionPhoto, setNutritionPhoto] = useState<string | null>(null);
 
   // Flow state
+  const [entryMode, setEntryMode] = useState<"manual" | "camera">("manual");
   const [step, setStep] = useState<"capture" | "review">("capture");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -106,6 +108,7 @@ export default function AddMissingBarcodeModal({
         setServingSize(result.servingSize || "100g");
         setUnitWeight(result.unitWeight || 100);
         setUnitLabel(result.unitLabel || "porción");
+        setEntryMode("manual");
         setStep("review");
       } else {
         setAnalysisError("La IA no pudo extraer los datos claramente. Puedes ingresar los datos manualmente.");
@@ -208,9 +211,40 @@ export default function AddMissingBarcodeModal({
           </button>
         </div>
 
+        {/* Mode Selector Tabs */}
+        <div className="flex bg-black/40 p-1 rounded-2xl border border-white/5 mx-4 sm:mx-5 mt-3 shrink-0">
+          <button
+            type="button"
+            onClick={() => setEntryMode("manual")}
+            className={`flex-1 py-2 text-xs font-black rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer ${
+              entryMode === "manual"
+                ? "bg-emerald-500 text-black shadow-md"
+                : "text-white/50 hover:text-white"
+            }`}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            <span>✍️ Manual Rápido</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEntryMode("camera");
+              setStep("capture");
+            }}
+            className={`flex-1 py-2 text-xs font-black rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer ${
+              entryMode === "camera"
+                ? "bg-emerald-500 text-black shadow-md"
+                : "text-white/50 hover:text-white"
+            }`}
+          >
+            <Camera className="h-3.5 w-3.5" />
+            <span>📷 Automático con IA</span>
+          </button>
+        </div>
+
         {/* Content Body */}
         <div className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs">
-          {step === "capture" ? (
+          {entryMode === "camera" && step === "capture" ? (
             <>
               <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3 flex items-start gap-2.5">
                 <Sparkles className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
@@ -327,7 +361,7 @@ export default function AddMissingBarcodeModal({
 
                 <button
                   type="button"
-                  onClick={() => setStep("review")}
+                  onClick={() => setEntryMode("manual")}
                   className="w-full text-center text-[10px] text-white/40 hover:text-white transition py-1 cursor-pointer underline"
                 >
                   O ingresar los datos manualmente sin fotos
@@ -335,19 +369,24 @@ export default function AddMissingBarcodeModal({
               </div>
             </>
           ) : (
-            /* Step 2: Review and manual edit */
+            /* Manual entry & AI Review mode */
             <div className="space-y-3.5">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider">
-                  Revisa y Confirma los Datos
+                  {step === "review" ? "Revisa y Confirma los Datos" : "Ingreso Manual de Producto"}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setStep("capture")}
-                  className="text-[10px] text-white/40 hover:text-white underline cursor-pointer"
-                >
-                  ← Volver a fotos
-                </button>
+                {(frontPhoto || nutritionPhoto) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEntryMode("camera");
+                      setStep("capture");
+                    }}
+                    className="text-[10px] text-white/40 hover:text-white underline cursor-pointer"
+                  >
+                    ← Volver a fotos
+                  </button>
+                )}
               </div>
 
               <div className="space-y-2.5">
@@ -359,7 +398,7 @@ export default function AddMissingBarcodeModal({
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Ej: Leche Entera"
+                    placeholder="Ej: Leche Entera, Ketchup Heinz..."
                     className="bg-black/40 border-white/10"
                   />
                 </div>
@@ -373,7 +412,7 @@ export default function AddMissingBarcodeModal({
                       type="text"
                       value={brand}
                       onChange={(e) => setBrand(e.target.value)}
-                      placeholder="Ej: Colun"
+                      placeholder="Ej: Colun, Heinz..."
                       className="bg-black/40 border-white/10"
                     />
                   </div>
@@ -385,7 +424,34 @@ export default function AddMissingBarcodeModal({
                       type="text"
                       value={servingSize}
                       onChange={(e) => setServingSize(e.target.value)}
-                      placeholder="Ej: 1 vaso (200 ml)"
+                      placeholder="Ej: 1 porción (16g), 200ml..."
+                      className="bg-black/40 border-white/10"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-white/40 uppercase mb-1">
+                      Peso porción (g / ml)
+                    </label>
+                    <Input
+                      type="number"
+                      value={unitWeight}
+                      onChange={(e) => setUnitWeight(Number(e.target.value) || 100)}
+                      placeholder="100"
+                      className="bg-black/40 border-white/10"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-white/40 uppercase mb-1">
+                      Etiqueta porción
+                    </label>
+                    <Input
+                      type="text"
+                      value={unitLabel}
+                      onChange={(e) => setUnitLabel(e.target.value)}
+                      placeholder="Ej: porción, cucharada, vaso..."
                       className="bg-black/40 border-white/10"
                     />
                   </div>

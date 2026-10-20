@@ -239,6 +239,7 @@ export default function FoodLogger({
 
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
   const [isManualEditingMacros, setIsManualEditingMacros] = useState(false);
+  const [pantryStockQuantity, setPantryStockQuantity] = useState("Moderada");
 
   const nutritionWarning = React.useMemo(() => {
     if (!selectedFood || selectedFood.name === "") return null;
@@ -493,9 +494,15 @@ export default function FoodLogger({
 
     setUnitWeight(uWeight);
     setUnitLabel(uLabel);
-    setPortionUnit("g");
-    setPortionValue(uWeight);
-    setPortionGrams(uWeight);
+    if (isCustomPortion) {
+      setPortionUnit("unit");
+      setPortionValue(1);
+      setPortionGrams(uWeight);
+    } else {
+      setPortionUnit("g");
+      setPortionValue(100);
+      setPortionGrams(100);
+    }
 
     const scale = uWeight / 100;
     setCustomCalories(Math.round(correction.calories * scale));
@@ -516,8 +523,8 @@ export default function FoodLogger({
       raw100gCarbs: correction.carbs,
       raw100gFat: correction.fat,
       portionGrams: uWeight,
-      portionValue: uWeight,
-      portionUnit: "g",
+      portionValue: isCustomPortion ? 1 : 100,
+      portionUnit: isCustomPortion ? "unit" : "g",
       unitWeight: uWeight,
       unitLabel: uLabel,
       servingSize: correction.servingSize || (isCustomPortion ? `${uWeight}g` : "100g"),
@@ -981,9 +988,11 @@ export default function FoodLogger({
       const protVal = Number(customProtein) || 0;
       const carbVal = Number(customCarbs) || 0;
       const fatVal = Number(customFat) || 0;
-      const servVal = portionUnit === "unit"
-        ? `${portionValue} ${unitLabel || "porción"}${portionGrams > 0 ? ` (${portionGrams}g)` : ""}`
-        : `${portionValue}${portionUnit}`;
+      const servVal = mode === "pantry"
+        ? (pantryStockQuantity.trim() || "Moderada")
+        : (portionUnit === "unit"
+            ? `${portionValue} ${unitLabel || "porción"}${portionGrams > 0 ? ` (${portionGrams}g)` : ""}`
+            : `${portionValue}${portionUnit}`);
 
       const raw100gCals = selectedFood?.raw100gCalories !== undefined 
         ? selectedFood.raw100gCalories 
@@ -1677,33 +1686,65 @@ export default function FoodLogger({
 
               {/* Community Correction Banner */}
               {showCommunityPrompt && communityCorrection && (
-                <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-2xl space-y-2.5 animate-fadeIn">
-                  <div className="flex gap-2 items-start">
-                    <Sparkles className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                    <div className="space-y-0.5">
-                      <span className="block text-[10.5px] font-black text-amber-400 uppercase tracking-wider leading-none">Macros de la Comunidad</span>
-                      <p className="text-[10px] text-gray-700 dark:text-white/60 leading-normal">
-                        Nuestra comunidad ha sugerido una corrección para este código de barras:
-                        <span className="block font-mono mt-1 text-[9px] bg-white/5 p-1 rounded border border-white/5">
-                          Cal: {communityCorrection.calories} | P: {communityCorrection.protein}g | C: {communityCorrection.carbs}g | G: {communityCorrection.fat}g
-                        </span>
+                <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl space-y-3 animate-fadeIn">
+                  <div className="flex gap-2.5 items-start">
+                    <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl shrink-0 mt-0.5">
+                      <Sparkles className="h-4 w-4" />
+                    </div>
+                    <div className="space-y-1.5 flex-1 min-w-0">
+                      <span className="block text-xs font-black text-amber-400 uppercase tracking-wider leading-none">
+                        ⚠️ Producto modificado por la comunidad
+                      </span>
+                      <p className="text-[11px] text-gray-700 dark:text-white/80 leading-relaxed">
+                        Este producto fue modificado por un usuario de la comunidad. Revisa si los macros coinciden con tu envase físico y confirma si deseas aplicarlos:
                       </p>
+                      
+                      <div className="mt-2 bg-black/30 border border-white/10 rounded-xl p-2.5 space-y-1.5 text-[10px] font-mono">
+                        <div className="flex justify-between items-center text-amber-300 font-bold">
+                          <span>Sugerido por comunidad:</span>
+                          <span>{communityCorrection.calories} kcal · P:{communityCorrection.protein}g · C:{communityCorrection.carbs}g · G:{communityCorrection.fat}g</span>
+                        </div>
+                        {selectedFood && (
+                          <div className="flex justify-between items-center text-white/50 text-[9px]">
+                            <span>Original registrado:</span>
+                            <span>{selectedFood.raw100gCalories || selectedFood.calories} kcal · P:{selectedFood.raw100gProtein || selectedFood.protein}g · C:{selectedFood.raw100gCarbs || selectedFood.carbs}g · G:{selectedFood.raw100gFat || selectedFood.fat}g</span>
+                          </div>
+                        )}
+                        {communityCorrection.unitWeight && communityCorrection.unitWeight !== 100 && (
+                          <div className="text-[9px] text-emerald-400 font-sans font-bold pt-0.5">
+                            Porción recomendada: {communityCorrection.unitWeight}g ({communityCorrection.unitLabel || "porción"})
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex gap-2 border-t border-amber-500/10 pt-2">
+
+                  <div className="flex flex-wrap gap-2 border-t border-amber-500/15 pt-2.5">
                     <button
                       type="button"
                       onClick={handleAcceptCommunityCorrection}
-                      className="flex-1 py-1 bg-amber-500 text-black text-[9.5px] font-black rounded-lg transition hover:bg-amber-450 cursor-pointer"
+                      className="flex-1 min-w-[120px] py-2 bg-amber-500 hover:bg-amber-400 text-black text-[10.5px] font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
                     >
-                      Sí, usar
+                      <Check className="h-3.5 w-3.5" />
+                      Usar datos comunitarios
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleAcceptCommunityCorrection();
+                        setIsManualEditingMacros(true);
+                      }}
+                      className="px-3 py-2 bg-white/10 hover:bg-white/15 text-white text-[10.5px] font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1 border border-white/10"
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-amber-400" />
+                      Editar manualmente
                     </button>
                     <button
                       type="button"
                       onClick={handleRejectCommunityCorrection}
-                      className="flex-1 py-1 bg-white/5 border border-white/10 text-white/50 text-[9.5px] font-bold rounded-lg transition hover:bg-white/10 cursor-pointer"
+                      className="px-3 py-2 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white text-[10px] font-bold rounded-xl transition cursor-pointer"
                     >
-                      No, ignorar
+                      Mantener original
                     </button>
                   </div>
                 </div>
@@ -1869,8 +1910,63 @@ export default function FoodLogger({
                 </div>
               )}
 
-              {/* Portion Control panel (Only shown for database items) */}
+              {/* Portion Control / Pantry Stock panel */}
               {selectedFood.name !== "" && (
+                mode === "pantry" ? (
+                  <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-2xl border border-gray-200 dark:border-white/10 space-y-3.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-amber-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <Package className="h-3.5 w-3.5" />
+                        Cantidad / Stock en Despensa
+                      </span>
+                      <span className="text-[9px] text-gray-500 dark:text-white/40 font-bold">
+                        {pantryStockQuantity}
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-gray-600 dark:text-white/60 leading-relaxed">
+                      Define cuánto tienes disponible en casa (estimado cualitativo o cantidad exacta):
+                    </p>
+
+                    {/* Qualitative quick chips */}
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {[
+                        { label: "Mucha", color: "hover:border-emerald-500/50 hover:bg-emerald-500/10" },
+                        { label: "Moderada", color: "hover:border-blue-500/50 hover:bg-blue-500/10" },
+                        { label: "Poca", color: "hover:border-amber-500/50 hover:bg-amber-500/10" },
+                        { label: "Por terminar", color: "hover:border-rose-500/50 hover:bg-rose-500/10" }
+                      ].map(chip => (
+                        <button
+                          key={chip.label}
+                          type="button"
+                          onClick={() => setPantryStockQuantity(chip.label)}
+                          className={`py-1.5 text-[10px] font-black rounded-xl border transition cursor-pointer text-center ${
+                            pantryStockQuantity === chip.label
+                              ? "bg-amber-500 border-amber-500 text-black shadow-sm"
+                              : `bg-white dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-white/70 ${chip.color}`
+                          }`}
+                        >
+                          {chip.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Exact custom quantity input */}
+                    <div className="pt-1 space-y-1.5">
+                      <label className="block text-[9.5px] font-bold text-gray-500 dark:text-white/40 uppercase tracking-wider">
+                        O especifica cantidad exacta / envase:
+                      </label>
+                      <Input
+                        type="text"
+                        value={pantryStockQuantity}
+                        onChange={(e) => setPantryStockQuantity(e.target.value)}
+                        placeholder="Ej: 3 litros, 6 huevos, 500g, 2 cajas..."
+                        className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 text-xs rounded-xl focus:border-amber-500/40 text-gray-900 dark:text-white"
+                        size="md"
+                      />
+                    </div>
+                  </div>
+                ) : (
                 <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-2xl border border-gray-205 dark:border-white/5 space-y-3.5">
                   {/* Selector de Unidades */}
                   <div className="flex gap-1.5 p-1 bg-white/5 border border-white/5 rounded-xl">
@@ -2011,25 +2107,45 @@ export default function FoodLogger({
                     </span>
                   )}
                 </div>
+                )
               )}
 
-              {/* Adjust Details Accordion Box */}
-              {(selectedFood.name === "" || selectedFood.barcode) && (
+              {/* Adjust Details Accordion Box - Always available for any selected food */}
+              {selectedFood && (
                 <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-2xl border border-gray-200 dark:border-white/10 space-y-3">
-                  <div className="flex justify-between items-center border-b border-gray-200 dark:border-white/5 pb-1.5">
-                    <span className="block text-[10px] font-bold text-gray-500 dark:text-white/40 uppercase tracking-wider">
-                      {selectedFood.name === "" ? "Verificar / Editar Macros Manualmente" : "Información de Macros (OFF)"}
-                    </span>
-                    {selectedFood.barcode && isCorrectingBarcode && (
+                  <div className="flex justify-between items-center border-b border-gray-200 dark:border-white/5 pb-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="block text-[10px] font-bold text-gray-500 dark:text-white/40 uppercase tracking-wider">
+                        Macros del Alimento
+                      </span>
+                      {selectedFood.barcode && (
+                        <span className="text-[9px] text-white/30 font-mono hidden sm:inline">({selectedFood.barcode})</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         type="button"
-                        onClick={() => setShowBarcodeHelp(!showBarcodeHelp)}
-                        className="text-amber-400 hover:text-amber-300 transition cursor-pointer bg-transparent border-0 flex items-center gap-0.5 text-[9px] font-bold"
+                        onClick={() => setIsManualEditingMacros(!isManualEditingMacros)}
+                        className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-xl border transition cursor-pointer ${
+                          isManualEditingMacros
+                            ? "bg-amber-500 text-black border-amber-500 shadow-sm"
+                            : "bg-white/5 hover:bg-white/10 border-white/10 text-white/60 hover:text-white"
+                        }`}
                       >
-                        <HelpCircle className="h-3 w-3" />
-                        ¿Dónde buscar?
+                        <Pencil className="h-3 w-3" />
+                        {isManualEditingMacros ? "✓ Bloquear edición" : "Editar macros"}
                       </button>
-                    )}
+                      {selectedFood.barcode && isCorrectingBarcode && (
+                        <button
+                          type="button"
+                          onClick={() => setShowBarcodeHelp(!showBarcodeHelp)}
+                          className="text-amber-400 hover:text-amber-300 transition cursor-pointer bg-transparent border-0 flex items-center gap-0.5 text-[9px] font-bold"
+                        >
+                          <HelpCircle className="h-3 w-3" />
+                          ¿Dónde buscar?
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {showBarcodeHelp && isCorrectingBarcode && (
@@ -2164,8 +2280,7 @@ export default function FoodLogger({
                     </div>
 
                     {/* Option to also save to My Meals as a template */}
-                    {/* Option to also save to My Meals as a template */}
-                    {!isCustomFoodOnlyMode && userId && selectedFood.name === "" && (
+                    {!isCustomFoodOnlyMode && userId && (selectedFood.name === "" || isManualEditingMacros) && (
                       <div className="flex items-center justify-between mt-2 px-3 py-2.5 bg-emerald-500/5 border border-emerald-500/10 rounded-xl select-none">
                         <span className="text-[10.5px] text-emerald-600 dark:text-emerald-400 font-extrabold uppercase tracking-wide">
                           Guardar también en Mis Comidas

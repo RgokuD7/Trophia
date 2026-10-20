@@ -866,6 +866,24 @@ export const STAPLE_FOODS_DB: FoodItem[] = [
     source: "local"
   },
   {
+    name: "Limón (Entero / Fruta fresca)",
+    calories: 29,
+    protein: 1.1,
+    carbs: 9.3,
+    fat: 0.3,
+    servingSize: "1 unidad mediana (60g)",
+    source: "local"
+  },
+  {
+    name: "Lima / Limón Sutil",
+    calories: 30,
+    protein: 0.7,
+    carbs: 10.5,
+    fat: 0.2,
+    servingSize: "1 unidad (50g)",
+    source: "local"
+  },
+  {
     name: "Limón (Jugo)",
     calories: 22,
     protein: 0.4,
@@ -1141,6 +1159,244 @@ export const STAPLE_FOODS_DB: FoodItem[] = [
     carbs: 6.7,
     fat: 3.3,
     servingSize: "1 scoop (30g)",
+    source: "local"
+  },
+
+  // ==========================================
+  // HIERBAS, ESPECIAS Y CONDIMENTOS
+  // ==========================================
+  {
+    name: "Orégano Seco",
+    calories: 265,
+    protein: 9,
+    carbs: 69,
+    fat: 4.3,
+    servingSize: "1 cucharadita (2g)",
+    source: "local"
+  },
+  {
+    name: "Orégano Fresco",
+    calories: 68,
+    protein: 2.2,
+    carbs: 15,
+    fat: 1,
+    servingSize: "1 porción (5g)",
+    source: "local"
+  },
+  {
+    name: "Cilantro Fresco",
+    calories: 23,
+    protein: 2.1,
+    carbs: 3.7,
+    fat: 0.5,
+    servingSize: "1 taza picada (15g)",
+    source: "local"
+  },
+  {
+    name: "Perejil Fresco",
+    calories: 36,
+    protein: 3,
+    carbs: 6.3,
+    fat: 0.8,
+    servingSize: "1 puñado (15g)",
+    source: "local"
+  },
+  {
+    name: "Albahaca Fresca",
+    calories: 23,
+    protein: 3.2,
+    carbs: 2.7,
+    fat: 0.6,
+    servingSize: "5 hojas (10g)",
+    source: "local"
+  },
+  {
+    name: "Albahaca Seca",
+    calories: 233,
+    protein: 23,
+    carbs: 48,
+    fat: 4,
+    servingSize: "1 cucharadita (2g)",
+    source: "local"
+  },
+  {
+    name: "Ajo Fresco",
+    calories: 149,
+    protein: 6.4,
+    carbs: 33,
+    fat: 0.5,
+    servingSize: "1 diente (3g)",
+    source: "local"
+  },
+  {
+    name: "Ajo en Polvo",
+    calories: 331,
+    protein: 17,
+    carbs: 73,
+    fat: 0.7,
+    servingSize: "1 cucharadita (3g)",
+    source: "local"
+  },
+  {
+    name: "Cebolla en Polvo",
+    calories: 341,
+    protein: 10,
+    carbs: 79,
+    fat: 1,
+    servingSize: "1 cucharadita (3g)",
+    source: "local"
+  },
+  {
+    name: "Cebollín / Cebolla de Verdeo",
+    calories: 32,
+    protein: 1.8,
+    carbs: 7.3,
+    fat: 0.2,
+    servingSize: "1 tallo (15g)",
+    source: "local"
+  },
+  {
+    name: "Comino Molido",
+    calories: 375,
+    protein: 18,
+    carbs: 44,
+    fat: 22,
+    servingSize: "1 cucharadita (3g)",
+    source: "local"
+  },
+  {
+    name: "Pimienta Negra Molida",
+    calories: 251,
+    protein: 10,
+    carbs: 64,
+    fat: 3.3,
+    servingSize: "1 pizca (1g)",
+    source: "local"
+  },
+  {
+    name: "Pimienta Blanca",
+    calories: 296,
+    protein: 10.4,
+    carbs: 68.6,
+    fat: 2.1,
+    servingSize: "1 pizca (1g)",
+    source: "local"
+  },
+  {
+    name: "Sal de Mesa / Sal Marina",
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+    servingSize: "1 pizca (1g)",
+    source: "local"
+  },
+  {
+    name: "Pimentón Dulce / Paprika / Ají de Color",
+    calories: 282,
+    protein: 14,
+    carbs: 54,
+    fat: 13,
+    servingSize: "1 cucharadita (3g)",
+    source: "local"
+  },
+  {
+    name: "Ají Verde / Chile Fresco",
+    calories: 40,
+    protein: 1.9,
+    carbs: 8.8,
+    fat: 0.4,
+    servingSize: "1 unidad (45g)",
+    source: "local"
+  },
+  {
+    name: "Canela en Polvo",
+    calories: 247,
+    protein: 4,
+    carbs: 81,
+    fat: 1.2,
+    servingSize: "1 cucharadita (2.5g)",
+    source: "local"
+  },
+  {
+    name: "Jengibre Fresco",
+    calories: 80,
+    protein: 1.8,
+    carbs: 18,
+    fat: 0.8,
+    servingSize: "1 trozo (10g)",
+    source: "local"
+  },
+  {
+    name: "Jengibre en Polvo",
+    calories: 335,
+    protein: 9,
+    carbs: 72,
+    fat: 4.2,
+    servingSize: "1 cucharadita (2g)",
+    source: "local"
+  },
+  {
+    name: "Romero Seco",
+    calories: 331,
+    protein: 4.9,
+    carbs: 64,
+    fat: 15,
+    servingSize: "1 cucharadita (2g)",
+    source: "local"
+  },
+  {
+    name: "Tomillo Seco",
+    calories: 276,
+    protein: 9.1,
+    carbs: 64,
+    fat: 7.4,
+    servingSize: "1 cucharadita (2g)",
+    source: "local"
+  },
+  {
+    name: "Laurel (Hojas secas)",
+    calories: 313,
+    protein: 7.6,
+    carbs: 75,
+    fat: 8.4,
+    servingSize: "2 hojas (1g)",
+    source: "local"
+  },
+  {
+    name: "Cúrcuma en Polvo",
+    calories: 354,
+    protein: 7.8,
+    carbs: 65,
+    fat: 9.9,
+    servingSize: "1 cucharadita (3g)",
+    source: "local"
+  },
+  {
+    name: "Curry en Polvo",
+    calories: 325,
+    protein: 12.7,
+    carbs: 58.2,
+    fat: 14,
+    servingSize: "1 cucharadita (3g)",
+    source: "local"
+  },
+  {
+    name: "Menta / Hierbabuena Fresca",
+    calories: 44,
+    protein: 3.3,
+    carbs: 8.4,
+    fat: 0.7,
+    servingSize: "1 ramita (5g)",
+    source: "local"
+  },
+  {
+    name: "Nuez Moscada Molida",
+    calories: 525,
+    protein: 5.8,
+    carbs: 49.3,
+    fat: 36.3,
+    servingSize: "1 pizca (1g)",
     source: "local"
   }
 ];

@@ -327,6 +327,27 @@ export default function NutritionHub({
     setEditingMeal(null);
   };
 
+  const [editingPantryItem, setEditingPantryItem] = useState<PantryItem | null>(null);
+  const [editPantryQuantity, setEditPantryQuantity] = useState("");
+
+  const handleSavePantryItemQuantity = (newQuantity: string) => {
+    if (!editingPantryItem) return;
+    const currentPantry = household ? household.pantry : (profile.pantry || []);
+    const updated = currentPantry.map(item => 
+      item.id === editingPantryItem.id 
+        ? { ...item, quantity: newQuantity.trim() || "Moderada" } 
+        : item
+    );
+    if (profile.householdId) {
+      updateHouseholdPantry(profile.householdId, updated).catch(console.error);
+    }
+    onUpdateProfile({
+      ...profile,
+      pantry: updated
+    });
+    setEditingPantryItem(null);
+  };
+
   const handleDeletePantryItem = (itemId: string) => {
     const currentPantry = household ? household.pantry : (profile.pantry || []);
     const nextPantry = currentPantry.filter(x => x.id !== itemId);
@@ -642,7 +663,7 @@ export default function NutritionHub({
   if (activeSection === "pantry") {
     const currentPantry = household ? household.pantry : (profile.pantry || []);
     return (
-      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex-1 overflow-y-auto px-5 py-6 space-y-4 no-scrollbar">
+      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="h-full flex flex-col overflow-y-auto px-5 py-6 space-y-4 pb-32 no-scrollbar" style={{ maxHeight: "100%", WebkitOverflowScrolling: "touch" }}>
         <div className="flex items-center gap-3">
           <button onClick={() => setActiveSection(null)} className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition cursor-pointer">
             <ArrowLeft className="h-4 w-4" />
@@ -747,7 +768,7 @@ export default function NutritionHub({
         </button>
 
         {/* Lista de ingredientes */}
-        <div className="space-y-2">
+        <div className="space-y-2 flex-1">
           <span className="block text-[10px] font-bold text-white/40 uppercase tracking-wider">
             Ingredientes en Despensa ({currentPantry.length})
           </span>
@@ -761,28 +782,74 @@ export default function NutritionHub({
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-2">
-              {currentPantry.map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-3.5 bg-white/5 border border-white/5 rounded-2xl">
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-sm">
-                      {item.category === "protein" ? "💪" : item.category === "carb" ? "⚡" : item.category === "fat" ? "🥑" : item.category === "supplement" ? "🥤" : "✨"}
-                    </span>
-                    <div>
-                      <span className="block text-xs font-extrabold text-white">{item.name}</span>
-                      <span className="block text-[9px] text-white/40 font-medium">
-                        Cantidad: {item.quantity} · {Math.round(item.calories)} kcal (P: {item.protein}g · C: {item.carbs}g · G: {item.fat}g)
+              {currentPantry.map((item) => {
+                const qLower = (item.quantity || "").toLowerCase();
+                const isMucho = qLower.includes("much") || qLower.includes("alto") || qLower.includes("lleno");
+                const isPoco = qLower.includes("poc") || qLower.includes("baj") || qLower.includes("escaso");
+                const isTerminar = qLower.includes("terminar") || qLower.includes("nada") || qLower.includes("acabar") || qLower.includes("critico");
+                const isMod = qLower.includes("moderad") || qLower.includes("medio") || qLower.includes("regular");
+
+                const badgeColor = isMucho 
+                  ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/25"
+                  : isPoco
+                    ? "bg-amber-500/15 text-amber-400 border-amber-500/25"
+                    : isTerminar
+                      ? "bg-rose-500/15 text-rose-400 border-rose-500/25"
+                      : isMod
+                        ? "bg-blue-500/15 text-blue-400 border-blue-500/25"
+                        : "bg-teal-500/15 text-teal-400 border-teal-500/25";
+
+                return (
+                  <div key={item.id} className="flex items-center justify-between p-3.5 bg-white/5 border border-white/5 rounded-2xl hover:border-white/10 transition">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-base shrink-0">
+                        {item.category === "protein" ? "💪" : item.category === "carb" ? "⚡" : item.category === "fat" ? "🥑" : item.category === "supplement" ? "🥤" : "✨"}
                       </span>
+                      <div className="min-w-0">
+                        <span className="block text-xs font-extrabold text-white truncate">{item.name}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingPantryItem(item);
+                              setEditPantryQuantity(item.quantity || "Moderada");
+                            }}
+                            className={`text-[9.5px] px-2 py-0.5 rounded-lg border font-bold flex items-center gap-1 transition cursor-pointer ${badgeColor}`}
+                            title="Haz clic para modificar la cantidad o stock"
+                          >
+                            <span>Stock: {item.quantity || "Sin definir"}</span>
+                            <Pencil className="h-2.5 w-2.5 opacity-60" />
+                          </button>
+                          <span className="text-[9px] text-white/40 font-mono">
+                            {Math.round(item.calories)} kcal · P:{item.protein}g C:{item.carbs}g G:{item.fat}g
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingPantryItem(item);
+                          setEditPantryQuantity(item.quantity || "Moderada");
+                        }}
+                        className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition border-none cursor-pointer"
+                        title="Modificar cantidad"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPantryItemToDelete(item)}
+                        className="p-1.5 bg-transparent text-white/20 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition border-none cursor-pointer"
+                        title="Eliminar de la despensa"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setPantryItemToDelete(item)}
-                    className="p-1.5 bg-transparent text-white/20 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition border-none cursor-pointer"
-                    title="Eliminar de la despensa"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -2285,6 +2352,99 @@ export default function NutritionHub({
                   className="flex-1 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-black transition cursor-pointer shadow-lg shadow-rose-500/20"
                 >
                   Sí, Eliminar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal: Edit Pantry Item Quantity */}
+      <AnimatePresence>
+        {editingPantryItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-fadeIn">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#12131d] border border-white/10 rounded-3xl p-5 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                    <Package className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-black text-white">Stock / Cantidad</h3>
+                    <p className="text-[10px] text-white/50 truncate">{editingPantryItem.name}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingPantryItem(null)}
+                  className="p-1.5 text-white/40 hover:text-white rounded-lg hover:bg-white/5 transition cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Botones de Stock Rápido (Cualitativo) */}
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-bold text-white/40 uppercase tracking-wider block">
+                  Estado rápido:
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    { label: "Mucha", color: "hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+                    { label: "Moderada", color: "hover:bg-blue-500/20 text-blue-400 border-blue-500/30" },
+                    { label: "Poca", color: "hover:bg-amber-500/20 text-amber-400 border-amber-500/30" },
+                    { label: "Por terminar", color: "hover:bg-rose-500/20 text-rose-400 border-rose-500/30" },
+                  ].map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => setEditPantryQuantity(preset.label)}
+                      className={`py-2 px-2.5 rounded-xl border text-[10.5px] font-bold transition flex items-center justify-center cursor-pointer ${
+                        editPantryQuantity === preset.label
+                          ? "bg-white/15 border-white/30 text-white font-black shadow-inner"
+                          : `bg-white/[0.03] ${preset.color}`
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* O Cantidad personalizada exacta */}
+              <div className="space-y-1.5 pt-1">
+                <label className="text-[9px] font-bold text-white/40 uppercase tracking-wider block">
+                  O escribe la cantidad exacta / envases:
+                </label>
+                <Input
+                  type="text"
+                  value={editPantryQuantity}
+                  onChange={(e) => setEditPantryQuantity(e.target.value)}
+                  placeholder="Ej: 3 litros, 6 huevos, 500g, 2 cajas..."
+                  size="md"
+                  className="bg-black/40 border-white/10 text-white font-medium text-xs"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setEditingPantryItem(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSavePantryItemQuantity(editPantryQuantity)}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black transition cursor-pointer shadow-md shadow-emerald-500/20"
+                >
+                  Guardar
                 </button>
               </div>
             </motion.div>
