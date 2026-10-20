@@ -20,7 +20,7 @@ export interface ExerciseAiAdvisorModalProps {
   routineName?: string;
   userProfile: UserProfile;
   apiKey?: string;
-  onApplyReplacement: (newExercise: WorkoutExercise, explanation: string) => void;
+  onApplyReplacement: (newExercise: WorkoutExercise, explanation: string, scope: "today_only" | "permanent_routine") => void;
 }
 
 interface ChatMessage {
@@ -50,12 +50,14 @@ export default function ExerciseAiAdvisorModal({
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [hasReplaced, setHasReplaced] = useState(false);
+  const [replacedScope, setReplacedScope] = useState<"today_only" | "permanent_routine" | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
   // Initialize or reset when a new exercise is opened
   useEffect(() => {
     if (isOpen && exercise) {
       setHasReplaced(false);
+      setReplacedScope(null);
       setInputText("");
       setIsLoading(false);
 
@@ -141,10 +143,27 @@ export default function ExerciseAiAdvisorModal({
     }
   };
 
-  const handleApply = (suggested: ExerciseConsultationSuggestedExercise, explanationText: string) => {
+  const handleApply = (
+    suggested: ExerciseConsultationSuggestedExercise, 
+    explanationText: string,
+    scope: "today_only" | "permanent_routine" = "today_only"
+  ) => {
     const numSets = suggested.sets || exercise.sets || 3;
     const numReps = suggested.reps || exercise.reps || 10;
-    const numWeight = suggested.weight ?? exercise.weight ?? 0;
+    let numWeight = suggested.weight ?? exercise.weight ?? 0;
+
+    // Dumbbell weight per hand safeguard: if AI doubled the weight when user said "pesas de X para cada brazo"
+    const isDumbbell = isDumbbellExercise(suggested) && !isSingleDumbbellExercise(suggested);
+    if (isDumbbell && numWeight > 0) {
+      const allText = messages.map(m => m.text).join(" ").toLowerCase();
+      const matchPerHand = allText.match(/(?:pesas?|mancuernas?)\s+de\s+(\d+(?:\.\d+)?)\s*(?:kg)?\s*(?:para\s+cada\s+brazo|en\s+cada\s+mano|c\/u|cada\s+brazo|cada\s+mano)/i);
+      if (matchPerHand) {
+        const stated = parseFloat(matchPerHand[1]);
+        if (stated > 0 && numWeight === stated * 2) {
+          numWeight = stated;
+        }
+      }
+    }
 
     const updatedWorkoutExercise: WorkoutExercise = {
       ...exercise,
@@ -166,11 +185,12 @@ export default function ExerciseAiAdvisorModal({
       }))
     };
 
+    setReplacedScope(scope);
     setHasReplaced(true);
-    onApplyReplacement(updatedWorkoutExercise, explanationText);
+    onApplyReplacement(updatedWorkoutExercise, explanationText, scope);
     setTimeout(() => {
       onClose();
-    }, 1100);
+    }, 1500);
   };
 
   const QUICK_PROMPT_PILLS = [
@@ -245,10 +265,14 @@ export default function ExerciseAiAdvisorModal({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="bg-emerald-500 text-black px-4 py-3 flex items-center justify-center gap-2 font-black text-xs shrink-0 shadow-lg"
+              className="bg-emerald-500 text-black px-4 py-3 flex items-center justify-center gap-2 font-black text-xs shrink-0 shadow-lg text-center"
             >
               <CheckCircle2 className="h-4 w-4 stroke-[3]" />
-              <span>¡Ejercicio actualizado con éxito en tu rutina!</span>
+              <span>
+                {replacedScope === "permanent_routine"
+                  ? `¡Ejercicio actualizado tanto en tu rutina "${routineName}" como en la sesión de hoy!`
+                  : `¡Ejercicio cambiado exclusivamente para la sesión de hoy!`}
+              </span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -315,14 +339,34 @@ export default function ExerciseAiAdvisorModal({
                         </p>
                       )}
 
-                      <button
-                        type="button"
-                        onClick={() => handleApply(msg.suggestedExercise!, msg.text)}
-                        className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-black font-black text-xs rounded-xl transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20 active:scale-98 cursor-pointer"
-                      >
-                        <Check className="h-3.5 w-3.5 stroke-[3]" />
-                        <span>Aplicar este cambio a mi rutina</span>
-                      </button>
+                      <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-white/5">
+                        <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 block text-center">
+                          ¿Dónde deseas aplicar este cambio?
+                        </span>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleApply(msg.suggestedExercise!, msg.text, "today_only")}
+                            className="py-2.5 px-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/15 text-gray-800 dark:text-white font-bold text-xs rounded-xl transition flex flex-col items-center justify-center gap-0.5 cursor-pointer text-center active:scale-98"
+                            title="Aplica el cambio solo para la sesión de hoy sin modificar tu plan semanal"
+                          >
+                            <span className="font-black text-[11px]">Solo sesión de hoy</span>
+                            <span className="text-[8.5px] font-normal opacity-70">No altera tu rutina</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleApply(msg.suggestedExercise!, msg.text, "permanent_routine")}
+                            className="py-2.5 px-2.5 bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-black font-black text-xs rounded-xl transition flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-emerald-500/20 active:scale-98 cursor-pointer text-center"
+                            title="Reemplaza este ejercicio permanentemente en tu rutina semanal"
+                          >
+                            <div className="flex items-center gap-1 font-black text-[11px]">
+                              <Check className="h-3 w-3 stroke-[3]" />
+                              <span>En rutina permanente</span>
+                            </div>
+                            <span className="text-[8.5px] font-medium opacity-85">Se guardará siempre</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </motion.div>
                 )}

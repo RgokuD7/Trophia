@@ -39,6 +39,79 @@ export interface ExerciseGuideViewData {
   source: "db_cache" | "gemini_ai";
 }
 
+// Helper to convert date string "YYYY-MM-DD" to RoutineDayKey
+export const getDayKeyFromDateStr = (dateStr: string): RoutineDayKey => {
+  const parts = dateStr.split("-").map(Number);
+  if (parts.length === 3) {
+    const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+    const dayIdx = d.getDay();
+    const map: Record<number, RoutineDayKey> = {
+      1: "monday",
+      2: "tuesday",
+      3: "wednesday",
+      4: "thursday",
+      5: "friday",
+      6: "saturday",
+      0: "sunday"
+    };
+    return map[dayIdx] || "unassigned";
+  }
+  return "unassigned";
+};
+
+// Builds a provisional WorkoutSession from an assigned routine template
+export const buildProvisionalSessionFromTemplate = (
+  dateStr: string,
+  assignedRoutine: RoutineTemplate
+): WorkoutSession => {
+  return {
+    id: `session-${dateStr}-${assignedRoutine.id || "auto"}`,
+    date: dateStr,
+    name: assignedRoutine.name,
+    warmup: assignedRoutine.warmup && assignedRoutine.warmup.length > 0 
+      ? assignedRoutine.warmup 
+      : ["Movilidad articular general - 5 min"],
+    cooldown: assignedRoutine.cooldown && assignedRoutine.cooldown.length > 0 
+      ? assignedRoutine.cooldown 
+      : ["Estiramiento general completo - 5 min"],
+    exercises: (assignedRoutine.exercises || []).map((ex, idx) => {
+      const setsCount = ex.sets || 3;
+      const repsCount = ex.reps || 12;
+      const weightVal = ex.weight || 0;
+      const completedSets = (ex.completedSets && ex.completedSets.length > 0)
+        ? ex.completedSets.map((s, sIdx) => ({
+            setIndex: sIdx,
+            completed: false,
+            reps: s.reps || repsCount,
+            weight: s.weight !== undefined ? s.weight : weightVal
+          }))
+        : Array.from({ length: setsCount }).map((_, sIdx) => ({
+            setIndex: sIdx,
+            completed: false,
+            reps: repsCount,
+            weight: weightVal
+          }));
+
+      return {
+        id: ex.id || `ex-${idx}`,
+        name: ex.name,
+        sets: setsCount,
+        reps: repsCount,
+        weight: weightVal,
+        trackingType: ex.trackingType || "reps",
+        caloriesBurnedPerSet: ex.caloriesBurnedPerSet || 5,
+        primaryMuscles: ex.primaryMuscles || [],
+        secondaryMuscles: ex.secondaryMuscles || [],
+        techniqueTips: ex.techniqueTips,
+        equipmentNeeded: ex.equipmentNeeded,
+        completedSets
+      };
+    }),
+    completed: false,
+    durationMinutes: 45
+  };
+};
+
 interface WorkoutsProps {
   apiKey?: string;
   userProfile: UserProfile;
@@ -51,8 +124,20 @@ interface WorkoutsProps {
 
 export default function Workouts({ apiKey, userProfile, userId, workoutHistory, onAddWorkout, onClearWorkouts, onUpdateProfile }: WorkoutsProps) {
   const [activeTab, setActiveTab] = useState<"routine" | "routines" | "recovery">("routine");
-  const [selectedDay, setSelectedDay] = useState<string>(getLocalDateString());
-  const [activeSession, setActiveSession] = useState<WorkoutSession | null>(null);
+  const initialTodayStr = getLocalDateString();
+  const [selectedDay, setSelectedDay] = useState<string>(initialTodayStr);
+  const [activeSession, setActiveSession] = useState<WorkoutSession | null>(() => {
+    const todaySession = workoutHistory.find(w => w.date === initialTodayStr);
+    if (todaySession) return todaySession;
+    const selectedDayKey = getDayKeyFromDateStr(initialTodayStr);
+    const assigned = userProfile.weeklyRoutinePlan?.routines?.find(
+      r => r.assignedDay === selectedDayKey
+    );
+    if (assigned) {
+      return buildProvisionalSessionFromTemplate(initialTodayStr, assigned);
+    }
+    return null;
+  });
   const [completedWorkoutSummary, setCompletedWorkoutSummary] = useState<{
     name: string;
     durationMinutes: number;
@@ -60,58 +145,19 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     completedSetsCount: number;
   } | null>(null);
 
-  // Helper to convert date string "YYYY-MM-DD" to RoutineDayKey
-  const getDayKeyFromDateStr = (dateStr: string): RoutineDayKey => {
-    const parts = dateStr.split("-").map(Number);
-    if (parts.length === 3) {
-      const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
-      const dayIdx = d.getDay();
-      const map: Record<number, RoutineDayKey> = {
-        1: "monday",
-        2: "tuesday",
-        3: "wednesday",
-        4: "thursday",
-        5: "friday",
-        6: "saturday",
-        0: "sunday"
-      };
-      return map[dayIdx] || "unassigned";
-    }
-    return "unassigned";
-  };
-
   // Instantiate a routine template into active session for selectedDay
   const startSessionFromTemplate = (routine: RoutineTemplate, markCompletedDirectly = false) => {
+    const provisional = buildProvisionalSessionFromTemplate(selectedDay, routine);
     const newSession: WorkoutSession = {
+      ...provisional,
       id: Math.random().toString(36).substr(2, 9),
-      date: selectedDay,
-      name: routine.name,
-      warmup: routine.warmup && routine.warmup.length > 0 ? routine.warmup : ["Movilidad articular general - 5 min"],
-      cooldown: routine.cooldown && routine.cooldown.length > 0 ? routine.cooldown : ["Estiramiento general completo - 5 min"],
-      exercises: (routine.exercises || []).map((ex, idx) => {
-        const setsCount = ex.sets || 3;
-        const repsCount = ex.reps || 12;
-        const weightVal = ex.weight || 0;
-        return {
-          id: `ex-${idx}`,
-          name: ex.name,
-          sets: setsCount,
-          reps: repsCount,
-          weight: weightVal,
-          trackingType: ex.trackingType || "reps",
-          caloriesBurnedPerSet: ex.caloriesBurnedPerSet || 5,
-          primaryMuscles: ex.primaryMuscles || [],
-          secondaryMuscles: ex.secondaryMuscles || [],
-          techniqueTips: ex.techniqueTips,
-          equipmentNeeded: ex.equipmentNeeded,
-          completedSets: Array.from({ length: setsCount }).map((_, sIdx) => ({
-            setIndex: sIdx,
-            completed: markCompletedDirectly,
-            reps: repsCount,
-            weight: weightVal
-          }))
-        };
-      }),
+      exercises: provisional.exercises.map(ex => ({
+        ...ex,
+        completedSets: ex.completedSets.map(s => ({
+          ...s,
+          completed: markCompletedDirectly
+        }))
+      })),
       completed: markCompletedDirectly,
       startTime: markCompletedDirectly ? `${selectedDay}T10:00:00.000Z` : undefined,
       endTime: markCompletedDirectly ? `${selectedDay}T10:45:00.000Z` : undefined,
@@ -522,15 +568,24 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
   const [hiitRound, setHiitRound] = useState(1);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load the workout for the selected day if it exists
+  // Load the workout for the selected day if it exists, or instantiate from assigned template
   useEffect(() => {
     const todaySession = workoutHistory.find(w => w.date === selectedDay);
     if (todaySession) {
       setActiveSession(todaySession);
     } else {
-      setActiveSession(null);
+      const selectedDayKey = getDayKeyFromDateStr(selectedDay);
+      const assignedRoutine = userProfile.weeklyRoutinePlan?.routines?.find(
+        r => r.assignedDay === selectedDayKey
+      );
+      if (assignedRoutine) {
+        // Instantiate provisional session directly so the user sees the full detail immediately!
+        setActiveSession(buildProvisionalSessionFromTemplate(selectedDay, assignedRoutine));
+      } else {
+        setActiveSession(null);
+      }
     }
-  }, [selectedDay, workoutHistory]);
+  }, [selectedDay, workoutHistory, userProfile.weeklyRoutinePlan]);
 
   // Handle active muscle recovery state estimation dynamically based on history
   useEffect(() => {
@@ -1168,11 +1223,18 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     setExerciseForAlternatives(exercise);
   };
 
-  const handleApplyExerciseReplacementInActiveSession = (newExercise: WorkoutExercise) => {
+  const handleApplyExerciseReplacementInActiveSession = (
+    newExercise: WorkoutExercise,
+    _explanation?: string,
+    scope: "today_only" | "permanent_routine" = "today_only"
+  ) => {
     if (!activeSession || !exerciseForAlternatives) return;
 
+    const oldName = exerciseForAlternatives.name;
+
+    // 1. Update active session for today
     const updatedExercises = activeSession.exercises.map(ex => {
-      if (ex.id === exerciseForAlternatives.id || ex.name === exerciseForAlternatives.name) {
+      if (ex.id === exerciseForAlternatives.id || ex.name === oldName) {
         return newExercise;
       }
       return ex;
@@ -1181,6 +1243,39 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     const updatedSession = { ...activeSession, exercises: updatedExercises };
     onAddWorkout(updatedSession);
     setActiveSession(updatedSession);
+
+    // 2. If user chose permanent routine scope, update the template in userProfile.weeklyRoutinePlan
+    if (scope === "permanent_routine" && userProfile.weeklyRoutinePlan?.routines) {
+      const selectedDayKey = getDayKeyFromDateStr(selectedDay);
+      const updatedRoutines = userProfile.weeklyRoutinePlan.routines.map(routine => {
+        const isTargetRoutine = routine.assignedDay === selectedDayKey || routine.name === activeSession.name;
+        if (!isTargetRoutine) return routine;
+
+        const updatedTemplateExercises = routine.exercises.map(ex => {
+          if (ex.id === exerciseForAlternatives.id || ex.name === oldName) {
+            return newExercise;
+          }
+          return ex;
+        });
+
+        return {
+          ...routine,
+          exercises: updatedTemplateExercises
+        };
+      });
+
+      const updatedPlan = {
+        ...userProfile.weeklyRoutinePlan,
+        routines: updatedRoutines,
+        lastUpdated: new Date().toISOString()
+      };
+
+      onUpdateProfile({
+        ...userProfile,
+        weeklyRoutinePlan: updatedPlan
+      });
+    }
+
     setExerciseForAlternatives(null);
   };
 
@@ -1566,117 +1661,11 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
               const hasRoutinePlan = !!(userProfile.weeklyRoutinePlan && userProfile.weeklyRoutinePlan.routines && userProfile.weeklyRoutinePlan.routines.length > 0);
 
               if (assignedRoutine) {
-                return (
-                  <div className="space-y-4 text-left">
-                    {/* Scheduled Routine Card */}
-                    <div className="bg-white dark:bg-[#161824] p-5 rounded-3xl border border-emerald-500/30 dark:border-emerald-500/20 shadow-lg space-y-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2.5 py-1 rounded-full bg-emerald-500 text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            <span>{DAY_LABEL_MAP[selectedDayKey]}</span>
-                          </span>
-                          {assignedRoutine.focus && (
-                            <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 text-[10px] font-bold">
-                              🎯 {assignedRoutine.focus}
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[10px] text-gray-500 dark:text-gray-400 font-mono font-bold">
-                          {assignedRoutine.exercises.length} ejercicios · ~45 min
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider block">
-                          {selectedDay === todayStr ? "Rutina Programada para Hoy" : `Rutina del ${DAY_LABEL_MAP[selectedDayKey]} (${formatFriendlyDate(selectedDay)})`}
-                        </span>
-                        <h3 className="text-base font-black text-gray-900 dark:text-white mt-0.5">
-                          {assignedRoutine.name}
-                        </h3>
-                      </div>
-
-                      {/* Warmup preview */}
-                      {assignedRoutine.warmup && assignedRoutine.warmup.length > 0 && (
-                        <div className="p-3 rounded-2xl bg-gray-50 dark:bg-[#12131d] border border-gray-200 dark:border-gray-800/60 space-y-1.5">
-                          <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide block">
-                            Calentamiento sugerido:
-                          </span>
-                          <ul className="text-xs text-gray-700 dark:text-gray-300 space-y-1">
-                            {assignedRoutine.warmup.map((w, wIdx) => (
-                              <li key={wIdx} className="flex items-start gap-1.5">
-                                <span className="text-emerald-400 font-bold">•</span>
-                                <span>{w}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      {/* Exercises preview */}
-                      <div className="space-y-2">
-                        <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide block">
-                          Ejercicios de la sesión:
-                        </span>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {assignedRoutine.exercises.map((ex, exIdx) => (
-                            <div
-                              key={exIdx}
-                              className="p-2.5 rounded-xl bg-gray-50 dark:bg-[#12131d] border border-gray-200 dark:border-gray-800/60 flex items-center justify-between"
-                            >
-                              <div className="min-w-0 pr-2">
-                                <span className="block text-xs font-bold text-gray-900 dark:text-white truncate">
-                                  {ex.name}
-                                </span>
-                                <span className="block text-[10px] text-gray-500 dark:text-gray-400">
-                                  {ex.sets} series × {ex.reps} {ex.trackingType === "time" ? "seg" : "reps"}
-                                  {ex.weight > 0 ? (
-                                    isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex)
-                                      ? ` · ${ex.weight}kg ×2 (c/u)`
-                                      : ` · ${ex.weight}kg`
-                                  ) : ""}
-                                </span>
-                              </div>
-                              {ex.primaryMuscles && ex.primaryMuscles[0] && (
-                                <span className="text-[9px] px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 font-medium shrink-0">
-                                  {ex.primaryMuscles[0]}
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* CTA Button */}
-                      <div className="pt-2 flex flex-col sm:flex-row gap-2">
-                        <button
-                          onClick={() => startSessionFromTemplate(assignedRoutine)}
-                          className="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-98 cursor-pointer"
-                        >
-                          <Play className="h-4 w-4 fill-current" />
-                          <span>{selectedDay === todayStr ? "Iniciar Entrenamiento de Hoy" : "Cargar Rutina para este Día"}</span>
-                        </button>
-                        {selectedDay < todayStr && (
-                          <button
-                            onClick={() => startSessionFromTemplate(assignedRoutine, true)}
-                            className="py-3 px-4 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer border border-emerald-500/25 shadow-sm active:scale-98"
-                            title="Registra esta rutina como completada en esta fecha"
-                          >
-                            <CheckCircle2 className="h-4 w-4" />
-                            <span>Registrar ya Realizada</span>
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setActiveTab("routines")}
-                          className="py-3 px-3.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border border-gray-200 dark:border-white/10"
-                        >
-                          <Layers className="h-4 w-4 text-emerald-400" />
-                          <span>Reorganizar en Tus Rutinas</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
+                // Defensive fallback: if activeSession was temporarily unmounted or not set,
+                // instantiate the full detailed session immediately without showing the intermediate summary card
+                const prov = buildProvisionalSessionFromTemplate(selectedDay, assignedRoutine);
+                setTimeout(() => setActiveSession(prov), 0);
+                return null;
               }
 
               // Rest day or no plan

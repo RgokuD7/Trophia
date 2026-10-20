@@ -144,11 +144,38 @@ export default function WorkoutsRoutineManager({
 
   // Open modal to edit an existing routine
   const handleOpenEditRoutine = (routine: RoutineTemplate) => {
+    const normalizedExercises = (routine.exercises || []).map(ex => {
+      const setsCount = ex.sets || 3;
+      const repsCount = ex.reps || 10;
+      const weightVal = ex.weight || 0;
+      const completedSets = (ex.completedSets && ex.completedSets.length > 0)
+        ? ex.completedSets.map((s, idx) => ({
+            setIndex: idx,
+            completed: false,
+            reps: s.reps || repsCount,
+            weight: s.weight !== undefined ? s.weight : weightVal
+          }))
+        : Array.from({ length: setsCount }).map((_, idx) => ({
+            setIndex: idx,
+            completed: false,
+            reps: repsCount,
+            weight: weightVal
+          }));
+
+      return {
+        ...ex,
+        sets: completedSets.length,
+        reps: completedSets[0]?.reps || repsCount,
+        weight: completedSets[0]?.weight !== undefined ? completedSets[0].weight : weightVal,
+        completedSets
+      };
+    });
+
     setEditingRoutineId(routine.id);
     setRoutineFormName(routine.name);
     setRoutineFormFocus(routine.focus || "");
     setRoutineFormDay(routine.assignedDay || "unassigned");
-    setRoutineFormExercises([...routine.exercises]);
+    setRoutineFormExercises(normalizedExercises);
     setRoutineFormWarmup(routine.warmup && routine.warmup.length > 0 ? [...routine.warmup] : ["Movilidad articular general - 5 min"]);
     setRoutineFormCooldown(routine.cooldown && routine.cooldown.length > 0 ? [...routine.cooldown] : ["Estiramientos completos - 5 min"]);
     setIsRoutineModalOpen(true);
@@ -347,6 +374,72 @@ export default function WorkoutsRoutineManager({
 
   const handleRemoveExerciseFromModal = (index: number) => {
     setRoutineFormExercises(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateSetInRoutineModal = (
+    exIdx: number,
+    setIdx: number,
+    field: "reps" | "weight",
+    val: any
+  ) => {
+    setRoutineFormExercises(prev => {
+      const copy = [...prev];
+      const target = { ...copy[exIdx] };
+      const sets = [...(target.completedSets || [])];
+      if (!sets[setIdx]) return prev;
+
+      const num = field === "reps" ? Math.max(1, Number(val) || 1) : Math.max(0, Number(val) || 0);
+      sets[setIdx] = {
+        ...sets[setIdx],
+        [field]: num
+      };
+
+      target.completedSets = sets;
+      target.sets = sets.length;
+      if (setIdx === 0) {
+        target[field] = num;
+      }
+      copy[exIdx] = target;
+      return copy;
+    });
+  };
+
+  const handleAddSetToExerciseInModal = (exIdx: number) => {
+    setRoutineFormExercises(prev => {
+      const copy = [...prev];
+      const target = { ...copy[exIdx] };
+      const sets = [...(target.completedSets || [])];
+      const lastSet = sets[sets.length - 1];
+      const newReps = lastSet?.reps || target.reps || 10;
+      const newWeight = lastSet?.weight !== undefined ? lastSet.weight : (target.weight || 0);
+
+      sets.push({
+        setIndex: sets.length,
+        completed: false,
+        reps: newReps,
+        weight: newWeight
+      });
+
+      target.completedSets = sets;
+      target.sets = sets.length;
+      copy[exIdx] = target;
+      return copy;
+    });
+  };
+
+  const handleRemoveSetFromExerciseInModal = (exIdx: number, setIdx: number) => {
+    setRoutineFormExercises(prev => {
+      const copy = [...prev];
+      const target = { ...copy[exIdx] };
+      let sets = [...(target.completedSets || [])];
+      if (sets.length <= 1) return prev;
+
+      sets = sets.filter((_, i) => i !== setIdx).map((s, i) => ({ ...s, setIndex: i }));
+      target.completedSets = sets;
+      target.sets = sets.length;
+      copy[exIdx] = target;
+      return copy;
+    });
   };
 
   // Filter exercises for catalog tab
@@ -845,31 +938,71 @@ export default function WorkoutsRoutineManager({
                               </button>
                             </div>
 
-                            {/* Fila 2: Series, reps, peso e implemento */}
-                            <div className="flex flex-wrap items-center gap-2 text-[10px]">
-                              <span className="font-bold text-emerald-500 dark:text-emerald-400">
-                                {ex.sets || 3} series × {ex.reps || 10} {ex.trackingType === "time" ? "seg" : "reps"}
-                              </span>
-                              {ex.weight > 0 ? (
-                                <span className="text-gray-500 dark:text-gray-400">
-                                  · {ex.weight} kg {isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) ? "c/u (×2)" : ""} sugeridos
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 dark:text-gray-500">
-                                  · Peso corporal
-                                </span>
-                              )}
-                              {isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) && (
-                                <span className="text-[9px] px-1.5 py-0.2 bg-amber-500/15 text-amber-500 rounded font-bold shrink-0 border border-amber-500/20">
-                                  2 mancuernas (c/u · ×2)
-                                </span>
-                              )}
-                              {ex.equipmentNeeded && (
-                                <span className="text-gray-400 dark:text-gray-500">
-                                  · {ex.equipmentNeeded}
-                                </span>
-                              )}
-                            </div>
+                            {/* Fila 2: Series detalladas (Sobrecarga progresiva) */}
+                            {(() => {
+                              const sets = ex.completedSets && ex.completedSets.length > 0 ? ex.completedSets : [];
+                              const isProgressive = sets.length > 1 && sets.some(s => s.reps !== sets[0].reps || s.weight !== sets[0].weight);
+
+                              if (isProgressive) {
+                                return (
+                                  <div className="space-y-1 pt-0.5">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-black text-emerald-500 dark:text-emerald-400 text-[10px]">
+                                        {sets.length} series · Sobrecarga Progresiva:
+                                      </span>
+                                      {isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) && (
+                                        <span className="text-[9px] px-1.5 py-0.2 bg-amber-500/15 text-amber-500 rounded font-bold shrink-0 border border-amber-500/20">
+                                          2 mancuernas (c/u · ×2)
+                                        </span>
+                                      )}
+                                      {ex.equipmentNeeded && (
+                                        <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                                          · {ex.equipmentNeeded}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex flex-wrap gap-1">
+                                      {sets.map((s, idx) => (
+                                        <span
+                                          key={idx}
+                                          className="text-[9.5px] px-2 py-0.5 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-md font-mono text-gray-700 dark:text-gray-300"
+                                        >
+                                          S{idx + 1}: <strong>{s.reps}{ex.trackingType === "time" ? "s" : "r"}</strong>
+                                          {s.weight > 0 ? ` · ${s.weight}kg${isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) ? "×2" : ""}` : ""}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                                  <span className="font-bold text-emerald-500 dark:text-emerald-400">
+                                    {ex.sets || 3} series × {ex.reps || 10} {ex.trackingType === "time" ? "seg" : "reps"}
+                                  </span>
+                                  {ex.weight > 0 ? (
+                                    <span className="text-gray-500 dark:text-gray-400">
+                                      · {ex.weight} kg {isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) ? "c/u (×2)" : ""} sugeridos
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-400 dark:text-gray-500">
+                                      · Peso corporal
+                                    </span>
+                                  )}
+                                  {isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) && (
+                                    <span className="text-[9px] px-1.5 py-0.2 bg-amber-500/15 text-amber-500 rounded font-bold shrink-0 border border-amber-500/20">
+                                      2 mancuernas (c/u · ×2)
+                                    </span>
+                                  )}
+                                  {ex.equipmentNeeded && (
+                                    <span className="text-gray-400 dark:text-gray-500">
+                                      · {ex.equipmentNeeded}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
 
                             {/* Fila 3: Técnica y consejos a todo el ancho (sin huecos vacíos debajo del botón) */}
                             {ex.techniqueTips && (
@@ -1175,69 +1308,95 @@ export default function WorkoutsRoutineManager({
                               </button>
                             </div>
 
-                            {/* Inputs for Sets, Reps/Time, Weight, Tracking Type Toggle */}
-                            <div className="flex flex-wrap items-center gap-2.5 text-[11px] pt-1 border-t border-gray-200/50 dark:border-gray-800/60">
-                              {/* Series */}
-                              <div className="flex items-center gap-1 bg-white dark:bg-[#0f1019] px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700">
-                                <span className="text-gray-400 font-bold text-[9px] uppercase">Series</span>
-                                <input
-                                  type="number"
-                                  value={ex.sets}
-                                  onChange={(e) => handleUpdateExerciseInModal(exIdx, "sets", e.target.value)}
-                                  className="w-8 text-center font-bold bg-transparent text-gray-900 dark:text-white focus:outline-none"
-                                />
+                            {/* Series Table (Sobrecarga Progresiva) - Identical to Daily Session */}
+                            <div className="space-y-1.5 border-t border-gray-200/60 dark:border-gray-800/60 pt-2.5">
+                              <div className="flex items-center justify-between text-[9px] font-mono uppercase font-bold text-gray-400 dark:text-gray-500 px-1 mb-1">
+                                <span>Serie</span>
+                                <div className="flex items-center gap-4 mr-6">
+                                  <span>{isTime ? "Duración" : "Repeticiones"}</span>
+                                  <span className={isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) ? "text-amber-500 font-bold" : ""}>
+                                    {isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) ? "Carga (kg c/u · ×2)" : "Carga (kg)"}
+                                  </span>
+                                </div>
+                                <span>Quitar</span>
                               </div>
 
-                              {/* Reps o Segundos */}
-                              <div className="flex items-center gap-1 bg-white dark:bg-[#0f1019] px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700">
-                                <span className="text-gray-400 font-bold text-[9px] uppercase">
-                                  {isTime ? "Segundos" : "Reps"}
-                                </span>
-                                <input
-                                  type="number"
-                                  value={ex.reps}
-                                  onChange={(e) => handleUpdateExerciseInModal(exIdx, "reps", e.target.value)}
-                                  className="w-10 text-center font-bold bg-transparent text-gray-900 dark:text-white focus:outline-none"
-                                />
-                              </div>
+                              {(ex.completedSets && ex.completedSets.length > 0
+                                ? ex.completedSets
+                                : Array.from({ length: ex.sets || 3 }).map((_, i) => ({
+                                    setIndex: i,
+                                    completed: false,
+                                    reps: ex.reps || 10,
+                                    weight: ex.weight || 0
+                                  }))
+                              ).map((set, setIdx, arr) => (
+                                <div
+                                  key={setIdx}
+                                  className="flex items-center justify-between p-1.5 rounded-xl bg-white dark:bg-[#0f101a] border border-gray-200/70 dark:border-gray-800/70"
+                                >
+                                  <span className="font-mono text-[11px] font-black text-gray-500 dark:text-gray-400 pl-1">
+                                    SET {setIdx + 1}
+                                  </span>
 
-                              {/* Peso */}
-                              <div className={`flex items-center gap-1 bg-white dark:bg-[#0f1019] px-2 py-1 rounded-lg border ${
-                                isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex)
-                                  ? "border-amber-500/30 dark:border-amber-500/30"
-                                  : "border-gray-200 dark:border-gray-700"
-                              }`}>
-                                <span className={`font-bold text-[9px] uppercase ${
-                                  isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex)
-                                    ? "text-amber-500"
-                                    : "text-gray-400"
-                                }`}>
-                                  {isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) ? "Peso c/u (kg ×2)" : "Peso (kg)"}
-                                </span>
-                                <input
-                                  type="number"
-                                  value={ex.weight}
-                                  onChange={(e) => handleUpdateExerciseInModal(exIdx, "weight", e.target.value)}
-                                  className="w-10 text-center font-bold bg-transparent text-gray-900 dark:text-white focus:outline-none"
-                                />
-                              </div>
+                                  <div className="flex items-center gap-2">
+                                    {/* Reps / Seconds Input */}
+                                    <div className="flex items-center gap-1 bg-gray-50 dark:bg-black/30 border border-gray-200 dark:border-gray-700/60 rounded-lg px-2 py-1 shadow-inner">
+                                      <input
+                                        type="number"
+                                        value={set.reps}
+                                        onChange={(e) => handleUpdateSetInRoutineModal(exIdx, setIdx, "reps", e.target.value)}
+                                        className="w-10 text-center text-xs font-bold bg-transparent text-gray-900 dark:text-white focus:outline-none"
+                                      />
+                                      <span className="text-[9px] text-gray-400 font-semibold">{isTime ? "seg" : "reps"}</span>
+                                    </div>
 
-                              {/* Toggle Tracking Type */}
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateExerciseInModal(exIdx, "trackingType", isTime ? "reps" : "time")}
-                                className="text-[9px] font-bold text-gray-600 dark:text-gray-300 hover:text-emerald-400 bg-white dark:bg-[#0f1019] px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700 transition cursor-pointer ml-auto"
-                                title="Alternar entre Repeticiones y Segundos"
-                              >
-                                {isTime ? "⏱️ Por Tiempo" : "🔄 Por Reps"}
-                              </button>
+                                    {/* Weight Input */}
+                                    <div className={`flex items-center gap-1 bg-gray-50 dark:bg-black/30 border rounded-lg px-2 py-1 shadow-inner ${
+                                      isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) ? "border-amber-500/30" : "border-gray-200 dark:border-gray-700/60"
+                                    }`}>
+                                      <input
+                                        type="number"
+                                        value={set.weight}
+                                        onChange={(e) => handleUpdateSetInRoutineModal(exIdx, setIdx, "weight", e.target.value)}
+                                        className="w-10 text-center text-xs font-bold bg-transparent text-gray-900 dark:text-white focus:outline-none"
+                                        title={isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) ? "Peso de cada mancuerna en kg" : "Carga en kg"}
+                                      />
+                                      <span className={`text-[9px] ${isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) ? "text-amber-500 font-black" : "text-gray-400 font-semibold"}`}>
+                                        {isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) ? "kg ×2" : "kg"}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Remove Set Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveSetFromExerciseInModal(exIdx, setIdx)}
+                                    disabled={arr.length <= 1}
+                                    className="w-7 h-7 rounded-xl flex items-center justify-center text-gray-400 hover:text-rose-500 disabled:opacity-20 disabled:pointer-events-none transition cursor-pointer"
+                                    title="Quitar esta serie"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+
+                              {/* Footer row: Add series button & dumbbell note */}
+                              <div className="flex items-center justify-between pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddSetToExerciseInModal(exIdx)}
+                                  className="text-[10px] font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-1 py-1 px-2.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/15 transition cursor-pointer"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                  <span>Añadir Serie (Sobrecarga)</span>
+                                </button>
+                                {isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) && (
+                                  <span className="text-[9px] text-amber-500/90 font-medium">
+                                    💡 Anota el peso de cada mancuerna
+                                  </span>
+                                )}
+                              </div>
                             </div>
-
-                            {isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) && (
-                              <p className="text-[9px] text-amber-500/90 font-medium pt-1">
-                                💡 Mancuernas: anota el peso de cada mancuerna (ej: 10 kg significa una de 10 kg en cada mano, total 20 kg).
-                              </p>
-                            )}
                           </div>
                         );
                       })}

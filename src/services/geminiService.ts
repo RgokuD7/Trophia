@@ -1092,6 +1092,9 @@ El usuario está analizando un ejercicio de su plan de entrenamiento y te ha esc
 REGLAS DE ORO:
 - NUNCA menciones nombres de modelos de IA, APIs ni términos técnicos de programación.
 - El equipamiento del ejercicio sugerido DEBE pertenecer al equipamiento disponible del usuario (o peso corporal).
+- REGLA ESTRICTA DE PESO EN MANCUERNAS (DUMBBELLS):
+  En ejercicios bilaterales con mancuernas (ej: Curl con mancuernas, Press con mancuernas, Elevaciones laterales, Remo con mancuernas, etc.), el campo "weight" DEBE representar SIEMPRE el peso INDIVIDUAL DE UNA SOLA MANCUERNA (el peso por mano), NUNCA la suma de ambas.
+  ¡MUY IMPORTANTE!: Si el usuario menciona que tiene dos pesas o mancuernas de 10 kg (una en cada mano o para cada brazo), el campo "weight" DEBE SER EXACTAMENTE 10 (NUNCA 20). La app multiplicará automáticamente por 2 en la interfaz al mostrar "10kg c/u (×2)". Si anotas 20, la app mostrará 20kg ×2 (40kg) y arruinará la carga real del usuario.
 - Responde estrictamente en formato JSON:
 {
   "explanation": "Texto explicativo para el usuario...",
