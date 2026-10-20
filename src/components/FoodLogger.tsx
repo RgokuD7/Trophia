@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, Camera, Plus, History, Trash, AlertCircle, Check, X, RefreshCw, Star, Barcode, Sparkles, HelpCircle, Package } from "lucide-react";
+import { Search, Camera, Plus, History, Trash, AlertCircle, Check, X, RefreshCw, Star, Barcode, Sparkles, HelpCircle, Package, AlertTriangle, Pencil } from "lucide-react";
 import { LoggedMeal, FoodItem, MealType, BarcodeCorrection, CustomFood, PantryItem } from "../types";
 import { GLOBAL_FOODS_DB, getLocalDateString, formatFriendlyDate, createTimestampForDate } from "../utils/fitnessUtils";
 import { analyzeFoodByIA, estimateMacrosFromDescription, getVisualServingSizesByIA, analyzeNutritionLabelByIA } from "../services/geminiService";
@@ -238,6 +238,25 @@ export default function FoodLogger({
   const [showPortionsInfo, setShowPortionsInfo] = useState(false);
 
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
+  const [isManualEditingMacros, setIsManualEditingMacros] = useState(false);
+
+  const nutritionWarning = React.useMemo(() => {
+    if (!selectedFood || selectedFood.name === "") return null;
+    if (selectedFood.hasNutritionWarning && selectedFood.nutritionWarningReason) {
+      return selectedFood.nutritionWarningReason;
+    }
+    const cals = selectedFood.raw100gCalories !== undefined ? selectedFood.raw100gCalories : selectedFood.calories;
+    const prot = selectedFood.raw100gProtein !== undefined ? selectedFood.raw100gProtein : selectedFood.protein;
+    const carbs = selectedFood.raw100gCarbs !== undefined ? selectedFood.raw100gCarbs : selectedFood.carbs;
+    const fat = selectedFood.raw100gFat !== undefined ? selectedFood.raw100gFat : selectedFood.fat;
+    const issues: string[] = [];
+    if (carbs > 100) issues.push(`Carbohidratos (${carbs}g en 100g)`);
+    if (prot > 100) issues.push(`Proteína (${prot}g en 100g)`);
+    if (fat > 100) issues.push(`Grasa (${fat}g en 100g)`);
+    if (cals > 900) issues.push(`Calorías sospechosas (${cals} kcal en 100g)`);
+    if (carbs + prot + fat > 105) issues.push(`Suma de macros excede 100g (${(carbs + prot + fat).toFixed(1)}g)`);
+    return issues.length > 0 ? issues.join(", ") : null;
+  }, [selectedFood]);
 
   // Search Results
   const [filteredFoods, setFilteredFoods] = useState<FoodItem[]>([]);
@@ -404,6 +423,7 @@ export default function FoodLogger({
     setCommunityCorrection(null);
     setShowCommunityPrompt(false);
     setIsCorrectingBarcode(false);
+    setIsManualEditingMacros(false);
     setBarcodeSaveSuccess(false);
     setVisualPortions([]);
     setShowPortionsInfo(false);
@@ -500,8 +520,55 @@ export default function FoodLogger({
       portionUnit: "g",
       unitWeight: uWeight,
       unitLabel: uLabel,
-      servingSize: correction.servingSize || (isCustomPortion ? `${uWeight}g` : "100g")
+      servingSize: correction.servingSize || (isCustomPortion ? `${uWeight}g` : "100g"),
+      hasNutritionWarning: false,
+      nutritionWarningReason: undefined
     } : null);
+  };
+
+  const handleManualMacroChange = (field: "calories" | "protein" | "carbs" | "fat", value: number | "") => {
+    const validNum = value === "" ? 0 : Number(value);
+    const pGrams = portionGrams > 0 ? portionGrams : (unitWeight || 100);
+    const scale = pGrams / 100;
+    const base100g = scale > 0 ? validNum / scale : validNum;
+
+    if (field === "calories") {
+      setCustomCalories(value);
+      setSelectedFood(prev => prev ? {
+        ...prev,
+        calories: Math.round(base100g),
+        raw100gCalories: Math.round(base100g),
+        hasNutritionWarning: false,
+        nutritionWarningReason: undefined
+      } : null);
+    } else if (field === "protein") {
+      setCustomProtein(value);
+      setSelectedFood(prev => prev ? {
+        ...prev,
+        protein: Number(base100g.toFixed(1)),
+        raw100gProtein: Number(base100g.toFixed(1)),
+        hasNutritionWarning: false,
+        nutritionWarningReason: undefined
+      } : null);
+    } else if (field === "carbs") {
+      setCustomCarbs(value);
+      setSelectedFood(prev => prev ? {
+        ...prev,
+        carbs: Number(base100g.toFixed(1)),
+        raw100gCarbs: Number(base100g.toFixed(1)),
+        hasNutritionWarning: false,
+        nutritionWarningReason: undefined
+      } : null);
+    } else if (field === "fat") {
+      setCustomFat(value);
+      setSelectedFood(prev => prev ? {
+        ...prev,
+        fat: Number(base100g.toFixed(1)),
+        raw100gFat: Number(base100g.toFixed(1)),
+        hasNutritionWarning: false,
+        nutritionWarningReason: undefined
+      } : null);
+    }
   };
 
   const updatePortion = (val: number, unit = portionUnit) => {
@@ -619,7 +686,11 @@ export default function FoodLogger({
         calories: baseCal,
         protein: baseProt,
         carbs: baseCarb,
-        fat: baseFat
+        fat: baseFat,
+        unitWeight: unitWeight || 100,
+        unitLabel: unitLabel || "porción",
+        servingSize: `${portionGrams || unitWeight || 100}g`,
+        contributedBy: userId
       });
 
       setSelectedFood(prev => prev ? {
@@ -627,7 +698,13 @@ export default function FoodLogger({
         calories: baseCal,
         protein: baseProt,
         carbs: baseCarb,
-        fat: baseFat
+        fat: baseFat,
+        raw100gCalories: baseCal,
+        raw100gProtein: baseProt,
+        raw100gCarbs: baseCarb,
+        raw100gFat: baseFat,
+        hasNutritionWarning: false,
+        nutritionWarningReason: undefined
       } : null);
 
       setBarcodeSaveSuccess(true);
@@ -1663,6 +1740,44 @@ export default function FoodLogger({
                 </div>
               </div>
 
+              {/* Suspicious Nutritional Data Warning */}
+              {nutritionWarning && (
+                <div className="bg-amber-500/10 border border-amber-500/30 p-3.5 rounded-2xl flex items-start gap-3 animate-fadeIn">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+                    <AlertTriangle className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1 space-y-1.5 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <h5 className="text-xs font-black text-amber-400 uppercase tracking-tight">⚠️ Posible error en el registro de origen</h5>
+                    </div>
+                    <p className="text-[11px] text-gray-700 dark:text-white/80 leading-relaxed">
+                      Este producto contiene valores inconsistentes en la base de datos abierta (<strong>{nutritionWarning}</strong>). Podría tratarse de un error de registro. Te sugerimos verificarlo antes de guardar:
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setIsManualEditingMacros(true)}
+                        className="px-2.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-[10.5px] font-black transition cursor-pointer flex items-center gap-1 shadow-sm"
+                      >
+                        <Pencil className="h-3 w-3" />
+                        {isManualEditingMacros ? "✓ Edición activada abajo" : "Editar macros directamente"}
+                      </button>
+                      <label className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-[10.5px] font-bold transition cursor-pointer flex items-center gap-1 border border-white/10">
+                        <Camera className="h-3 w-3 text-amber-400" />
+                        Escanear tabla con IA
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleLabelPhotoUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Macro Indicators */}
               <div className="grid grid-cols-3 gap-2">
                 {/* Protein */}
@@ -1977,12 +2092,16 @@ export default function FoodLogger({
                           value={customCalories}
                           onChange={(e) => {
                             const val = e.target.value === "" ? "" : Math.round(Number(e.target.value));
-                            setCustomCalories(val);
+                            if (isManualEditingMacros) {
+                              handleManualMacroChange("calories", val);
+                            } else {
+                              setCustomCalories(val);
+                            }
                           }}
                           placeholder="kcal"
                           className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-emerald-600 dark:text-emerald-400 font-mono font-bold px-1 focus:border-emerald-500/40 disabled:opacity-50"
                           size="sm"
-                          disabled={selectedFood.name !== ""}
+                          disabled={selectedFood.name !== "" && !isManualEditingMacros && !isCorrectingBarcode}
                         />
                       </div>
                       <div>
@@ -1992,12 +2111,16 @@ export default function FoodLogger({
                           value={customProtein}
                           onChange={(e) => {
                             const val = e.target.value === "" ? "" : Number(Number(e.target.value).toFixed(1));
-                            setCustomProtein(val);
+                            if (isManualEditingMacros) {
+                              handleManualMacroChange("protein", val);
+                            } else {
+                              setCustomProtein(val);
+                            }
                           }}
                           placeholder="g"
                           className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-50"
                           size="sm"
-                          disabled={selectedFood.name !== ""}
+                          disabled={selectedFood.name !== "" && !isManualEditingMacros && !isCorrectingBarcode}
                         />
                       </div>
                       <div>
@@ -2007,12 +2130,16 @@ export default function FoodLogger({
                           value={customCarbs}
                           onChange={(e) => {
                             const val = e.target.value === "" ? "" : Number(Number(e.target.value).toFixed(1));
-                            setCustomCarbs(val);
+                            if (isManualEditingMacros) {
+                              handleManualMacroChange("carbs", val);
+                            } else {
+                              setCustomCarbs(val);
+                            }
                           }}
                           placeholder="g"
                           className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-50"
                           size="sm"
-                          disabled={selectedFood.name !== ""}
+                          disabled={selectedFood.name !== "" && !isManualEditingMacros && !isCorrectingBarcode}
                         />
                       </div>
                       <div>
@@ -2022,12 +2149,16 @@ export default function FoodLogger({
                           value={customFat}
                           onChange={(e) => {
                             const val = e.target.value === "" ? "" : Number(Number(e.target.value).toFixed(1));
-                            setCustomFat(val);
+                            if (isManualEditingMacros) {
+                              handleManualMacroChange("fat", val);
+                            } else {
+                              setCustomFat(val);
+                            }
                           }}
                           placeholder="g"
                           className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-50"
                           size="sm"
-                          disabled={selectedFood.name !== ""}
+                          disabled={selectedFood.name !== "" && !isManualEditingMacros && !isCorrectingBarcode}
                         />
                       </div>
                     </div>
@@ -2063,6 +2194,28 @@ export default function FoodLogger({
                             ⚠️ {labelScanError}
                           </span>
                         )}
+
+                        {/* If manual edit was activated, allow saving to community directly */}
+                        {isManualEditingMacros && !barcodeSaveSuccess && !isCorrectingBarcode && (
+                          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-2 animate-fadeIn">
+                            <span className="text-[10px] font-black text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                              <Sparkles className="h-3.5 w-3.5" />
+                              Guardar cambios en la Comunidad
+                            </span>
+                            <p className="text-[9.5px] text-gray-700 dark:text-white/70 leading-normal">
+                              Has corregido los macros manualmente. Puedes confirmar para que se guarden permanentemente bajo este código de barras para ti y la comunidad.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={handleSaveBarcodeCorrection}
+                              className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                              Guardar Corrección Comunitaria
+                            </button>
+                          </div>
+                        )}
+
                         {!isCorrectingBarcode && !barcodeSaveSuccess ? (
                           <label className="text-[10px] text-amber-400 hover:text-amber-350 font-black transition cursor-pointer flex items-center gap-1 justify-center py-2 bg-amber-500/5 border border-dashed border-amber-500/20 rounded-xl">
                             <Camera className="h-3.5 w-3.5" />

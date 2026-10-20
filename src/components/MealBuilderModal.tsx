@@ -310,6 +310,8 @@ export default function MealBuilderModal({
     portionUnit?: "g" | "ml" | "unit";
     unitWeight?: number;
     unitLabel?: string;
+    hasNutritionWarning?: boolean;
+    nutritionWarningReason?: string;
   }) => {
     let targetFood = { ...food };
 
@@ -329,6 +331,8 @@ export default function MealBuilderModal({
           targetFood.portionUnit = "g";
           targetFood.unitLabel = corr.unitLabel || "porción";
           targetFood.servingSize = corr.servingSize || `${uW}g`;
+          targetFood.hasNutritionWarning = false;
+          targetFood.nutritionWarningReason = undefined;
         }
       } catch (err) {
         console.warn("Could not check barcode correction for ingredient:", err);
@@ -346,6 +350,20 @@ export default function MealBuilderModal({
       carbs: targetFood.raw100gCarbs !== undefined ? targetFood.raw100gCarbs : targetFood.carbs,
       fat: targetFood.raw100gFat !== undefined ? targetFood.raw100gFat : targetFood.fat,
     };
+
+    let hasNutritionWarning = targetFood.hasNutritionWarning || false;
+    let nutritionWarningReason = targetFood.nutritionWarningReason;
+
+    // Detect impossible/suspicious registry values
+    if (raw100g.carbs > 100 || raw100g.protein > 100 || raw100g.fat > 100 || raw100g.calories > 900) {
+      hasNutritionWarning = true;
+      const issues: string[] = [];
+      if (raw100g.carbs > 100) issues.push(`Carbos excesivos (${raw100g.carbs}g)`);
+      if (raw100g.protein > 100) issues.push(`Proteínas excesivas (${raw100g.protein}g)`);
+      if (raw100g.fat > 100) issues.push(`Grasas excesivas (${raw100g.fat}g)`);
+      if (raw100g.calories > 900) issues.push(`Calorías sospechosas (${raw100g.calories} kcal)`);
+      nutritionWarningReason = issues.join(", ");
+    }
 
     // 10x safeguard for corrupt barcode data
     if (raw100g.carbs > 100 && raw100g.carbs <= 1000) raw100g.carbs = raw100g.carbs / 10;
@@ -376,13 +394,19 @@ export default function MealBuilderModal({
       raw100gFat: raw100g.fat,
       unitWeight: unitWeight,
       barcode: targetFood.barcode,
+      hasNutritionWarning,
+      nutritionWarningReason,
     };
 
     setIngredients(prev => [...prev, newIng]);
     
     // Tactile & Visual Feedback
     const unitStr = newIng.unit === "unit" ? (newIng.amount === 1 ? newIng.unitLabel : newIng.unitLabel + "s") : newIng.unit;
-    setToastMessage(`¡Agregado! ${newIng.name} (${newIng.amount} ${unitStr} · ${newIng.calories} kcal)`);
+    if (hasNutritionWarning) {
+      setToastMessage(`⚠️ Agregado: ${newIng.name} (Revisa macros: posible error en base de datos)`);
+    } else {
+      setToastMessage(`¡Agregado! ${newIng.name} (${newIng.amount} ${unitStr} · ${newIng.calories} kcal)`);
+    }
     setLastAddedName(food.name);
     if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(40);
     setTimeout(() => setToastMessage(null), 2500);
@@ -1198,9 +1222,20 @@ export default function MealBuilderModal({
                           </div>
 
                           {/* Row 2: Nombre del Alimento */}
-                          <span className="text-xs font-black text-white block truncate">
-                            {ing.name}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-black text-white truncate">
+                              {ing.name}
+                            </span>
+                            {ing.hasNutritionWarning && (
+                              <span 
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-[8.5px] font-bold text-amber-400"
+                                title={ing.nutritionWarningReason || "Valores sospechosos en origen. Te recomendamos verificar."}
+                              >
+                                <AlertCircle className="h-2.5 w-2.5" />
+                                Revisar macros
+                              </span>
+                            )}
+                          </div>
 
                           {/* Row 3: Macros con colores */}
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap">

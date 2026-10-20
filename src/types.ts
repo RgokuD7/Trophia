@@ -120,6 +120,8 @@ export interface MealBuilderIngredient {
   raw100gFat: number;
   unitWeight: number;
   barcode?: string;
+  hasNutritionWarning?: boolean;
+  nutritionWarningReason?: string;
 }
 
 export interface LoggedMeal {
@@ -266,6 +268,8 @@ export interface FoodItem {
   portionProtein?: number;
   portionCarbs?: number;
   portionFat?: number;
+  hasNutritionWarning?: boolean;
+  nutritionWarningReason?: string;
 }
 
 export interface FrequentRoute {

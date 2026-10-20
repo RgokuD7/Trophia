@@ -78,8 +78,24 @@ function parseOffProduct(p: any, barcode?: string): FoodItem {
     }
   }
 
-  // Heuristic safeguard for Open Food Facts comma-stripping bugs (e.g. 25,0g carbs entered as 250g)
-  // In 100g of food, carbs, protein, and fat cannot physically exceed 100g.
+  // Detect if nutritional registry in Open Food Facts has suspicious/impossible values
+  let hasNutritionWarning = false;
+  let nutritionWarningReason = "";
+  const issues: string[] = [];
+
+  if (carbs > 100) issues.push(`Carbohidratos sospechosos (${carbs}g en 100g)`);
+  if (protein > 100) issues.push(`Proteínas sospechosas (${protein}g en 100g)`);
+  if (fat > 100) issues.push(`Grasas sospechosas (${fat}g en 100g)`);
+  if (calories > 900) issues.push(`Calorías sospechosas (${calories} kcal en 100g)`);
+  if (carbs + protein + fat > 105) issues.push(`Suma de macros excede 100g (${(carbs + protein + fat).toFixed(1)}g)`);
+
+  if (issues.length > 0) {
+    hasNutritionWarning = true;
+    nutritionWarningReason = issues.join(", ");
+  }
+
+  // Heuristic safeguard: if values exceed physical 100g, do a provisional 10x division to prevent UI overflow,
+  // but keep hasNutritionWarning = true so the user is informed to verify and edit.
   if (carbs > 100 && carbs <= 1000) carbs = carbs / 10;
   if (protein > 100 && protein <= 1000) protein = protein / 10;
   if (fat > 100 && fat <= 1000) fat = fat / 10;
@@ -123,7 +139,9 @@ function parseOffProduct(p: any, barcode?: string): FoodItem {
     portionValue: portionValue,
     portionUnit: portionUnit,
     unitWeight: unitWeight,
-    unitLabel: unitLabel
+    unitLabel: unitLabel,
+    hasNutritionWarning: hasNutritionWarning,
+    nutritionWarningReason: nutritionWarningReason || undefined
   };
 }
 

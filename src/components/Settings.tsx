@@ -765,7 +765,7 @@ export default function SettingsView({
           <div className="text-center pt-2 text-[10px] text-gray-400 font-mono tracking-wider">
             <span>Trophia • by Richard Bouryssieres</span>
             <span className="mx-1.5">•</span>
-            <span>v0.1.37</span>
+            <span>v0.2.0</span>
           </div>
         </div>
 
