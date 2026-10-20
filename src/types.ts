@@ -302,10 +302,17 @@ export interface CustomFood {
 export interface BarcodeCorrection {
   barcode: string;
   name: string;
+  brand?: string;
   calories: number;
   protein: number;
   carbs: number;
   fat: number;
+  servingSize?: string;
+  unitWeight?: number;
+  unitLabel?: string;
+  frontImageUrl?: string;
+  nutritionTableImageUrl?: string;
+  contributedBy?: string;
   yesVotes: number;
   noVotes: number;
   updatedAt?: any;

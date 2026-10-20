@@ -8,6 +8,7 @@ import { Input } from "./ui/Input";
 import { searchAllFoods, getProductByBarcode } from "../services/foodDatabaseService";
 import BarcodeScannerModal from "./BarcodeScannerModal";
 import MealBuilderModal from "./MealBuilderModal";
+import AddMissingBarcodeModal from "./AddMissingBarcodeModal";
 import { getBarcodeCorrection, saveBarcodeCorrection, voteBarcodeCorrection, addCustomFood, getCustomFoods } from "../services/dbService";
 
 interface FoodLoggerProps {
@@ -253,6 +254,8 @@ export default function FoodLogger({
   const [personalHistory, setPersonalHistory] = useState<FoodItem[]>([]);
 
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isMissingBarcodeModalOpen, setIsMissingBarcodeModalOpen] = useState(false);
+  const [missingBarcode, setMissingBarcode] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
@@ -673,7 +676,9 @@ export default function FoodLogger({
       if (product) {
         handleSelectFood(product);
       } else {
-        setSearchError("Producto no encontrado por código de barras.");
+        // Open the community crowdsourcing modal
+        setMissingBarcode(barcode);
+        setIsMissingBarcodeModalOpen(true);
       }
     } catch (err: any) {
       console.error("Error al buscar producto por código de barras:", err);
@@ -2222,6 +2227,17 @@ export default function FoodLogger({
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         onScanSuccess={handleBarcodeScanSuccess}
+      />
+
+      <AddMissingBarcodeModal
+        isOpen={isMissingBarcodeModalOpen}
+        barcode={missingBarcode}
+        onClose={() => setIsMissingBarcodeModalOpen(false)}
+        onProductCreated={(food) => {
+          handleSelectFood(food);
+        }}
+        apiKey={effectiveApiKey}
+        userName={userId}
       />
 
       <MealBuilderModal

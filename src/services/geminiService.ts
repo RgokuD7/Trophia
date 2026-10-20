@@ -1391,6 +1391,58 @@ Requisitos:
   return await callGeminiAPI(apiKey, prompt, [cleanImg], { model: "gemini-3.5-flash", tier: "flash" });
 }
 
+export interface AnalyzedCommunityProductResult {
+  name: string;
+  brand?: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  servingSize: string;
+  unitWeight?: number;
+  unitLabel?: string;
+}
+
+// 11b. Analyze product packaging and nutrition table from multiple photos for community database
+export async function analyzeCommunityProductPhotosByIA(
+  apiKey: string,
+  base64Images: string[],
+  barcode?: string
+): Promise<AnalyzedCommunityProductResult | null> {
+  const cleanImages = base64Images.map(img => cleanBase64Image(img));
+  const prompt = `Actúas como un experto auditor de alimentos y extractor OCR nutricional de la comunidad fitness Trophia.
+Se te han proporcionado 1 o 2 fotos de un producto empaquetado (frente del empaque con marca/nombre, y/o tabla de información nutricional).
+${barcode ? `El código de barras escaneado del producto es: ${barcode}` : ""}
+
+Tu objetivo es extraer con la máxima exactitud los datos del producto para ingresarlo a la base de datos comunitaria:
+1. "name": Nombre comercial del producto en español (ej: "Leche Entera", "Galletas de Avena con Chía", "Yogur Batido Frutilla").
+2. "brand": Marca o fabricante si es visible (ej: "Colun", "Soprole", "Quaker", "Nestlé", "Ideal", "San Jorge"). Si no es evidente, déjalo vacío "".
+3. Macronutrientes normalizados por cada **100g** (o 100ml):
+   - "calories": Calorías por 100g/ml (en kcal, número entero).
+   - "protein": Proteínas por 100g/ml (en gramos, número decimal o entero).
+   - "carbs": Carbohidratos disponibles por 100g/ml (en gramos, número decimal o entero).
+   - "fat": Grasas totales por 100g/ml (en gramos, número decimal o entero).
+   *REGLA OBLIGATORIA: Si la tabla del envase SOLO muestra valores por porción (ej: porción 30g), calcula matemáticamente la regla de tres para expresarlo por 100g.*
+4. "servingSize": La porción sugerida oficial del envase (ej: "1 vaso (200 ml)", "2 galletas (30g)", "1 barra (45g)", "1 cucharada (15g)").
+5. "unitWeight": Peso en gramos o ml de UNA porción individual (ej: si la porción es 30g, pon 30).
+6. "unitLabel": Etiqueta de la porción en singular (ej: "vaso", "galleta", "barra", "rebanada", "porción", "unidad", "pote").
+
+Tu respuesta debe ser estrictamente un objeto JSON válido con esta estructura:
+{
+  "name": "Nombre descriptivo del producto",
+  "brand": "Marca del producto",
+  "calories": 0,
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "servingSize": "1 porción (30g)",
+  "unitWeight": 30,
+  "unitLabel": "porción"
+}`;
+
+  return await callGeminiAPI(apiKey, prompt, cleanImages, { model: "gemini-3.5-flash", tier: "flash" });
+}
+
 // 12. Generate smart food suggestions based on remaining macronutrients
 export interface SmartFoodSuggestion {
   name: string;

@@ -1,5 +1,7 @@
 import { FoodItem } from "../types";
 import { GLOBAL_FOODS_DB } from "../utils/fitnessUtils";
+import { STAPLE_FOODS_DB } from "../data/stapleFoods";
+import { getBarcodeCorrection } from "./dbService";
 
 const DEFAULT_USDA_API_KEY = "DEMO_KEY";
 const USDA_BASE_URL = "https://api.nal.usda.gov/fdc/v1";
@@ -141,29 +143,57 @@ export const searchUsdaFoods = async (query: string, apiKey?: string): Promise<F
 };
 
 /**
- * Fetches a product from Open Food Facts using its barcode.
+ * Fetches a product from Trophia community Firestore first, then Open Food Facts.
  */
 export const getProductByBarcode = async (barcode: string): Promise<FoodItem | null> => {
   if (!barcode || barcode.trim() === "") return null;
+  const cleanCode = barcode.trim();
 
+  // 1. Check Trophia Community Firestore Database first
   try {
-    const response = await fetch(`${OFF_BASE_URL}/api/v2/product/${barcode}.json`);
+    const communityProduct = await getBarcodeCorrection(cleanCode);
+    if (communityProduct && communityProduct.name) {
+      return {
+        name: communityProduct.name,
+        brand: communityProduct.brand || "Comunidad Trophia",
+        calories: communityProduct.calories,
+        protein: communityProduct.protein,
+        carbs: communityProduct.carbs,
+        fat: communityProduct.fat,
+        servingSize: communityProduct.servingSize || "1 porción",
+        barcode: cleanCode,
+        source: "local" as const,
+        raw100gCalories: communityProduct.calories,
+        raw100gProtein: communityProduct.protein,
+        raw100gCarbs: communityProduct.carbs,
+        raw100gFat: communityProduct.fat,
+        unitWeight: communityProduct.unitWeight,
+        unitLabel: communityProduct.unitLabel
+      };
+    }
+  } catch (dbErr) {
+    console.warn("Could not check community barcode cache:", dbErr);
+  }
+
+  // 2. Check Open Food Facts
+  try {
+    const response = await fetch(`${OFF_BASE_URL}/api/v2/product/${cleanCode}.json`);
     if (!response.ok) throw new Error(`Open Food Facts Barcode HTTP error ${response.status}`);
     const data = await response.json();
 
     if (data.status === 1 && data.product) {
-      return parseOffProduct(data.product, barcode);
+      return parseOffProduct(data.product, cleanCode);
     }
     return null;
   } catch (error) {
     console.error("Error fetching product by barcode:", error);
-    throw error;
+    return null;
   }
 };
 
 /**
- * Performs a combined search across Local DB, History, USDA, and Open Food Facts.
- * Filters duplicate names and prioritizes local history.
+ * Performs a combined search across Local Staple DB, History, USDA, and Open Food Facts.
+ * Prioritizes staple raw/cooked ingredients at the top with smart ranking.
  */
 export const searchAllFoods = async (
   query: string,
@@ -173,15 +203,30 @@ export const searchAllFoods = async (
   const trimmed = query.trim().toLowerCase();
   if (trimmed === "") return [];
 
-  // 1. Search Local static DB
-  const localDbMatches = GLOBAL_FOODS_DB.filter((food) =>
+  // 1. Search Local Staples DB (sorted by relevance: items starting with query first)
+  const stapleMatches = STAPLE_FOODS_DB.filter((food) =>
     food.name.toLowerCase().includes(trimmed)
+  ).sort((a, b) => {
+    const aStarts = a.name.toLowerCase().startsWith(trimmed);
+    const bStarts = b.name.toLowerCase().startsWith(trimmed);
+    if (aStarts && !bStarts) return -1;
+    if (!aStarts && bStarts) return 1;
+    return a.name.localeCompare(b.name);
+  }).map((food) => ({
+    ...food,
+    source: "local" as const
+  }));
+
+  // 2. Search Global general DB
+  const localDbMatches = GLOBAL_FOODS_DB.filter((food) =>
+    food.name.toLowerCase().includes(trimmed) &&
+    !stapleMatches.some(s => s.name.toLowerCase() === food.name.toLowerCase())
   ).map((food) => ({
     ...food,
     source: "local" as const
   }));
 
-  // 2. Search Local History
+  // 3. Search Local History
   const historyMatches = localHistory.filter((food) =>
     food.name.toLowerCase().includes(trimmed)
   ).map((food) => ({
@@ -195,10 +240,16 @@ export const searchAllFoods = async (
     searchOpenFoodFacts(query)
   ]);
 
-  // Combine results: History -> Local DB -> USDA -> OFF
-  const allResults = [...historyMatches, ...localDbMatches, ...usdaResults, ...offResults];
+  // Combine results with clear priority: History -> Staples -> Local DB -> USDA -> OFF
+  const allResults = [
+    ...historyMatches,
+    ...stapleMatches,
+    ...localDbMatches,
+    ...usdaResults,
+    ...offResults
+  ];
 
-  // Remove duplicates by name (case-insensitive)
+  // Remove duplicates by name and brand (case-insensitive)
   const seen = new Set<string>();
   const uniqueResults: FoodItem[] = [];
 

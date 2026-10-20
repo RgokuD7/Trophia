@@ -9,6 +9,7 @@ import { MealType, LoggedMeal, FoodItem, PantryItem, CustomFood, MealBuilderIngr
 import { searchAllFoods, getProductByBarcode } from "../services/foodDatabaseService";
 import { getDefaultServingInfo } from "./FoodLogger";
 import BarcodeScannerModal from "./BarcodeScannerModal";
+import AddMissingBarcodeModal from "./AddMissingBarcodeModal";
 import { addCustomFood } from "../services/dbService";
 import { createTimestampForDate } from "../utils/fitnessUtils";
 import { estimateMacrosFromDescription, analyzeFoodByIA } from "../services/geminiService";
@@ -67,6 +68,8 @@ export default function MealBuilderModal({
   const [searchResults, setSearchResults] = useState<FoodItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isMissingBarcodeModalOpen, setIsMissingBarcodeModalOpen] = useState(false);
+  const [missingBarcode, setMissingBarcode] = useState("");
   const [scannerError, setScannerError] = useState<string | null>(null);
   const isProcessingBarcodeRef = useRef(false);
 
@@ -402,7 +405,8 @@ export default function MealBuilderModal({
       if (product) {
         handleAddFoodAsIngredient(product);
       } else {
-        setScannerError("Producto no encontrado por código de barras.");
+        setMissingBarcode(barcode);
+        setIsMissingBarcodeModalOpen(true);
       }
     } catch (err) {
       console.error("Error barcode in meal builder:", err);
@@ -1399,6 +1403,18 @@ export default function MealBuilderModal({
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         onScanSuccess={handleBarcodeScanSuccess}
+      />
+
+      {/* Community Barcode Crowdsourcing Modal */}
+      <AddMissingBarcodeModal
+        isOpen={isMissingBarcodeModalOpen}
+        barcode={missingBarcode}
+        onClose={() => setIsMissingBarcodeModalOpen(false)}
+        onProductCreated={(food) => {
+          handleAddFoodAsIngredient(food);
+        }}
+        apiKey={apiKey}
+        userName={userId}
       />
     </div>
   );
