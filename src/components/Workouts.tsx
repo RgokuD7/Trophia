@@ -1976,12 +1976,13 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                           allCompleted ? "border-emerald-500/30 bg-emerald-500/5 dark:bg-[#161824]/40" : "border-gray-200 dark:border-gray-800"
                         }`}
                       >
-                        {/* Fila 1: Estrella + Nombre a la izquierda | Acciones (Técnica y Cambiar con IA) a la derecha */}
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
+                        {/* Fila 1: Estrella + Nombre Completo del Ejercicio (espacio total sin truncar) | Pastilla Calorías */}
+                        <div className="flex items-start justify-between gap-2.5">
+                          <div className="flex items-start gap-2.5 min-w-0 flex-1">
                             <button
+                              type="button"
                               onClick={() => handleToggleFavorite(ex.name)}
-                              className={`p-1.5 rounded-xl border transition-all cursor-pointer shrink-0 ${
+                              className={`p-1.5 rounded-xl border transition-all cursor-pointer shrink-0 mt-0.5 ${
                                 (userProfile.favoriteExercises || []).includes(ex.name)
                                   ? "bg-amber-500/15 border-amber-500/30 text-amber-500 shadow-sm shadow-amber-500/10"
                                   : "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-400 hover:text-amber-500"
@@ -1991,64 +1992,69 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                               <Star className={`h-4 w-4 ${(userProfile.favoriteExercises || []).includes(ex.name) ? "fill-current" : ""}`} />
                             </button>
 
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <h4 className="text-sm font-black text-gray-900 dark:text-white truncate">
-                                {ex.name}
-                              </h4>
-                              {(userProfile.favoriteExercises || []).includes(ex.name) && (
-                                <span className="text-[9px] bg-amber-500/15 text-amber-500 font-black px-1.5 py-0.5 rounded-md border border-amber-500/20 font-mono shrink-0">
-                                  FAV
-                                </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <h4 className="text-sm sm:text-base font-black text-gray-900 dark:text-white leading-tight break-words">
+                                  {ex.name}
+                                </h4>
+                                {(userProfile.favoriteExercises || []).includes(ex.name) && (
+                                  <span className="text-[9px] bg-amber-500/15 text-amber-500 font-black px-1.5 py-0.5 rounded-md border border-amber-500/20 font-mono shrink-0">
+                                    FAV
+                                  </span>
+                                )}
+                              </div>
+
+                              {ex.primaryMuscles && ex.primaryMuscles.length > 0 && (
+                                <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">
+                                  🎯 {ex.primaryMuscles.join(", ")}
+                                </p>
                               )}
                             </div>
                           </div>
 
-                          {/* Acciones: Técnica + Alternativas agrupadas en la esquina superior */}
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              onClick={() => handleOpenTechniqueGuide(ex)}
-                              className="text-[10px] font-black text-blue-500 hover:text-blue-600 bg-blue-500/10 hover:bg-blue-500/20 px-2 py-1 rounded-xl border border-blue-500/20 flex items-center gap-1 transition cursor-pointer"
-                              title="Ver biomecánica y técnica del ejercicio"
-                            >
-                              <Sparkles className="h-3 w-3" />
-                              <span>Técnica</span>
-                            </button>
-                            <button
-                              onClick={() => handleOpenAlternatives(ex)}
-                              className="text-[10px] font-black text-emerald-500 hover:text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded-xl border border-emerald-500/20 flex items-center gap-1 transition cursor-pointer"
-                              title="Consultar con la IA o pedir cambio para este ejercicio"
-                            >
-                              <Sparkles className="h-3 w-3" />
-                              <span>Cambiar</span>
-                            </button>
+                          {/* Pastilla de Calorías quemadas */}
+                          <div className="px-2 py-0.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 shrink-0 flex items-center gap-1 text-[11px] mt-0.5" title="Gasto calórico estimado conservador">
+                            <Flame className="h-3 w-3" />
+                            <span className="font-black">~{ex.sets * ex.caloriesBurnedPerSet} kcal</span>
                           </div>
                         </div>
 
-                        {/* Fila 2: Músculo + Series/Reps info + Toggle a la izq | Pastilla de Calorías a la der */}
-                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-100 dark:border-gray-800/40">
-                          <div className="flex items-center gap-2 flex-wrap min-w-0">
-                            {ex.primaryMuscles && ex.primaryMuscles.length > 0 && (
-                              <span className="text-[10px] bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-lg border border-emerald-500/20 shrink-0">
-                                🎯 {ex.primaryMuscles[0]}
-                              </span>
-                            )}
-                            <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase shrink-0">
-                              {ex.sets} series × {ex.reps} {isTimeTracking ? "seg" : "reps"}
+                        {/* Fila 2: Barra de Control (Series/Reps) a la izq | Acciones (Técnica + Cambiar con IA) a la der */}
+                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-gray-800/50 flex-wrap sm:flex-nowrap">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-tight">
+                              {ex.sets} {ex.sets === 1 ? "serie" : "series"} × {ex.reps} {isTimeTracking ? "seg" : "reps"}
                             </span>
                             <button
                               type="button"
                               onClick={() => handleToggleTrackingType(ex.id)}
-                              className="text-[9px] font-bold text-gray-600 dark:text-gray-300 hover:text-emerald-400 bg-gray-100 dark:bg-white/5 hover:bg-emerald-500/10 px-2 py-0.5 rounded-md border border-gray-200 dark:border-white/10 transition cursor-pointer shrink-0"
+                              className="text-[10px] font-bold text-gray-500 dark:text-gray-400 hover:text-emerald-500 bg-gray-100 dark:bg-white/5 hover:bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-gray-200 dark:border-white/10 transition cursor-pointer"
                               title="Alternar entre Repeticiones y Segundos de duración"
                             >
                               {isTimeTracking ? "⏱️ Tiempo" : "🔄 Reps"}
                             </button>
                           </div>
 
-                          {/* Pastilla de Calorías quemadas */}
-                          <div className="px-2 py-0.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 shrink-0 flex items-center gap-1 text-[11px]" title="Gasto calórico estimado conservador">
-                            <Flame className="h-3 w-3" />
-                            <span className="font-black">~{ex.sets * ex.caloriesBurnedPerSet} kcal</span>
+                          {/* Acciones: Técnica y Cambiar */}
+                          <div className="flex items-center gap-1.5 ml-auto">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenTechniqueGuide(ex)}
+                              className="text-[10px] font-black text-blue-500 hover:text-blue-600 bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-xl border border-blue-500/20 flex items-center gap-1 transition cursor-pointer"
+                              title="Ver biomecánica y técnica del ejercicio"
+                            >
+                              <Sparkles className="h-3 w-3" />
+                              <span>Técnica</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAlternatives(ex)}
+                              className="text-[10px] font-black text-emerald-500 hover:text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-xl border border-emerald-500/20 flex items-center gap-1 transition cursor-pointer"
+                              title="Consultar con la IA o pedir cambio para este ejercicio"
+                            >
+                              <Sparkles className="h-3 w-3" />
+                              <span>Cambiar</span>
+                            </button>
                           </div>
                         </div>
                           
