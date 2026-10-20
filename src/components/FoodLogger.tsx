@@ -991,26 +991,6 @@ export default function FoodLogger({
                     </button>
                   </div>
 
-                  {/* Fast Creation Shortcuts */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsMealBuilderOpen(true)}
-                      className="py-2.5 px-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 hover:text-emerald-300 rounded-xl transition flex items-center justify-center gap-1.5 font-bold text-[11px] cursor-pointer shadow-sm"
-                    >
-                      <span className="text-sm">🥪</span>
-                      <span>Armar Sándwich / Plato</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCreateCustom}
-                      className="py-2.5 px-2 bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-emerald-500/30 text-white/70 hover:text-white rounded-xl transition flex items-center justify-center gap-1.5 font-bold text-[11px] cursor-pointer shadow-sm"
-                    >
-                      <Plus className="h-3.5 w-3.5 text-emerald-400" />
-                      <span>Alimento Manual</span>
-                    </button>
-                  </div>
-
                   {/* Search Error banner */}
                   {searchError && (
                     <div className="bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-xl text-[10.5px] text-rose-400 font-bold flex items-center gap-2">
@@ -2054,17 +2034,25 @@ export default function FoodLogger({
         </div>
 
         {/* Footer actions */}
-        <div className="p-5 border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-[#12131d]/90 flex-shrink-0 flex gap-3">
+        <div className="p-4 sm:p-5 border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-[#12131d]/90 flex-shrink-0 flex gap-3">
           {selectedFood === null ? (
-            <div className="w-full">
-              <Button
-                variant="secondary"
-                onClick={onClose}
-                className="w-full rounded-xl"
-                size="md"
+            <div className="w-full grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setIsMealBuilderOpen(true)}
+                className="py-3 px-3 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-extrabold text-xs rounded-2xl transition flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.98]"
               >
-                Cancelar
-              </Button>
+                <span className="text-base">🥪</span>
+                <span>Armar Plato</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateCustom}
+                className="py-3 px-3 bg-white dark:bg-white/[0.04] hover:bg-gray-100 dark:hover:bg-white/[0.08] border border-gray-200 dark:border-white/10 text-gray-800 dark:text-white/80 font-bold text-xs rounded-2xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-[0.98]"
+              >
+                <Plus className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
+                <span>Alimento Manual</span>
+              </button>
             </div>
           ) : (
             <>
