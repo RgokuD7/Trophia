@@ -17,7 +17,8 @@ import {
 } from "../services/geminiService";
 import { 
   DEFAULT_EXERCISES, findExerciseInCatalog, resolveOrAnalyzeExercise, 
-  createWorkoutExerciseFromData, normalizeExerciseName 
+  createWorkoutExerciseFromData, normalizeExerciseName,
+  isDumbbellExercise, isSingleDumbbellExercise, formatExerciseWeight
 } from "../services/exerciseLibrary";
 import { 
   getCustomExercises, addCustomExercise, deleteCustomExercise, updateCustomExercise 
@@ -1629,7 +1630,11 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                                 </span>
                                 <span className="block text-[10px] text-gray-500 dark:text-gray-400">
                                   {ex.sets} series × {ex.reps} {ex.trackingType === "time" ? "seg" : "reps"}
-                                  {ex.weight > 0 ? ` · ${ex.weight}kg` : ""}
+                                  {ex.weight > 0 ? (
+                                    isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex)
+                                      ? ` · ${ex.weight}kg ×2 (c/u)`
+                                      : ` · ${ex.weight}kg`
+                                  ) : ""}
                                 </span>
                               </div>
                               {ex.primaryMuscles && ex.primaryMuscles[0] && (
@@ -2004,11 +2009,18 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                                 )}
                               </div>
 
-                              {ex.primaryMuscles && ex.primaryMuscles.length > 0 && (
-                                <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">
-                                  🎯 {ex.primaryMuscles.join(", ")}
-                                </p>
-                              )}
+                              <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                {ex.primaryMuscles && ex.primaryMuscles.length > 0 && (
+                                  <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
+                                    🎯 {ex.primaryMuscles.join(", ")}
+                                  </p>
+                                )}
+                                {isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) && (
+                                  <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold px-1.5 py-0.2 rounded-md border border-amber-500/20 inline-flex items-center gap-0.5">
+                                    🏋️ 2 mancuernas (c/u · ×2)
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -2064,61 +2076,84 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                             <span>Serie</span>
                             <div className="flex items-center gap-4 sm:gap-6 mr-6 sm:mr-8">
                               <span>{isTimeTracking ? "Duración" : "Repeticiones"}</span>
-                              <span>Carga (kg)</span>
+                              <span className={isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) ? "text-amber-500 font-bold" : ""}>
+                                {isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) ? "Carga (kg c/u · ×2)" : "Carga (kg)"}
+                              </span>
                             </div>
                             <span>Listo</span>
                           </div>
 
-                          {ex.completedSets.map((set) => (
-                            <div 
-                              key={set.setIndex}
-                              className={`flex items-center justify-between p-1.5 rounded-xl transition ${
-                                set.completed 
-                                  ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-300"
-                                  : "bg-gray-50/70 dark:bg-[#0f101a] border border-gray-200/70 dark:border-gray-800/70"
-                              }`}
-                            >
-                              <span className="font-mono text-[11px] font-black text-gray-500 dark:text-gray-400 pl-1">
-                                SET {set.setIndex + 1}
-                              </span>
-                              
-                              <div className="flex items-center gap-2">
-                                {/* Edit Reps / Seconds */}
-                                <div className="flex items-center gap-1 bg-white dark:bg-black/30 border border-gray-200 dark:border-gray-700/60 rounded-lg px-2 py-1 shadow-inner">
-                                  <input
-                                    type="number"
-                                    value={set.reps}
-                                    onChange={(e) => handleUpdateSetWeightOrReps(ex.id, set.setIndex, set.weight, Math.max(1, Number(e.target.value) || set.reps))}
-                                    className="w-10 text-center text-xs font-bold bg-transparent text-gray-900 dark:text-white focus:outline-none"
-                                  />
-                                  <span className="text-[9px] text-gray-400 font-semibold">{isTimeTracking ? "seg" : "reps"}</span>
-                                </div>
-
-                                {/* Edit Weight */}
-                                <div className="flex items-center gap-1 bg-white dark:bg-black/30 border border-gray-200 dark:border-gray-700/60 rounded-lg px-2 py-1 shadow-inner">
-                                  <input
-                                    type="number"
-                                    value={set.weight}
-                                    onChange={(e) => handleUpdateSetWeightOrReps(ex.id, set.setIndex, Math.max(0, Number(e.target.value) || 0), set.reps)}
-                                    className="w-10 text-center text-xs font-bold bg-transparent text-gray-900 dark:text-white focus:outline-none"
-                                  />
-                                  <span className="text-[9px] text-gray-400 font-semibold">kg</span>
-                                </div>
-                              </div>
-
-                              <button
-                                onClick={() => handleToggleSet(ex.id, set.setIndex)}
-                                className={`w-7 h-7 rounded-xl border flex items-center justify-center transition cursor-pointer shadow-sm ${
-                                  set.completed
-                                    ? "bg-emerald-500 border-emerald-400 text-white shadow-emerald-500/20"
-                                    : "bg-white dark:bg-[#161824] border-gray-300 dark:border-gray-700 text-gray-400 hover:text-emerald-400 hover:border-emerald-400"
+                          {ex.completedSets.map((set) => {
+                            const isDumbbell = isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex);
+                            return (
+                              <div 
+                                key={set.setIndex}
+                                className={`flex items-center justify-between p-1.5 rounded-xl transition ${
+                                  set.completed 
+                                    ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-300"
+                                    : "bg-gray-50/70 dark:bg-[#0f101a] border border-gray-200/70 dark:border-gray-800/70"
                                 }`}
-                                title={set.completed ? "Serie completada" : "Marcar como completada"}
                               >
-                                {set.completed ? <Check className="h-4 w-4 stroke-[3]" /> : <Play className="h-3 w-3 fill-current ml-0.5" />}
-                              </button>
+                                <span className="font-mono text-[11px] font-black text-gray-500 dark:text-gray-400 pl-1">
+                                  SET {set.setIndex + 1}
+                                </span>
+                                
+                                <div className="flex items-center gap-2">
+                                  {/* Edit Reps / Seconds */}
+                                  <div className="flex items-center gap-1 bg-white dark:bg-black/30 border border-gray-200 dark:border-gray-700/60 rounded-lg px-2 py-1 shadow-inner">
+                                    <input
+                                      type="number"
+                                      value={set.reps}
+                                      onChange={(e) => handleUpdateSetWeightOrReps(ex.id, set.setIndex, set.weight, Math.max(1, Number(e.target.value) || set.reps))}
+                                      className="w-10 text-center text-xs font-bold bg-transparent text-gray-900 dark:text-white focus:outline-none"
+                                    />
+                                    <span className="text-[9px] text-gray-400 font-semibold">{isTimeTracking ? "seg" : "reps"}</span>
+                                  </div>
+
+                                  {/* Edit Weight */}
+                                  <div className={`flex items-center gap-1 bg-white dark:bg-black/30 border rounded-lg px-2 py-1 shadow-inner ${
+                                    isDumbbell ? "border-amber-500/30 dark:border-amber-500/30" : "border-gray-200 dark:border-gray-700/60"
+                                  }`}>
+                                    <input
+                                      type="number"
+                                      value={set.weight}
+                                      onChange={(e) => handleUpdateSetWeightOrReps(ex.id, set.setIndex, Math.max(0, Number(e.target.value) || 0), set.reps)}
+                                      className="w-10 text-center text-xs font-bold bg-transparent text-gray-900 dark:text-white focus:outline-none"
+                                      title={isDumbbell ? "Peso de cada mancuerna en kg (ej: 10 = 10 kg en cada mano, total 20 kg)" : "Carga en kg"}
+                                    />
+                                    <span 
+                                      className={`text-[9px] ${isDumbbell ? "text-amber-500 font-black" : "text-gray-400 font-semibold"}`}
+                                      title={isDumbbell ? "Peso individual de cada mancuerna (ej: 10 kg = 10 kg en cada mano, total 20 kg)" : "Kilogramos"}
+                                    >
+                                      {isDumbbell ? "kg ×2" : "kg"}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <button
+                                  onClick={() => handleToggleSet(ex.id, set.setIndex)}
+                                  className={`w-7 h-7 rounded-xl border flex items-center justify-center transition cursor-pointer shadow-sm ${
+                                    set.completed
+                                      ? "bg-emerald-500 border-emerald-400 text-white shadow-emerald-500/20"
+                                      : "bg-white dark:bg-[#161824] border-gray-300 dark:border-gray-700 text-gray-400 hover:text-emerald-400 hover:border-emerald-400"
+                                  }`}
+                                  title={set.completed ? "Serie completada" : "Marcar como completada"}
+                                >
+                                  {set.completed ? <Check className="h-4 w-4 stroke-[3]" /> : <Play className="h-3 w-3 fill-current ml-0.5" />}
+                                </button>
+                              </div>
+                            );
+                          })}
+
+                          {/* Dumbbell beginner clarification banner */}
+                          {isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) && (
+                            <div className="mt-1 px-2.5 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-1.5 text-[10px] text-amber-700 dark:text-amber-300">
+                              <span className="text-xs shrink-0">💡</span>
+                              <span>
+                                <strong>Mancuernas:</strong> Anota el peso de <strong>cada mancuerna</strong> (ej: si pones <strong>10 kg</strong>, usas una mancuerna de 10 kg en cada mano, total 20 kg).
+                              </span>
                             </div>
-                          ))}
+                          )}
                         </div>
 
                         {/* Exercise Controls Row: Add Set, Remove Set, Delete Exercise */}
@@ -2303,16 +2338,30 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                             />
                           </div>
                           <div>
-                            <label className="block text-[9px] font-bold text-gray-400 mb-1">Peso (kg)</label>
+                            <label className="block text-[9px] font-bold text-gray-400 mb-1">
+                              {isDumbbellExercise({ name: newExerciseName }) && !isSingleDumbbellExercise({ name: newExerciseName })
+                                ? "Peso c/u (kg ×2)"
+                                : "Peso (kg)"}
+                            </label>
                             <input
                               type="number"
                               min={0}
                               value={newExerciseWeight}
                               onChange={(e) => setNewExerciseWeight(Math.max(0, Number(e.target.value) || 0))}
-                              className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-lg px-2 py-1 text-xs text-center text-gray-900 dark:text-white"
+                              className={`w-full bg-gray-50 dark:bg-[#0f101a] border rounded-lg px-2 py-1 text-xs text-center text-gray-900 dark:text-white ${
+                                isDumbbellExercise({ name: newExerciseName }) && !isSingleDumbbellExercise({ name: newExerciseName })
+                                  ? "border-amber-500/40"
+                                  : "border-gray-200 dark:border-gray-800"
+                              }`}
                             />
                           </div>
                         </div>
+
+                        {isDumbbellExercise({ name: newExerciseName }) && !isSingleDumbbellExercise({ name: newExerciseName }) && (
+                          <p className="text-[9px] text-amber-500 font-medium">
+                            💡 Mancuernas: anota el peso de <strong>cada mancuerna</strong> (ej. 10 kg significa 10 kg en cada mano, total 20 kg).
+                          </p>
+                        )}
 
                         {/* Add Button */}
                         <button
@@ -3184,6 +3233,19 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                         No bloquees articulaciones bruscamente al final del movimiento. Mantén el abdomen activo para proteger la zona lumbar.
                       </p>
                     </div>
+
+                    {/* Dumbbell beginner clarification note */}
+                    {isDumbbellExercise(selectedGuideExercise) && !isSingleDumbbellExercise(selectedGuideExercise) && (
+                      <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-800 dark:text-emerald-300 space-y-1">
+                        <div className="flex items-center gap-1.5 font-bold text-[11px]">
+                          <span>🏋️</span>
+                          <span>Convención de Carga: Mancuernas (×2)</span>
+                        </div>
+                        <p className="text-[10px] leading-relaxed text-emerald-700 dark:text-emerald-300/90 pl-5">
+                          En Trophia el peso a registrar siempre es el de <strong>cada mancuerna individual</strong> (por ejemplo: si levantas dos mancuernas de 10 kg, anota <strong>10 kg</strong>, no los 20 kg sumados ni 5 kg divididos).
+                        </p>
+                      </div>
+                    )}
                   </>
                 ) : null}
               </div>

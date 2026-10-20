@@ -12,7 +12,8 @@ import {
 } from "../types";
 import { 
   DEFAULT_EXERCISES, createWorkoutExerciseFromData, normalizeExerciseName, 
-  resolveOrAnalyzeExercise, findExerciseInCatalog
+  resolveOrAnalyzeExercise, findExerciseInCatalog,
+  isDumbbellExercise, isSingleDumbbellExercise
 } from "../services/exerciseLibrary";
 import ExerciseAiAdvisorModal from "./ExerciseAiAdvisorModal";
 
@@ -851,11 +852,16 @@ export default function WorkoutsRoutineManager({
                               </span>
                               {ex.weight > 0 ? (
                                 <span className="text-gray-500 dark:text-gray-400">
-                                  · {ex.weight} kg sugeridos
+                                  · {ex.weight} kg {isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) ? "c/u (×2)" : ""} sugeridos
                                 </span>
                               ) : (
                                 <span className="text-gray-400 dark:text-gray-500">
                                   · Peso corporal
+                                </span>
+                              )}
+                              {isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) && (
+                                <span className="text-[9px] px-1.5 py-0.2 bg-amber-500/15 text-amber-500 rounded font-bold shrink-0 border border-amber-500/20">
+                                  2 mancuernas (c/u · ×2)
                                 </span>
                               )}
                               {ex.equipmentNeeded && (
@@ -1196,8 +1202,18 @@ export default function WorkoutsRoutineManager({
                               </div>
 
                               {/* Peso */}
-                              <div className="flex items-center gap-1 bg-white dark:bg-[#0f1019] px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700">
-                                <span className="text-gray-400 font-bold text-[9px] uppercase">Peso (kg)</span>
+                              <div className={`flex items-center gap-1 bg-white dark:bg-[#0f1019] px-2 py-1 rounded-lg border ${
+                                isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex)
+                                  ? "border-amber-500/30 dark:border-amber-500/30"
+                                  : "border-gray-200 dark:border-gray-700"
+                              }`}>
+                                <span className={`font-bold text-[9px] uppercase ${
+                                  isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex)
+                                    ? "text-amber-500"
+                                    : "text-gray-400"
+                                }`}>
+                                  {isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) ? "Peso c/u (kg ×2)" : "Peso (kg)"}
+                                </span>
                                 <input
                                   type="number"
                                   value={ex.weight}
@@ -1216,6 +1232,12 @@ export default function WorkoutsRoutineManager({
                                 {isTime ? "⏱️ Por Tiempo" : "🔄 Por Reps"}
                               </button>
                             </div>
+
+                            {isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) && (
+                              <p className="text-[9px] text-amber-500/90 font-medium pt-1">
+                                💡 Mancuernas: anota el peso de cada mancuerna (ej: 10 kg significa una de 10 kg en cada mano, total 20 kg).
+                              </p>
+                            )}
                           </div>
                         );
                       })}

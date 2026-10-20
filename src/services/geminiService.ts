@@ -659,7 +659,7 @@ Para CADA UNA de las ${targetDays} rutinas:
    - trackingType: "reps" para fuerza con repeticiones, "time" para ejercicios basados en tiempo (planchas, isométricos).
    - sets: número de series de trabajo (3 o 4).
    - reps: repeticiones recomendadas por serie o segundos si es time.
-   - weight: peso de inicio recomendado en kg (0 si es peso corporal).
+   - weight: peso de inicio recomendado en kg (0 si es peso corporal). ¡IMPORTANTE!: En ejercicios con mancuernas (dumbbell), el valor DEBE ser el peso de CADA mancuerna individual (ej: 10 kg significa una mancuerna de 10 kg en cada mano, total 20 kg). NUNCA dividas el peso.
    - caloriesBurnedPerSet: gasto calórico conservador por serie (3 a 8 kcal).
    - primaryMuscles: músculos principales trabajados.
    - secondaryMuscles: músculos sinergistas o secundarios.
@@ -1598,7 +1598,7 @@ Determina de forma rigurosa y científica:
 2. "trackingType": "reps" (si se entrena contando repeticiones de fuerza como sentadillas, press, dominadas), "time" (si es isométrico o por duración como planchas, paseos del granjero, sentadilla isométrica en pared, saltos de comba), o "distance" (si es de desplazamiento o carrera).
 3. "defaultSets": Número recomendado de series (típicamente 3 o 4).
 4. "defaultReps": Si trackingType es "reps", repeticiones recomendadas por serie (ej: 8, 10, 12). Si trackingType es "time", segundos recomendados de duración por serie (ej: 30, 45, 60).
-5. "defaultWeight": Peso inicial de referencia en kg (ej: 10, 20; o 0 si es calistenia/peso corporal).
+5. "defaultWeight": Peso inicial de referencia en kg (ej: 10, 20; o 0 si es calistenia/peso corporal). Si es con mancuernas, debe ser el peso de CADA mancuerna individual (ej: 10 kg significa 10 kg en cada mano, total 20 kg).
 6. "primaryMuscles": Array de músculos principales trabajados (ej: ["Pectoral mayor", "Tríceps braquial"]).
 7. "secondaryMuscles": Array de músculos sinergistas o estabilizadores (ej: ["Deltoides anterior", "Core"]).
 8. "techniqueTips": 2 o 3 indicaciones directas de técnica, alineación postural, respiración y prevención de lesiones (ej: "Retrae escápulas y apoya los pies firmes. Desciende la carga controlando la fase excéntrica sin rebotar.").

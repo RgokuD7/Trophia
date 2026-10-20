@@ -11,6 +11,7 @@ import {
   ExerciseConsultationResponse,
   ExerciseConsultationSuggestedExercise 
 } from "../services/geminiService";
+import { isDumbbellExercise, isSingleDumbbellExercise } from "../services/exerciseLibrary";
 
 export interface ExerciseAiAdvisorModalProps {
   isOpen: boolean;
@@ -224,7 +225,11 @@ export default function ExerciseAiAdvisorModal({
           <div className="flex items-center gap-1.5 text-gray-650 dark:text-gray-300 font-medium">
             <Dumbbell className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
             <span>Configuración actual: <b>{exercise.sets} series × {exercise.reps} {exercise.trackingType === "time" ? "seg" : "reps"}</b></span>
-            {exercise.weight > 0 ? <span>({exercise.weight} kg)</span> : <span>(Peso corporal)</span>}
+            {exercise.weight > 0 ? (
+              <span>({exercise.weight} kg{isDumbbellExercise(exercise) && !isSingleDumbbellExercise(exercise) ? " c/u · ×2" : ""})</span>
+            ) : (
+              <span>(Peso corporal)</span>
+            )}
           </div>
           {exercise.equipmentNeeded && (
             <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500 font-mono truncate max-w-[200px]">
@@ -294,8 +299,13 @@ export default function ExerciseAiAdvisorModal({
                             Implemento: {msg.suggestedExercise.equipmentNeeded}
                           </span>
                         </div>
-                        <span className="text-xs font-black text-emerald-500 dark:text-emerald-400 shrink-0">
-                          {msg.suggestedExercise.sets} × {msg.suggestedExercise.reps} {msg.suggestedExercise.trackingType === "time" ? "seg" : "reps"}
+                        <span className="text-xs font-black text-emerald-500 dark:text-emerald-400 shrink-0 text-right">
+                          <span>{msg.suggestedExercise.sets} × {msg.suggestedExercise.reps} {msg.suggestedExercise.trackingType === "time" ? "seg" : "reps"}</span>
+                          {msg.suggestedExercise.weight !== undefined && msg.suggestedExercise.weight > 0 ? (
+                            <span className="block text-[10px] font-normal text-emerald-400/90">
+                              {msg.suggestedExercise.weight} kg{isDumbbellExercise(msg.suggestedExercise) && !isSingleDumbbellExercise(msg.suggestedExercise) ? " c/u (×2)" : ""}
+                            </span>
+                          ) : null}
                         </span>
                       </div>
 

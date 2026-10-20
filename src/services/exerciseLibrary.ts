@@ -610,3 +610,54 @@ export async function resolveOrAnalyzeExercise(
     source: "gemini_ai",
   };
 }
+
+/**
+ * Detects if an exercise uses dumbbells (where weight represents each dumbbell, e.g. 10 kg x 2).
+ */
+export function isDumbbellExercise(exercise?: { name?: string; equipmentNeeded?: string } | null): boolean {
+  if (!exercise) return false;
+  const name = (exercise.name || "").toLowerCase();
+  const eq = (exercise.equipmentNeeded || "").toLowerCase();
+  return (
+    name.includes("mancuerna") ||
+    name.includes("dumbbell") ||
+    eq.includes("mancuerna") ||
+    eq.includes("dumbbell")
+  );
+}
+
+/**
+ * Returns whether the exercise uses a single dumbbell with both hands (e.g. Goblet squat, copa a 2 manos)
+ * vs a pair of dumbbells (bilateral, 1 in each hand: e.g. Press con mancuernas, Curls, Vuelos).
+ */
+export function isSingleDumbbellExercise(exercise?: { name?: string; equipmentNeeded?: string } | null): boolean {
+  if (!exercise) return false;
+  const name = (exercise.name || "").toLowerCase();
+  return (
+    name.includes("goblet") ||
+    name.includes("copa a dos manos") ||
+    name.includes("copa con mancuerna") ||
+    name.includes("pullover con mancuerna") ||
+    name.includes("1 mancuerna") ||
+    name.includes("una mancuerna")
+  );
+}
+
+/**
+ * Formats weight string clearly, e.g. "10 kg c/u (×2)" or "10 kg"
+ */
+export function formatExerciseWeight(
+  weight: number,
+  exercise?: { name?: string; equipmentNeeded?: string } | null,
+  options?: { compact?: boolean }
+): string {
+  if (!weight || weight <= 0) return "";
+  const isDumbbell = isDumbbellExercise(exercise) && !isSingleDumbbellExercise(exercise);
+  if (isDumbbell) {
+    if (options?.compact) {
+      return `${weight}kg ×2`;
+    }
+    return `${weight} kg c/u (×2)`;
+  }
+  return options?.compact ? `${weight}kg` : `${weight} kg`;
+}
