@@ -26,6 +26,7 @@ export interface WorkoutsOnboardingProps {
     jointPainAreas: ("knee" | "back" | "shoulder")[];
     customJointPain: string;
     workoutPreferencesNotes?: string;
+    homeEquipmentNotes?: string;
     weeklyTrainingDays: number;
   }) => void;
 }
@@ -129,6 +130,18 @@ export default function WorkoutsOnboarding({
     return PRESET_HOME_MACHINES.some(m => userProfile.equipment?.includes(m));
   });
   const [showFullGymCatalogForHome, setShowFullGymCatalogForHome] = useState(false);
+
+  // 2c. Gym default "Full Gym" master selection
+  const [isFullGymAssumed, setIsFullGymAssumed] = useState<boolean>(() => {
+    if (!userProfile.equipment || userProfile.equipment.length === 0) return true;
+    return PRESET_GYM_EQUIPMENT.some(eq => userProfile.equipment.includes(eq));
+  });
+  const [showCustomGymSelection, setShowCustomGymSelection] = useState<boolean>(false);
+
+  // 2d. Home equipment specific notes (dumbbell max weight caps, pulley accessories, cardio machine resistance)
+  const [homeEquipmentNotes, setHomeEquipmentNotes] = useState<string>(
+    userProfile.homeEquipmentNotes || ""
+  );
 
   // 3. Training Level & Days
   const [trainingLevel, setTrainingLevel] = useState<ExperienceLevel>(userProfile.level || "intermediate");
@@ -252,7 +265,12 @@ export default function WorkoutsOnboarding({
   // Finish onboarding
   const handleFinish = () => {
     const primaryEnv = selectedEnvironments[0] || "gym";
-    const finalEquipment = selectedEquipment.length > 0 ? selectedEquipment : [PRESET_BODYWEIGHT];
+    let finalEquipment = selectedEquipment.length > 0 ? selectedEquipment : [PRESET_BODYWEIGHT];
+
+    // If full commercial gym is assumed, merge full gym catalog
+    if (selectedEnvironments.includes("gym") && isFullGymAssumed) {
+      finalEquipment = Array.from(new Set([...finalEquipment, ...PRESET_GYM_EQUIPMENT]));
+    }
 
     onComplete({
       environment: primaryEnv,
@@ -263,6 +281,7 @@ export default function WorkoutsOnboarding({
       jointPainAreas: selectedJointPain,
       customJointPain: customJointPainText.trim(),
       workoutPreferencesNotes: workoutPreferencesNotes.trim(),
+      homeEquipmentNotes: homeEquipmentNotes.trim(),
       weeklyTrainingDays: weeklyDays
     });
   };
@@ -544,30 +563,139 @@ export default function WorkoutsOnboarding({
                     <h3 className="text-xs font-black text-emerald-400 uppercase tracking-wider">
                       {cat.category}
                     </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {cat.items.map((eq) => {
-                        const isSelected = selectedEquipment.includes(eq);
-                        return (
-                          <button
-                            key={eq}
-                            type="button"
-                            onClick={() => handleToggleEquipment(eq)}
-                            className={`p-3 rounded-2xl border text-left flex items-center justify-between transition cursor-pointer ${
-                              isSelected
-                                ? "bg-emerald-500/15 border-emerald-500 text-white font-bold shadow-sm"
-                                : "bg-white/[0.02] border-white/5 text-white/70 hover:bg-white/[0.04]"
-                            }`}
-                          >
-                            <span className="text-xs truncate pr-2">{eq}</span>
-                            <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
-                              isSelected ? "border-emerald-400 bg-emerald-500 text-black" : "border-white/20"
-                            }`}>
-                              {isSelected && <Check className="h-2.5 w-2.5 stroke-[3]" />}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
+
+                    {/* Master option for Gym */}
+                    {cat.id === "gym" ? (
+                      <div className="space-y-3">
+                        <div className={`p-4 rounded-3xl border transition-all ${
+                          isFullGymAssumed
+                            ? "bg-emerald-500/15 border-emerald-500 text-white shadow-lg shadow-emerald-500/10"
+                            : "bg-white/[0.02] border-white/10 text-white/70 hover:bg-white/[0.04]"
+                        }`}>
+                          <div className="flex items-start justify-between gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setIsFullGymAssumed(prev => !prev)}
+                              className="flex-1 text-left flex items-start gap-3 cursor-pointer bg-transparent border-none"
+                            >
+                              <span className="text-2xl shrink-0 mt-0.5">🏢</span>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="text-xs font-black text-white">
+                                    Gimnasio comercial completo (Todas las máquinas y pesos)
+                                  </h4>
+                                  <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500 text-black font-black">
+                                    Por defecto
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-white/60 mt-1 leading-relaxed">
+                                  La IA formulará tu plan asumiendo acceso a un gimnasio convencional completo (jaulas de sentadillas, poleas dobles ajustables, mancuernas de todos los pesos y máquinas guiadas). Una vez creada tu rutina, podrás cambiar cualquier ejercicio fácilmente con la IA si a tu gimnasio le falta alguna máquina o prefieres otra opción.
+                                </p>
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setIsFullGymAssumed(prev => !prev)}
+                              className={`w-6 h-6 rounded-xl border flex items-center justify-center shrink-0 cursor-pointer mt-1 ${
+                                isFullGymAssumed ? "border-emerald-400 bg-emerald-500 text-black" : "border-white/20 bg-white/5"
+                              }`}
+                            >
+                              {isFullGymAssumed && <Check className="h-3.5 w-3.5 stroke-[3]" />}
+                            </button>
+                          </div>
+
+                          <div className="pt-2.5 border-t border-white/5 mt-2.5 flex items-center justify-between">
+                            <span className="text-[10px] text-white/40">
+                              {isFullGymAssumed ? "Todas las máquinas activas para la IA" : "Selección manual activada"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowCustomGymSelection(prev => !prev)}
+                              className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 cursor-pointer bg-transparent border-none"
+                            >
+                              <span>{showCustomGymSelection ? "Ocultar lista de máquinas" : "Personalizar o desmarcar máquinas"}</span>
+                              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showCustomGymSelection ? "rotate-180" : ""}`} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Individual gym machines grid */}
+                        <AnimatePresence>
+                          {(showCustomGymSelection || !isFullGymAssumed) && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="overflow-hidden space-y-2 pt-1"
+                            >
+                              <div className="flex items-center justify-between px-1">
+                                <span className="text-[10px] font-mono text-white/50 uppercase font-bold">
+                                  Máquinas y equipos individuales
+                                </span>
+                                <span className="text-[9px] text-white/40">Marca o desmarca lo que uses</span>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {cat.items.map((eq) => {
+                                  const isSelected = isFullGymAssumed || selectedEquipment.includes(eq);
+                                  return (
+                                    <button
+                                      key={eq}
+                                      type="button"
+                                      onClick={() => {
+                                        if (isFullGymAssumed) {
+                                          setIsFullGymAssumed(false);
+                                          setSelectedEquipment(PRESET_GYM_EQUIPMENT.filter(x => x !== eq));
+                                        } else {
+                                          handleToggleEquipment(eq);
+                                        }
+                                      }}
+                                      className={`p-3 rounded-2xl border text-left flex items-center justify-between transition cursor-pointer ${
+                                        isSelected
+                                          ? "bg-emerald-500/15 border-emerald-500 text-white font-bold shadow-sm"
+                                          : "bg-white/[0.02] border-white/5 text-white/70 hover:bg-white/[0.04]"
+                                      }`}
+                                    >
+                                      <span className="text-xs truncate pr-2">{eq}</span>
+                                      <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
+                                        isSelected ? "border-emerald-400 bg-emerald-500 text-black" : "border-white/20"
+                                      }`}>
+                                        {isSelected && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    ) : (
+                      /* Standard non-gym categories (Home, Outdoor) */
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {cat.items.map((eq) => {
+                          const isSelected = selectedEquipment.includes(eq);
+                          return (
+                            <button
+                              key={eq}
+                              type="button"
+                              onClick={() => handleToggleEquipment(eq)}
+                              className={`p-3 rounded-2xl border text-left flex items-center justify-between transition cursor-pointer ${
+                                isSelected
+                                  ? "bg-emerald-500/15 border-emerald-500 text-white font-bold shadow-sm"
+                                  : "bg-white/[0.02] border-white/5 text-white/70 hover:bg-white/[0.04]"
+                              }`}
+                            >
+                              <span className="text-xs truncate pr-2">{eq}</span>
+                              <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
+                                isSelected ? "border-emerald-400 bg-emerald-500 text-black" : "border-white/20"
+                              }`}>
+                                {isSelected && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     {/* Dedicated "Elegir máquinas en casa" Button and Panel */}
                     {cat.isHome && (
@@ -689,6 +817,72 @@ export default function WorkoutsOnboarding({
                             </motion.div>
                           )}
                         </AnimatePresence>
+
+                        {/* Particularidades y detalles del equipo en casa */}
+                        <div className="p-4 rounded-3xl bg-white/[0.03] border border-white/10 space-y-2.5 mt-2">
+                          <label className="text-xs font-black text-white flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <span>🏠</span>
+                              <span>Detalles o límites de tu equipo en casa</span>
+                            </span>
+                            <span className="text-[9px] text-white/40 font-mono">Opcional</span>
+                          </label>
+
+                          <p className="text-[11px] text-white/50 leading-relaxed">
+                            Describe si tus mancuernas tienen límite de peso, accesorios de tu polea (cuerda en V, barra corta) o estado de máquinas de cardio. La IA calibrará los ejercicios y cargas para adaptarse con exactitud a tu espacio.
+                          </p>
+
+                          {/* Chips sugerencias rápidas */}
+                          <div className="flex flex-wrap gap-1.5 pt-0.5">
+                            {[
+                              "🏋️ Mancuernas hasta 10 kg por lado",
+                              "🔗 Polea fija con cuerda en V y barra corta",
+                              "🚴 Elíptica con resistencia moderada",
+                              "🧱 Mancuernas ligeras y mat"
+                            ].map((chip) => (
+                              <button
+                                key={chip}
+                                type="button"
+                                onClick={() => {
+                                  const clean = chip.replace(/^[^\s]+\s/, "");
+                                  setHomeEquipmentNotes(prev => {
+                                    const trimmed = prev.trim();
+                                    if (!trimmed) return clean;
+                                    if (trimmed.includes(clean)) return trimmed;
+                                    return `${trimmed}. ${clean}`;
+                                  });
+                                }}
+                                className="text-[10px] px-2.5 py-1 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-white/70 hover:text-emerald-300 border border-white/5 hover:border-emerald-500/30 transition cursor-pointer font-bold"
+                              >
+                                {chip}
+                              </button>
+                            ))}
+                          </div>
+
+                          <textarea
+                            value={homeEquipmentNotes}
+                            onChange={(e) => setHomeEquipmentNotes(e.target.value)}
+                            rows={2}
+                            placeholder="Ej: Tengo una elíptica que solo funciona con resistencia moderada, mancuernas de hasta 10 kg cada una, y una polea fija con cuerda en V y barra corta para tríceps..."
+                            className="w-full px-3.5 py-2.5 rounded-2xl bg-black/40 border border-white/10 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-emerald-500 transition resize-none leading-relaxed"
+                          />
+
+                          {homeEquipmentNotes.trim() && (
+                            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-300 font-medium flex items-center justify-between gap-2">
+                              <span className="flex items-center gap-1.5">
+                                <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                <span>La IA respetará estos topes de peso y accesorios al diseñar tu rutina.</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setHomeEquipmentNotes("")}
+                                className="text-[10px] text-white/40 hover:text-rose-400 underline cursor-pointer"
+                              >
+                                Borrar
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1115,23 +1309,23 @@ export default function WorkoutsOnboarding({
                 <label className="text-xs font-black text-white flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
                     <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
-                    <span>Deportes semanales o preferencias especiales para tu rutina</span>
+                    <span>Deportes semanales o preferencias de días y horario</span>
                   </span>
                   <span className="text-[9px] text-white/40 font-mono">Opcional</span>
                 </label>
 
                 <p className="text-[11px] text-white/50 leading-relaxed">
-                  ¿Juegas fútbol u otros deportes ciertos días? ¿Prefieres poleas en vez de mancuernas para tríceps? Cuéntaselo al sistema para que programe tus días inteligentes (ej: alejar pierna de los días de fútbol) y adapte los ejercicios a tu gusto.
+                  ¿Practicas fútbol, corres u otros deportes en días fijos? ¿Tienes preferencias de días o duración? Cuéntaselo al sistema para que programe tus días inteligentes (ej: alejar pierna de los días de partido o cardio) y distribuya el descanso adecuadamente.
                 </p>
 
                 {/* Quick suggestions chips */}
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {[
-                    "⚽ Juego fútbol los domingos y jueves (alejar piernas)",
-                    "🔗 Prefiero poleas y cables para tríceps",
-                    "🚫 Evitar ejercicios con saltos o burpees",
-                    "⏱️ Sesiones dinámicas de 45 minutos",
-                    "🦾 Priorizar estímulo de torso y brazos"
+                    "⚽ Fútbol / deportes en fin de semana (alejar pierna)",
+                    "🏃 Running o cardio en días fijos",
+                    "🛡️ Evitar ejercicios de alto impacto o saltos",
+                    "⏱️ Sesiones enfocadas de 40 a 50 minutos",
+                    "🎯 Mayor volumen en torso y tren superior"
                   ].map((chip) => (
                     <button
                       key={chip}
@@ -1156,7 +1350,7 @@ export default function WorkoutsOnboarding({
                   value={workoutPreferencesNotes}
                   onChange={(e) => setWorkoutPreferencesNotes(e.target.value)}
                   rows={3}
-                  placeholder="Ej: Juego a la pelota los domingos y a veces los jueves, por favor programa pierna a principios de semana para no sobrecargarme. Además, tengo polea y prefiero hacer tríceps en polea en lugar de mancuernas..."
+                  placeholder="Ej: Suelo jugar fútbol los fines de semana (domingos), por lo que prefiero no entrenar piernas viernes ni sábados para no llegar fatigado. Prefiero enfocarme en torso lunes y miércoles..."
                   className="w-full px-3.5 py-2.5 rounded-2xl bg-black/40 border border-white/10 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-emerald-500 transition resize-none leading-relaxed"
                 />
 
@@ -1259,6 +1453,29 @@ export default function WorkoutsOnboarding({
                         "{customJointPainText.trim()}"
                       </p>
                     )}
+                  </div>
+                )}
+
+                {selectedEnvironments.includes("gym") && isFullGymAssumed && (
+                  <div className="pt-3 border-t border-white/5">
+                    <span className="text-[10px] text-emerald-400 uppercase font-mono font-bold block mb-1">
+                      Equipamiento de Gimnasio
+                    </span>
+                    <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-300 font-bold flex items-center gap-2">
+                      <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                      <span>Gimnasio comercial completo (todas las máquinas, poleas y pesos asumidos por defecto)</span>
+                    </div>
+                  </div>
+                )}
+
+                {homeEquipmentNotes.trim() && (
+                  <div className="pt-3 border-t border-white/5">
+                    <span className="text-[10px] text-emerald-400 uppercase font-mono font-bold block mb-1">
+                      Detalles de Equipamiento en Casa
+                    </span>
+                    <p className="text-[11px] text-white/80 italic bg-black/30 p-2.5 rounded-xl border border-white/5 leading-relaxed">
+                      "{homeEquipmentNotes.trim()}"
+                    </p>
                   </div>
                 )}
 

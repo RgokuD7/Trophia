@@ -111,7 +111,8 @@ export default function ExerciseAiAdvisorModal({
           routineName: routineName || "Tu rutina de entrenamiento",
           userMessage: raw,
           equipmentList,
-          level: userProfile.level || "intermediate"
+          level: userProfile.level || "intermediate",
+          homeEquipmentNotes: userProfile.homeEquipmentNotes
         }
       );
 

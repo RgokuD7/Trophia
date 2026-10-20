@@ -568,6 +568,7 @@ export async function generateRoutineByIA(
     requiresMedicalClearance?: boolean;
     weeklyTrainingDays?: number;
     userNotesOrPreferences?: string;
+    homeEquipmentNotes?: string;
   }
 ): Promise<WeeklyRoutinePlan> {
   const { 
@@ -580,7 +581,8 @@ export async function generateRoutineByIA(
     customJointPain,
     requiresMedicalClearance,
     weeklyTrainingDays = 4,
-    userNotesOrPreferences
+    userNotesOrPreferences,
+    homeEquipmentNotes
   } = input;
 
   const targetDays = Math.min(6, Math.max(2, weeklyTrainingDays));
@@ -610,11 +612,22 @@ export async function generateRoutineByIA(
   if (userNotesOrPreferences && userNotesOrPreferences.trim()) {
     safetyInstructions += `\n- ¡PREFERENCIAS, DEPORTES SEMANALES Y DIRECTIVAS ESPECÍFICAS INDICADAS POR EL USUARIO!: "${userNotesOrPreferences.trim()}".
 CRÍTICO Y MÁXIMA PRIORIDAD:
-* Si el usuario indica que practica otros deportes en días determinados (por ejemplo: "juego a la pelota / fútbol los domingos y/o jueves"): NUNCA asignes el día de Piernas en esos días ni justo el día anterior o posterior para no causarle sobrecarga. Por ejemplo, sitúa la rutina de Piernas los lunes o martes.
-* Si el usuario manifiesta preferencia por ciertos tipos de equipamiento o ejercicios (por ejemplo: "tengo polea y prefiero hacer tríceps en polea en lugar de mancuernas"), prioriza rigurosamente ejercicios con ese equipamiento solicitado.
+* Si el usuario indica que practica otros deportes en días determinados (por ejemplo fútbol o running en fin de semana): NUNCA asignes el día de Piernas en esos días ni justo el día anterior o posterior para no causarle sobrecarga. Por ejemplo, sitúa la rutina de Piernas los lunes o martes.
+* Si el usuario manifiesta preferencia por ciertos tipos de equipamiento o ejercicios, prioriza rigurosamente ejercicios con ese equipamiento solicitado.
 * Si el usuario pide evitar o prescindir de algún ejercicio específico, respétalo absolutamente.
 * Adapta los días sugeridos de cada rutina (suggestedDay) y la selección de ejercicios respetando estas indicaciones.`;
   }
+
+  if (homeEquipmentNotes && homeEquipmentNotes.trim()) {
+    safetyInstructions += `\n- ¡PARTICULARIDADES Y LÍMITES DE EQUIPAMIENTO EN CASA!: "${homeEquipmentNotes.trim()}".
+CRÍTICO: Adapta las prescripciones y los pesos sugeridos estrictamente a estas especificaciones domésticas:
+* Si el usuario tiene mancuernas con tope de peso (ej: hasta 10 kg), NO formules pesos superiores a ese tope; si requiere mayor sobrecarga, incrementa las repeticiones o pauta variantes unilaterales (ej: sentadillas búlgaras, zancadas o tempo lento).
+* Si tiene polea casera o fija con accesorios puntuales (ej: cuerda en V o barra corta), formula ejercicios que exploten esos accesorios (ej: extensiones de tríceps en polea con cuerda).
+* Si alguna máquina de cardio tiene resistencia moderada o estado particular, programa el esfuerzo acorde a su capacidad real.`;
+  }
+
+  // Regla biomecánica obligatoria de élite
+  safetyInstructions += `\n- ¡REGLA BIOMECÁNICA DE ORO!: Si en el equipamiento disponible existen poleas o cables (por ejemplo en gimnasio o polea en casa), PRIORIZA POR DEFECTO ejercicios en polea para aislamiento de tríceps (ej: Extensiones de tríceps en polea alta con cuerda o barra), cruces de poleas para pectoral y elevaciones laterales en polea frente a mancuernas, dado que el cable garantiza tensión mecánica continua en la fase acortada donde las mancuernas pierden curva de resistencia.`;
 
   const envText = environments && environments.length > 0
     ? environments.map(e => e === "gym" ? "Gimnasio" : e === "home" ? "Casa" : "Aire libre / Calistenia").join(" y ")
@@ -1042,9 +1055,14 @@ export async function consultAndAdjustExerciseByIA(
     userMessage: string;
     equipmentList: string[];
     level: ExperienceLevel;
+    homeEquipmentNotes?: string;
   }
 ): Promise<ExerciseConsultationResponse> {
-  const { currentExercise, routineName, userMessage, equipmentList, level } = input;
+  const { currentExercise, routineName, userMessage, equipmentList, level, homeEquipmentNotes } = input;
+
+  const homeNotesContext = homeEquipmentNotes && homeEquipmentNotes.trim()
+    ? `\n- Particularidades de equipamiento en casa del usuario: "${homeEquipmentNotes.trim()}" (Toma en cuenta límites de peso de mancuernas, accesorios de polea o estado de máquinas al sugerir cargas y ejercicios).`
+    : "";
 
   const prompt = `Actúas como un Entrenador Deportivo de Élite, Fisiólogo y Biomecánico de la app Trophia.
 El usuario está analizando un ejercicio de su plan de entrenamiento y te ha escrito una consulta o solicitud de cambio en lenguaje natural.
@@ -1059,7 +1077,7 @@ El usuario está analizando un ejercicio de su plan de entrenamiento y te ha esc
 
 [PERFIL DEL USUARIO]:
 - Nivel de entrenamiento: ${level}
-- Equipamiento disponible: ${equipmentList.length > 0 ? equipmentList.join(", ") : "Peso corporal (sin equipamiento)"}
+- Equipamiento disponible: ${equipmentList.length > 0 ? equipmentList.join(", ") : "Peso corporal (sin equipamiento)"}${homeNotesContext}
 
 [MENSAJE O CONSULTA DEL USUARIO]:
 "${userMessage}"

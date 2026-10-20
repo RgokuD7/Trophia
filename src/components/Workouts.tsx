@@ -443,6 +443,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     jointPainAreas: ("knee" | "back" | "shoulder")[];
     customJointPain: string;
     workoutPreferencesNotes?: string;
+    homeEquipmentNotes?: string;
     weeklyTrainingDays: number;
   }) => {
     const updatedProfile: UserProfile = {
@@ -455,6 +456,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
       jointPainAreas: data.jointPainAreas,
       customJointPain: data.customJointPain,
       workoutPreferencesNotes: data.workoutPreferencesNotes,
+      homeEquipmentNotes: data.homeEquipmentNotes,
       weeklyTrainingDays: data.weeklyTrainingDays,
       isWorkoutsOnboardingCompleted: true
     };
@@ -477,6 +479,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
         jointPainAreas: updatedProfile.jointPainAreas,
         customJointPain: updatedProfile.customJointPain,
         userNotesOrPreferences: updatedProfile.workoutPreferencesNotes,
+        homeEquipmentNotes: updatedProfile.homeEquipmentNotes,
         requiresMedicalClearance: updatedProfile.requiresMedicalClearance,
         weeklyTrainingDays: updatedProfile.weeklyTrainingDays
       });
@@ -648,6 +651,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
         jointPainAreas: userProfile.jointPainAreas,
         customJointPain: userProfile.customJointPain,
         userNotesOrPreferences: userProfile.workoutPreferencesNotes,
+        homeEquipmentNotes: userProfile.homeEquipmentNotes,
         requiresMedicalClearance: userProfile.requiresMedicalClearance,
         weeklyTrainingDays: userProfile.weeklyTrainingDays
       });
@@ -683,6 +687,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
         jointPainAreas: userProfile.jointPainAreas,
         customJointPain: userProfile.customJointPain,
         userNotesOrPreferences: userProfile.workoutPreferencesNotes,
+        homeEquipmentNotes: userProfile.homeEquipmentNotes,
         requiresMedicalClearance: userProfile.requiresMedicalClearance,
         weeklyTrainingDays: userProfile.weeklyTrainingDays
       });

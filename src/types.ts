@@ -62,6 +62,7 @@ export interface UserProfile {
   jointPainAreas?: ("knee" | "back" | "shoulder")[];
   customJointPain?: string;
   workoutPreferencesNotes?: string;
+  homeEquipmentNotes?: string;
   customEquipment?: string[];
   isWorkoutsOnboardingCompleted?: boolean;
   weeklyRoutinePlan?: WeeklyRoutinePlan;

@@ -611,22 +611,47 @@ export default function WorkoutsRoutineManager({
         </div>
 
         {/* User Preferences & Directives Banner */}
-        {userProfile?.workoutPreferencesNotes && (
-          <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5 flex items-start justify-between gap-3">
-            <div className="flex items-start gap-2 min-w-0">
-              <Sparkles className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
-              <div className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">
-                <span className="font-bold text-gray-900 dark:text-white">Tus directivas para el plan: </span>
-                <span className="italic">"{userProfile.workoutPreferencesNotes}"</span>
+        {(userProfile?.workoutPreferencesNotes || userProfile?.homeEquipmentNotes) && (
+          <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5 space-y-2">
+            {userProfile?.workoutPreferencesNotes && (
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2 min-w-0">
+                  <Sparkles className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">
+                    <span className="font-bold text-gray-900 dark:text-white">Directivas para tu plan: </span>
+                    <span className="italic">"{userProfile.workoutPreferencesNotes}"</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onOpenPreferences}
+                  className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold underline shrink-0 cursor-pointer"
+                >
+                  Modificar
+                </button>
               </div>
-            </div>
-            <button
-              type="button"
-              onClick={onOpenPreferences}
-              className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold underline shrink-0 cursor-pointer"
-            >
-              Modificar
-            </button>
+            )}
+
+            {userProfile?.homeEquipmentNotes && (
+              <div className="flex items-start justify-between gap-3 pt-2 border-t border-gray-100 dark:border-white/5">
+                <div className="flex items-start gap-2 min-w-0">
+                  <span className="text-sm shrink-0">🏠</span>
+                  <div className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">
+                    <span className="font-bold text-gray-900 dark:text-white">Equipo en casa calibrado: </span>
+                    <span className="italic">"{userProfile.homeEquipmentNotes}"</span>
+                  </div>
+                </div>
+                {!userProfile.workoutPreferencesNotes && (
+                  <button
+                    type="button"
+                    onClick={onOpenPreferences}
+                    className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold underline shrink-0 cursor-pointer"
+                  >
+                    Modificar
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
