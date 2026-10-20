@@ -1455,6 +1455,15 @@ export interface SmartFoodSuggestion {
   prepTip?: string;
   ingredients?: string[];
   category?: "desayuno" | "almuerzo" | "snack" | "cena" | "cualquiera";
+  pantryIngredientsUsed?: string[];
+  recommendedPurchases?: string[];
+  is100PercentPantry?: boolean;
+}
+
+export interface SmartSuggestionsResult {
+  pantryNotice?: string;
+  pantryStatus: "empty" | "low" | "good";
+  suggestions: SmartFoodSuggestion[];
 }
 
 export async function getSmartFoodSuggestionsByIA(
@@ -1463,46 +1472,99 @@ export async function getSmartFoodSuggestionsByIA(
   cRemaining: number,
   fRemaining: number,
   kcalRemaining: number,
-  goal: string
-): Promise<SmartFoodSuggestion[]> {
-  const prompt = `Actúas como un Nutriólogo Deportivo experto de la aplicación Trophia. El usuario tiene los siguientes macronutrientes y calorías restantes por consumir HOY:
+  goal: string,
+  pantryItems: string[] = [],
+  strictPantryOnly = false
+): Promise<SmartSuggestionsResult> {
+  const pantryList = pantryItems.filter(p => p && p.trim() !== "");
+  const pantryCount = pantryList.length;
+
+  let pantryDirective = "";
+  if (strictPantryOnly) {
+    pantryDirective = `
+REGLA CRÍTICA - MODO ESTRICTO DE DESPENSA ACTIVADO:
+El usuario ha indicado: "Solo puedo acceder a lo que hay en mi despensa, no puedo comprar nada".
+Ingredientes disponibles en su despensa: ${pantryCount > 0 ? pantryList.join(", ") : "Ninguno registrado actualmente"}.
+Debes crear 3 opciones deliciosas utilizando ÚNICA Y EXCLUSIVAMENTE los ingredientes de su despensa (puedes asumir agua, sal y condimentos básicos de cocina).
+- "is100PercentPantry": true en todas las opciones sugeridas.
+- "pantryIngredientsUsed": los ingredientes de la despensa utilizados.
+- "recommendedPurchases": [] (array vacío, está prohibido pedir ingredientes adicionales).
+`;
+  } else {
+    pantryDirective = `
+PRIORIDAD ABSOLUTA A LA DESPENSA DEL USUARIO:
+Ingredientes en la despensa del usuario: ${pantryCount > 0 ? pantryList.join(", ") : "Ninguno registrado actualmente"}.
+Instrucciones sobre la despensa:
+1. SIEMPRE debes priorizar armar comidas utilizando los ingredientes que el usuario ya tiene en su despensa.
+2. Si la despensa tiene muy pocos ingredientes (ej: solo 1, 2 o 3 ingredientes como pollo y huevo), o está vacía:
+   - En "pantryNotice", incluye un mensaje amable, transparente y directo en español explicando que tiene pocos alimentos en su despensa (${pantryList.join(', ')}), recomendándole actualizarla o bien indicándole qué comprar para complementarla.
+   - En cada sugerencia, especifica en "pantryIngredientsUsed" cuáles ingredientes toma de su despensa y en "recommendedPurchases" qué 1 o 2 ingredientes le recomiendas comprar en el supermercado/almacén para armar un plato más completo o balanceado.
+   - Si una opción logra hacerse solo con lo que tiene en su despensa, marca "is100PercentPantry": true y deja "recommendedPurchases": [].
+3. Si la despensa tiene suficientes ingredientes:
+   - "pantryNotice": "Aprovechando los ingredientes de tu despensa (${pantryList.slice(0, 4).join(', ')}):"
+   - Prioriza opciones 100% con su despensa. Si recomiendas algo extra para enriquecer el plato, indícalo en "recommendedPurchases".
+`;
+  }
+
+  const prompt = `Actúas como un Nutriólogo Deportivo y Chef Experto de Trophia.
+El usuario tiene los siguientes requerimientos nutricionales pendientes por consumir HOY:
 - Calorías restantes: ${Math.round(kcalRemaining)} kcal
 - Proteína restante: ${Math.round(pRemaining)}g
 - Carbohidratos restantes: ${Math.round(cRemaining)}g
 - Grasas restantes: ${Math.round(fRemaining)}g
-- Meta fitness: ${goal === "lose_weight" ? "Definición / Pérdida de peso" : "Volumen / Ganancia de masa muscular"}
+- Meta fitness: ${goal === "lose_weight" ? "Definición / Pérdida de peso" : "Volumen / Masa muscular"}
 
-Sugiere exactamente 3 opciones de alimentos o snacks reales, sabrosos y saludables que se ajusten de forma óptima a estos requerimientos pendientes de hoy.
+${pantryDirective}
 
-Para cada opción proporciona:
-1. "name": Nombre descriptivo y apetecible del plato o snack (sin cortar, ej: "Bowl de yogur griego con arándanos y nueces").
-2. "calories": Calorías totales estimadas en kcal (número entero).
-3. "protein": Gramos de proteína (número con 1 decimal o entero).
-4. "carbs": Gramos de carbohidratos (número con 1 decimal o entero).
-5. "fat": Gramos de grasa (número con 1 decimal o entero).
-6. "servingSize": Porción sugerida detallada (ej: "1 bowl (200g yogur + 40g arándanos)").
-7. "reason": Explicación corta y motivadora de por qué encaja con sus macros restantes.
-8. "prepTip": Consejo o método de preparación rápida en 1 o 2 frases.
-9. "ingredients": Lista de 2 a 4 ingredientes clave con sus cantidades estimadas (ej: ["200g yogur griego", "40g arándanos", "15g nueces"]).
-10. "category": "snack" | "desayuno" | "almuerzo" | "cena" | "cualquiera"
+Genera exactamente 3 opciones de comidas o snacks reales, sabrosas y saludables.
+Responde estrictamente en formato JSON con la siguiente estructura de objeto:
+{
+  "pantryNotice": "Mensaje sobre el estado de su despensa o sugerencia de compra/actualización",
+  "pantryStatus": "${pantryCount === 0 ? "empty" : pantryCount <= 3 ? "low" : "good"}",
+  "suggestions": [
+    {
+      "name": "Nombre apetecible y descriptivo del plato",
+      "calories": 310,
+      "protein": 38.0,
+      "carbs": 12.0,
+      "fat": 10.0,
+      "servingSize": "1 plato (ej: 150g pollo + 2 huevos)",
+      "reason": "Explicación breve de por qué encaja con sus macros y aprovecha su despensa",
+      "prepTip": "Método de preparación rápida en 1 o 2 frases",
+      "ingredients": ["150g Pechuga de pollo", "2 Huevos enteros"],
+      "category": "almuerzo",
+      "pantryIngredientsUsed": ["Pechuga de pollo", "Huevo"],
+      "recommendedPurchases": [],
+      "is100PercentPantry": true
+    }
+  ]
+}`;
 
-Responde estrictamente en formato JSON con la siguiente estructura de array:
-[
-  {
-    "name": "Nombre completo del plato o snack",
-    "calories": 260,
-    "protein": 22,
-    "carbs": 18,
-    "fat": 5,
-    "servingSize": "1 bowl mediano (250g)",
-    "reason": "Excelente aporte proteico con carbohidratos de bajo índice glucémico y mínimas grasas.",
-    "prepTip": "Vierte el yogur en un recipiente, agrega los arándanos frescos y añade los frutos secos por encima.",
-    "ingredients": ["200g Yogur griego natural 0%", "40g Arándanos frescos", "15g Nueces picadas"],
-    "category": "snack"
+  const raw = await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.5-flash", tier: "flash" });
+
+  if (raw && typeof raw === "object") {
+    if (Array.isArray(raw.suggestions)) {
+      return {
+        pantryNotice: raw.pantryNotice || undefined,
+        pantryStatus: raw.pantryStatus || (pantryCount === 0 ? "empty" : pantryCount <= 3 ? "low" : "good"),
+        suggestions: raw.suggestions
+      };
+    } else if (Array.isArray(raw)) {
+      // Direct array fallback
+      return {
+        pantryNotice: pantryCount <= 3 
+          ? `Tienes ${pantryCount === 0 ? "la despensa vacía" : `pocos ingredientes (${pantryList.join(", ")})`}. Te recomendamos actualizarla o complementar con compras.` 
+          : undefined,
+        pantryStatus: pantryCount === 0 ? "empty" : pantryCount <= 3 ? "low" : "good",
+        suggestions: raw
+      };
+    }
   }
-]`;
 
-  return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.5-flash", tier: "flash" });
+  return {
+    pantryStatus: "good",
+    suggestions: []
+  };
 }
 
 // 13. Nutritional consultation with Trophia IA Nutri-Coach

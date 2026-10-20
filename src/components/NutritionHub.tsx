@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   Plus, BookOpen, Star, Calendar, ShoppingCart, Lock, ArrowLeft, Trash2, Check, X, 
   ChefHat, Flame, Zap, ChevronLeft, ChevronRight, MessageSquare, Lightbulb, Sparkles, AlertCircle, Send, Utensils, Package, Pencil,
-  Users, Copy, LogOut, CheckCheck
+  Users, Copy, LogOut, CheckCheck, CheckCircle2
 } from "lucide-react";
 import { UserProfile, LoggedMeal, MealType, CustomFood, HouseholdGroup, PantryItem } from "../types";
 import { 
@@ -13,7 +13,7 @@ import {
 import { getLocalDateString, isSameDay, formatFriendlyDate, createTimestampForDate } from "../utils/fitnessUtils";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
-import { getSmartFoodSuggestionsByIA, askNutriCoachIA, SmartFoodSuggestion } from "../services/geminiService";
+import { getSmartFoodSuggestionsByIA, askNutriCoachIA, SmartFoodSuggestion, SmartSuggestionsResult } from "../services/geminiService";
 import MealBuilderModal from "./MealBuilderModal";
 
 interface NutritionHubProps {
@@ -347,6 +347,9 @@ export default function NutritionHub({
   const [detailMealType, setDetailMealType] = useState<MealType>("snack");
   const [isSavingCustomFood, setIsSavingCustomFood] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const [strictPantryOnly, setStrictPantryOnly] = useState(false);
+  const [pantryNotice, setPantryNotice] = useState<string | null>(null);
+  const [pantryStatus, setPantryStatus] = useState<"empty" | "low" | "good">("good");
 
 
   // Calorie bank state
@@ -490,12 +493,18 @@ export default function NutritionHub({
   }, [selectedDate, pRemaining, cRemaining, fRemaining, userId]);
 
   const handleGetSuggestions = async (forceRefresh = false) => {
-    const key = `trophia_suggestion_${userId}_${selectedDate}_${Math.round(pRemaining)}_${Math.round(cRemaining)}_${Math.round(fRemaining)}`;
+    const currentPantry = household ? household.pantry : (profile.pantry || []);
+    const pantryNames = currentPantry.map(i => i.name);
+    const key = `trophia_sug_${userId}_${selectedDate}_${strictPantryOnly}_${pantryNames.length}_${Math.round(pRemaining)}_${Math.round(cRemaining)}_${Math.round(fRemaining)}`;
+
     if (!forceRefresh) {
       const cached = localStorage.getItem(key);
       if (cached) {
         try {
-          setFoodSuggestions(JSON.parse(cached));
+          const parsed: SmartSuggestionsResult = JSON.parse(cached);
+          setFoodSuggestions(parsed.suggestions || []);
+          setPantryNotice(parsed.pantryNotice || null);
+          setPantryStatus(parsed.pantryStatus || "good");
           setSuggestionsError(null);
           return;
         } catch (err) {
@@ -514,9 +523,13 @@ export default function NutritionHub({
         cRemaining,
         fRemaining,
         kcalRemaining,
-        profile.goal || "lose_weight"
+        profile.goal || "lose_weight",
+        pantryNames,
+        strictPantryOnly
       );
-      setFoodSuggestions(result);
+      setFoodSuggestions(result.suggestions || []);
+      setPantryNotice(result.pantryNotice || null);
+      setPantryStatus(result.pantryStatus || "good");
       localStorage.setItem(key, JSON.stringify(result));
     } catch (err: any) {
       console.error(err);
@@ -1321,13 +1334,78 @@ export default function NutritionHub({
             </span>
           </div>
 
+          {/* Pantry Mode Toggle & Status */}
+          <div className="flex items-center justify-between gap-2 p-2.5 bg-black/40 rounded-2xl border border-white/5">
+            <div className="flex items-center gap-2 pl-1 min-w-0">
+              <Package className="h-4 w-4 text-emerald-400 shrink-0" />
+              <div className="min-w-0">
+                <span className="text-[10px] font-bold text-white block truncate">
+                  {strictPantryOnly ? "Modo Estricto: Solo Despensa" : "Priorizar Despensa + Compras"}
+                </span>
+                <span className="text-[8.5px] text-white/40 block font-mono truncate">
+                  {(household ? household.pantry : (profile.pantry || [])).length} alimentos en tu despensa
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const nextVal = !strictPantryOnly;
+                setStrictPantryOnly(nextVal);
+                if (foodSuggestions.length > 0) {
+                  // Invalidate current so user re-generates in the new mode
+                  setFoodSuggestions([]);
+                  setPantryNotice(null);
+                }
+              }}
+              className={`px-3 py-1.5 rounded-xl text-[9.5px] font-black transition cursor-pointer border shrink-0 ${
+                strictPantryOnly
+                  ? "bg-emerald-500 text-black border-emerald-400 shadow-md shadow-emerald-500/20"
+                  : "bg-white/5 hover:bg-white/10 text-white/60 border-white/10"
+              }`}
+            >
+              {strictPantryOnly ? "Solo Despensa" : "Permitir compras"}
+            </button>
+          </div>
+
+          {/* Informative Pantry Notice */}
+          {pantryNotice && (
+            <div className={`p-3 rounded-2xl flex items-start justify-between gap-3 border animate-fadeIn ${
+              pantryStatus === "low" || pantryStatus === "empty"
+                ? "bg-amber-500/10 border-amber-500/25 text-amber-300"
+                : "bg-emerald-500/10 border-emerald-500/25 text-emerald-300"
+            }`}>
+              <div className="flex items-start gap-2.5 min-w-0">
+                {pantryStatus === "low" || pantryStatus === "empty" ? (
+                  <AlertCircle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                ) : (
+                  <Sparkles className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                )}
+                <p className="text-[11px] leading-relaxed font-medium">
+                  {pantryNotice}
+                </p>
+              </div>
+              {(pantryStatus === "low" || pantryStatus === "empty") && (
+                <button
+                  type="button"
+                  onClick={() => setActiveSection("pantry")}
+                  className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-xl font-bold text-[9px] shrink-0 border border-amber-500/30 transition cursor-pointer flex items-center gap-1"
+                >
+                  <Plus className="h-3 w-3" /> Despensa
+                </button>
+              )}
+            </div>
+          )}
+
           {foodSuggestions.length === 0 ? (
             <div className="space-y-3">
               <p className="text-xs text-white/50 leading-relaxed text-center">
-                ¿Te quedan macros hoy y no sabes qué comer? La IA analiza tu saldo de carbohidratos, grasas y proteínas para sugerirte alimentos específicos.
+                {strictPantryOnly
+                  ? "La IA creará opciones usando exclusivamente los ingredientes de tu despensa para ajustarse a tus macros restantes."
+                  : "La IA priorizará tu despensa y te sugerirá compras complementarias si tienes pocos ingredientes para que cumplas tus metas."}
               </p>
               <button
-                onClick={handleGetSuggestions}
+                onClick={() => handleGetSuggestions(true)}
                 disabled={isLoadingSuggestions}
                 className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-500/20 text-black text-xs font-black flex items-center justify-center gap-1.5 transition cursor-pointer border-none shadow-md"
               >
@@ -1369,8 +1447,29 @@ export default function NutritionHub({
                       <span className="block text-[9.5px] text-white/40 font-medium mt-1">
                         Porción: <span className="text-white/70">{item.servingSize}</span>
                       </span>
+
+                      {/* Pantry tags: 100% pantry vs recommended purchases */}
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                        {item.is100PercentPantry ? (
+                          <span className="text-[8px] font-black bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            ✅ 100% de tu despensa
+                          </span>
+                        ) : null}
+
+                        {item.pantryIngredientsUsed && item.pantryIngredientsUsed.length > 0 && (
+                          <span className="text-[8px] font-semibold bg-white/5 text-white/70 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            📦 Despensa: {item.pantryIngredientsUsed.join(", ")}
+                          </span>
+                        )}
+
+                        {item.recommendedPurchases && item.recommendedPurchases.length > 0 && (
+                          <span className="text-[8px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            🛒 Comprar: {item.recommendedPurchases.join(", ")}
+                          </span>
+                        )}
+                      </div>
                       
-                      <p className="text-[10px] text-white/55 leading-relaxed mt-1 italic">
+                      <p className="text-[10px] text-white/55 leading-relaxed mt-1.5 italic">
                         "{item.reason}"
                       </p>
                       
@@ -1406,7 +1505,10 @@ export default function NutritionHub({
                   <Sparkles className="h-3 w-3 text-emerald-400" /> Re-generar nuevas
                 </button>
                 <button
-                  onClick={() => setFoodSuggestions([])}
+                  onClick={() => {
+                    setFoodSuggestions([]);
+                    setPantryNotice(null);
+                  }}
                   className="py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white/60 text-[10px] font-bold transition cursor-pointer border-0"
                 >
                   Ocultar
@@ -1900,6 +2002,54 @@ export default function NutritionHub({
                     {selectedSuggestionForDetail.reason}
                   </p>
                 </div>
+
+                {/* 100% Pantry Callout if applicable */}
+                {selectedSuggestionForDetail.is100PercentPantry && (
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3 flex items-center gap-2.5">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <div>
+                      <span className="text-xs font-black text-emerald-400 block">¡100% con tu despensa!</span>
+                      <span className="text-[11px] text-white/60">Tienes todos los ingredientes necesarios listos en casa.</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Pantry vs Purchase Breakdown */}
+                {((selectedSuggestionForDetail.pantryIngredientsUsed && selectedSuggestionForDetail.pantryIngredientsUsed.length > 0) ||
+                  (selectedSuggestionForDetail.recommendedPurchases && selectedSuggestionForDetail.recommendedPurchases.length > 0)) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {selectedSuggestionForDetail.pantryIngredientsUsed && selectedSuggestionForDetail.pantryIngredientsUsed.length > 0 && (
+                      <div className="bg-white/[0.02] border border-emerald-500/20 rounded-2xl p-3 space-y-1.5">
+                        <span className="text-[9px] font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <Package className="h-3.5 w-3.5" />
+                          De tu despensa ({selectedSuggestionForDetail.pantryIngredientsUsed.length})
+                        </span>
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {selectedSuggestionForDetail.pantryIngredientsUsed.map((ing, i) => (
+                            <span key={i} className="text-[10px] px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-300 font-medium border border-emerald-500/20">
+                              {ing}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {selectedSuggestionForDetail.recommendedPurchases && selectedSuggestionForDetail.recommendedPurchases.length > 0 && (
+                      <div className="bg-white/[0.02] border border-amber-500/20 rounded-2xl p-3 space-y-1.5">
+                        <span className="text-[9px] font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <ShoppingCart className="h-3.5 w-3.5" />
+                          Recomendado comprar ({selectedSuggestionForDetail.recommendedPurchases.length})
+                        </span>
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {selectedSuggestionForDetail.recommendedPurchases.map((pur, i) => (
+                            <span key={i} className="text-[10px] px-2 py-0.5 rounded-lg bg-amber-500/10 text-amber-300 font-medium border border-amber-500/20">
+                              {pur}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Ingredients if provided */}
                 {selectedSuggestionForDetail.ingredients && selectedSuggestionForDetail.ingredients.length > 0 && (
