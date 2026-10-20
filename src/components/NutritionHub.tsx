@@ -328,14 +328,37 @@ export default function NutritionHub({
   };
 
   const [editingPantryItem, setEditingPantryItem] = useState<PantryItem | null>(null);
-  const [editPantryQuantity, setEditPantryQuantity] = useState("");
+  const [editPantryName, setEditPantryName] = useState("");
+  const [editPantryQuantity, setEditPantryQuantity] = useState("Moderada");
+  const [editPantryCalories, setEditPantryCalories] = useState<number | "">("");
+  const [editPantryProtein, setEditPantryProtein] = useState<number | "">("");
+  const [editPantryCarbs, setEditPantryCarbs] = useState<number | "">("");
+  const [editPantryFat, setEditPantryFat] = useState<number | "">("");
 
-  const handleSavePantryItemQuantity = (newQuantity: string) => {
+  const handleOpenEditPantry = (item: PantryItem) => {
+    setEditingPantryItem(item);
+    setEditPantryName(item.name || "");
+    setEditPantryQuantity(item.quantity || "Moderada");
+    setEditPantryCalories(item.calories !== undefined ? item.calories : "");
+    setEditPantryProtein(item.protein !== undefined ? item.protein : "");
+    setEditPantryCarbs(item.carbs !== undefined ? item.carbs : "");
+    setEditPantryFat(item.fat !== undefined ? item.fat : "");
+  };
+
+  const handleSavePantryItemFull = () => {
     if (!editingPantryItem) return;
     const currentPantry = household ? household.pantry : (profile.pantry || []);
     const updated = currentPantry.map(item => 
       item.id === editingPantryItem.id 
-        ? { ...item, quantity: newQuantity.trim() || "Moderada" } 
+        ? {
+            ...item,
+            name: editPantryName.trim() || item.name,
+            quantity: editPantryQuantity.trim() || "Moderada",
+            calories: editPantryCalories === "" ? 0 : Number(editPantryCalories),
+            protein: editPantryProtein === "" ? 0 : Number(editPantryProtein),
+            carbs: editPantryCarbs === "" ? 0 : Number(editPantryCarbs),
+            fat: editPantryFat === "" ? 0 : Number(editPantryFat)
+          } 
         : item
     );
     if (profile.householdId) {
@@ -810,10 +833,7 @@ export default function NutritionHub({
                         <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                           <button
                             type="button"
-                            onClick={() => {
-                              setEditingPantryItem(item);
-                              setEditPantryQuantity(item.quantity || "Moderada");
-                            }}
+                            onClick={() => handleOpenEditPantry(item)}
                             className={`text-[9.5px] px-2 py-0.5 rounded-lg border font-bold flex items-center gap-1 transition cursor-pointer ${badgeColor}`}
                             title="Haz clic para modificar la cantidad o stock"
                           >
@@ -829,12 +849,9 @@ export default function NutritionHub({
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
-                        onClick={() => {
-                          setEditingPantryItem(item);
-                          setEditPantryQuantity(item.quantity || "Moderada");
-                        }}
+                        onClick={() => handleOpenEditPantry(item)}
                         className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition border-none cursor-pointer"
-                        title="Modificar cantidad"
+                        title="Modificar alimento"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
@@ -981,6 +998,221 @@ export default function NutritionHub({
             </div>
           </div>
         )}
+
+        {/* Confirmation Modal: Delete Pantry Item */}
+        <AnimatePresence>
+          {pantryItemToDelete && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fadeIn">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-sm bg-[#12131d] border border-rose-500/20 rounded-3xl p-5 shadow-2xl space-y-4"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                    <Trash2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-white">¿Quitar de la despensa?</h3>
+                    <p className="text-[11px] text-white/50">Se eliminará del inventario.</p>
+                  </div>
+                </div>
+                
+                <div className="p-3 bg-white/[0.03] border border-white/5 rounded-2xl">
+                  <span className="text-xs font-bold text-white block">{pantryItemToDelete.name}</span>
+                  <span className="text-[10px] text-white/50 font-mono">
+                    Cantidad: {pantryItemToDelete.quantity || "Sin especificar"}
+                  </span>
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setPantryItemToDelete(null)}
+                    className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleDeletePantryItem(pantryItemToDelete.id);
+                      setPantryItemToDelete(null);
+                    }}
+                    className="flex-1 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-black transition cursor-pointer shadow-lg shadow-rose-500/20"
+                  >
+                    Sí, Eliminar
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal: Edit Pantry Item (Stock and Macros) */}
+        <AnimatePresence>
+          {editingPantryItem && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-fadeIn">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-sm bg-[#12131d] border border-white/10 rounded-3xl p-5 shadow-2xl space-y-3.5 text-white"
+              >
+                <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                      <Package className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-black uppercase tracking-wider text-white">Editar Alimento de Despensa</h3>
+                      <p className="text-[9px] text-white/40 truncate">{editingPantryItem.name}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingPantryItem(null)}
+                    className="p-1 text-white/40 hover:text-white rounded-lg hover:bg-white/5 transition cursor-pointer"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {/* Nombre del alimento */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-white/40 uppercase tracking-wider block">
+                    Nombre del Ingrediente
+                  </label>
+                  <Input
+                    type="text"
+                    value={editPantryName}
+                    onChange={(e) => setEditPantryName(e.target.value)}
+                    placeholder="Ej: Pollo, Huevos, Arroz..."
+                    size="sm"
+                    className="bg-black/40 border-white/10 text-white font-medium text-xs"
+                  />
+                </div>
+
+                {/* Botones de Stock Rápido (Cualitativo) */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold text-white/40 uppercase tracking-wider block">
+                    Nivel de stock estimado:
+                  </label>
+                  <div className="grid grid-cols-4 gap-1">
+                    {[
+                      { label: "Mucha", color: "hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+                      { label: "Moderada", color: "hover:bg-blue-500/20 text-blue-400 border-blue-500/30" },
+                      { label: "Poca", color: "hover:bg-amber-500/20 text-amber-400 border-amber-500/30" },
+                      { label: "Por terminar", color: "hover:bg-rose-500/20 text-rose-400 border-rose-500/30" },
+                    ].map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => setEditPantryQuantity(preset.label)}
+                        className={`py-1.5 rounded-xl border text-[10px] font-black transition text-center cursor-pointer ${
+                          editPantryQuantity === preset.label
+                            ? "bg-amber-500 text-black border-amber-500 shadow-sm"
+                            : `bg-white/[0.03] ${preset.color}`
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Cantidad exacta o envases */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-white/40 uppercase tracking-wider block">
+                    O cantidad exacta / envases:
+                  </label>
+                  <Input
+                    type="text"
+                    value={editPantryQuantity}
+                    onChange={(e) => setEditPantryQuantity(e.target.value)}
+                    placeholder="Ej: 3 litros, 6 huevos, 500g, 2 cajas..."
+                    size="sm"
+                    className="bg-black/40 border-white/10 text-white font-medium text-xs"
+                  />
+                </div>
+
+                {/* Macros manuales */}
+                <div className="pt-1">
+                  <span className="block text-[9px] font-bold text-white/40 uppercase mb-1.5">
+                    Macronutrientes (por 100g o porción)
+                  </span>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    <div className="bg-black/40 border border-white/10 p-1.5 rounded-xl text-center">
+                      <span className="text-[8px] font-bold text-emerald-400 block uppercase">Calorías</span>
+                      <input
+                        type="number"
+                        value={editPantryCalories}
+                        onChange={(e) => setEditPantryCalories(e.target.value === "" ? "" : Number(e.target.value))}
+                        placeholder="0"
+                        className="w-full text-center bg-transparent border-0 font-black text-xs text-white focus:outline-none"
+                      />
+                      <span className="text-[7.5px] text-white/30">kcal</span>
+                    </div>
+                    <div className="bg-black/40 border border-white/10 p-1.5 rounded-xl text-center">
+                      <span className="text-[8px] font-bold text-orange-400 block uppercase">Proteínas</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={editPantryProtein}
+                        onChange={(e) => setEditPantryProtein(e.target.value === "" ? "" : Number(e.target.value))}
+                        placeholder="0"
+                        className="w-full text-center bg-transparent border-0 font-black text-xs text-white focus:outline-none"
+                      />
+                      <span className="text-[7.5px] text-white/30">g</span>
+                    </div>
+                    <div className="bg-black/40 border border-white/10 p-1.5 rounded-xl text-center">
+                      <span className="text-[8px] font-bold text-sky-400 block uppercase">Carbos</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={editPantryCarbs}
+                        onChange={(e) => setEditPantryCarbs(e.target.value === "" ? "" : Number(e.target.value))}
+                        placeholder="0"
+                        className="w-full text-center bg-transparent border-0 font-black text-xs text-white focus:outline-none"
+                      />
+                      <span className="text-[7.5px] text-white/30">g</span>
+                    </div>
+                    <div className="bg-black/40 border border-white/10 p-1.5 rounded-xl text-center">
+                      <span className="text-[8px] font-bold text-amber-400 block uppercase">Grasas</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={editPantryFat}
+                        onChange={(e) => setEditPantryFat(e.target.value === "" ? "" : Number(e.target.value))}
+                        placeholder="0"
+                        className="w-full text-center bg-transparent border-0 font-black text-xs text-white focus:outline-none"
+                      />
+                      <span className="text-[7.5px] text-white/30">g</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t border-white/5">
+                  <button
+                    type="button"
+                    onClick={() => setEditingPantryItem(null)}
+                    className="flex-1 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSavePantryItemFull}
+                    className="flex-1 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-black transition cursor-pointer shadow-md shadow-amber-500/20"
+                  >
+                    Guardar Cambios
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </motion.div>
     );
   }
@@ -2301,150 +2533,6 @@ export default function NutritionHub({
                   className="flex-1 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-black transition cursor-pointer shadow-lg shadow-rose-500/20"
                 >
                   Sí, Eliminar
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Confirmation Modal: Delete Pantry Item */}
-      <AnimatePresence>
-        {pantryItemToDelete && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fadeIn">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-[#12131d] border border-rose-500/20 rounded-3xl p-5 shadow-2xl space-y-4"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
-                  <Trash2 className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-white">¿Quitar de la despensa?</h3>
-                  <p className="text-[11px] text-white/50">Se eliminará del inventario compartido.</p>
-                </div>
-              </div>
-              
-              <div className="p-3 bg-white/[0.03] border border-white/5 rounded-2xl">
-                <span className="text-xs font-bold text-white block">{pantryItemToDelete.name}</span>
-                <span className="text-[10px] text-white/50 font-mono">
-                  Cantidad: {pantryItemToDelete.quantity}
-                </span>
-              </div>
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setPantryItemToDelete(null)}
-                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleDeletePantryItem(pantryItemToDelete.id);
-                    setPantryItemToDelete(null);
-                  }}
-                  className="flex-1 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-black transition cursor-pointer shadow-lg shadow-rose-500/20"
-                >
-                  Sí, Eliminar
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal: Edit Pantry Item Quantity */}
-      <AnimatePresence>
-        {editingPantryItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-fadeIn">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-[#12131d] border border-white/10 rounded-3xl p-5 shadow-2xl space-y-4"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-9 h-9 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
-                    <Package className="h-4.5 w-4.5" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-black text-white">Stock / Cantidad</h3>
-                    <p className="text-[10px] text-white/50 truncate">{editingPantryItem.name}</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setEditingPantryItem(null)}
-                  className="p-1.5 text-white/40 hover:text-white rounded-lg hover:bg-white/5 transition cursor-pointer"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-
-              {/* Botones de Stock Rápido (Cualitativo) */}
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-bold text-white/40 uppercase tracking-wider block">
-                  Estado rápido:
-                </label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {[
-                    { label: "Mucha", color: "hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
-                    { label: "Moderada", color: "hover:bg-blue-500/20 text-blue-400 border-blue-500/30" },
-                    { label: "Poca", color: "hover:bg-amber-500/20 text-amber-400 border-amber-500/30" },
-                    { label: "Por terminar", color: "hover:bg-rose-500/20 text-rose-400 border-rose-500/30" },
-                  ].map((preset) => (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      onClick={() => setEditPantryQuantity(preset.label)}
-                      className={`py-2 px-2.5 rounded-xl border text-[10.5px] font-bold transition flex items-center justify-center cursor-pointer ${
-                        editPantryQuantity === preset.label
-                          ? "bg-white/15 border-white/30 text-white font-black shadow-inner"
-                          : `bg-white/[0.03] ${preset.color}`
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* O Cantidad personalizada exacta */}
-              <div className="space-y-1.5 pt-1">
-                <label className="text-[9px] font-bold text-white/40 uppercase tracking-wider block">
-                  O escribe la cantidad exacta / envases:
-                </label>
-                <Input
-                  type="text"
-                  value={editPantryQuantity}
-                  onChange={(e) => setEditPantryQuantity(e.target.value)}
-                  placeholder="Ej: 3 litros, 6 huevos, 500g, 2 cajas..."
-                  size="md"
-                  className="bg-black/40 border-white/10 text-white font-medium text-xs"
-                />
-              </div>
-
-              <div className="flex gap-2 pt-2 border-t border-white/5">
-                <button
-                  type="button"
-                  onClick={() => setEditingPantryItem(null)}
-                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSavePantryItemQuantity(editPantryQuantity)}
-                  className="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black transition cursor-pointer shadow-md shadow-emerald-500/20"
-                >
-                  Guardar
                 </button>
               </div>
             </motion.div>
