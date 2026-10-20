@@ -282,11 +282,6 @@ export default function BarcodeScannerModal({
             </Button>
           </div>
         </form>
-
-        {/* Safari / Browser permission tip */}
-        <p className="text-[9.5px] text-white/30 text-center leading-relaxed pt-1">
-          💡 Tip: Si tu navegador pide permiso cada vez, en Safari toca <span className="font-bold text-white/50">aA</span> ➔ <span className="font-bold text-white/50">Configuración del sitio web</span> ➔ <span className="font-bold text-white/50">Cámara: Permitir</span>.
-        </p>
       </motion.div>
     </div>
   );
