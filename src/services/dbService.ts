@@ -10,10 +10,12 @@ import {
   writeBatch,
   serverTimestamp,
   updateDoc,
-  increment
+  increment,
+  where,
+  onSnapshot
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { UserProfile, LoggedMeal, WaterLog, WorkoutSession, CustomFood, CustomExercise, BarcodeCorrection } from "../types";
+import { UserProfile, LoggedMeal, WaterLog, WorkoutSession, CustomFood, CustomExercise, BarcodeCorrection, HouseholdGroup, PantryItem } from "../types";
 
 // User Profile Operations
 export const getUserProfile = async (userId: string): Promise<UserProfile | null> => {
@@ -482,4 +484,170 @@ export const deleteCustomExercise = async (userId: string, exerciseId: string): 
     console.error("Error deleting custom exercise:", error);
     throw error;
   }
+};
+
+// Household & Shared Pantry Operations
+export const generateHouseholdInviteCode = (): string => {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "FAM-";
+  for (let i = 0; i < 4; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+};
+
+export const createHouseholdGroup = async (
+  userId: string,
+  userName: string,
+  householdName: string,
+  initialPantry: PantryItem[] = []
+): Promise<HouseholdGroup> => {
+  try {
+    const householdRef = doc(collection(db, "households"));
+    const inviteCode = generateHouseholdInviteCode();
+    const newGroup: HouseholdGroup = {
+      id: householdRef.id,
+      name: householdName.trim() || "Mi Hogar",
+      inviteCode,
+      createdBy: userId,
+      members: [
+        {
+          userId,
+          name: userName.trim() || "Usuario",
+          joinedAt: new Date().toISOString()
+        }
+      ],
+      pantry: initialPantry,
+      updatedAt: new Date().toISOString()
+    };
+
+    await setDoc(householdRef, newGroup);
+
+    // Link user profile
+    const userRef = doc(db, "users", userId);
+    await updateDoc(userRef, {
+      householdId: newGroup.id,
+      householdName: newGroup.name,
+      householdInviteCode: newGroup.inviteCode
+    });
+
+    return newGroup;
+  } catch (error) {
+    console.error("Error creating household group:", error);
+    throw error;
+  }
+};
+
+export const joinHouseholdGroupByCode = async (
+  userId: string,
+  userName: string,
+  inviteCode: string
+): Promise<HouseholdGroup> => {
+  try {
+    const cleanedCode = inviteCode.trim().toUpperCase();
+    const householdsRef = collection(db, "households");
+    const q = query(householdsRef, where("inviteCode", "==", cleanedCode));
+    const snap = await getDocs(q);
+
+    if (snap.empty) {
+      throw new Error("No se encontró ningún grupo familiar con este código de invitación.");
+    }
+
+    const docSnap = snap.docs[0];
+    const group = { id: docSnap.id, ...docSnap.data() } as HouseholdGroup;
+
+    // Check if user is already a member
+    const isMember = (group.members || []).some(m => m.userId === userId);
+    if (!isMember) {
+      const updatedMembers = [
+        ...(group.members || []),
+        {
+          userId,
+          name: userName.trim() || "Familiar",
+          joinedAt: new Date().toISOString()
+        }
+      ];
+
+      await updateDoc(docSnap.ref, {
+        members: updatedMembers,
+        updatedAt: new Date().toISOString()
+      });
+
+      group.members = updatedMembers;
+    }
+
+    // Link user profile
+    const userRef = doc(db, "users", userId);
+    await updateDoc(userRef, {
+      householdId: group.id,
+      householdName: group.name,
+      householdInviteCode: group.inviteCode
+    });
+
+    return group;
+  } catch (error) {
+    console.error("Error joining household group:", error);
+    throw error;
+  }
+};
+
+export const leaveHouseholdGroup = async (userId: string, householdId: string): Promise<void> => {
+  try {
+    const householdRef = doc(db, "households", householdId);
+    const snap = await getDoc(householdRef);
+
+    if (snap.exists()) {
+      const group = snap.data() as HouseholdGroup;
+      const filteredMembers = (group.members || []).filter(m => m.userId !== userId);
+      await updateDoc(householdRef, {
+        members: filteredMembers,
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    // Unlink user profile
+    const userRef = doc(db, "users", userId);
+    await updateDoc(userRef, {
+      householdId: null,
+      householdName: null,
+      householdInviteCode: null
+    });
+  } catch (error) {
+    console.error("Error leaving household group:", error);
+    throw error;
+  }
+};
+
+export const updateHouseholdPantry = async (householdId: string, pantry: PantryItem[]): Promise<void> => {
+  try {
+    const householdRef = doc(db, "households", householdId);
+    await updateDoc(householdRef, {
+      pantry,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Error updating household pantry:", error);
+    throw error;
+  }
+};
+
+export const subscribeToHousehold = (
+  householdId: string,
+  callback: (group: HouseholdGroup | null) => void
+): (() => void) => {
+  const householdRef = doc(db, "households", householdId);
+  return onSnapshot(
+    householdRef,
+    (docSnap) => {
+      if (docSnap.exists()) {
+        callback({ id: docSnap.id, ...docSnap.data() } as HouseholdGroup);
+      } else {
+        callback(null);
+      }
+    },
+    (err) => {
+      console.error("Error in household snapshot subscription:", err);
+      callback(null);
+    }
+  );
 };

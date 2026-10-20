@@ -32,7 +32,8 @@ import {
   getWorkoutHistory, 
   saveWorkoutSession, 
   clearWorkoutHistory,
-  deleteUserAllData
+  deleteUserAllData,
+  updateHouseholdPantry
 } from "./services/dbService";
 
 import { getLocalDateString, isSameDay } from "./utils/fitnessUtils";
@@ -487,9 +488,15 @@ export default function App() {
                   fat
                 };
                 
+                const updatedPantry = [...(profile.pantry || []), newItem];
+                if (profile.householdId) {
+                  updateHouseholdPantry(profile.householdId, updatedPantry).catch((err) => {
+                    console.error("Error updating household pantry:", err);
+                  });
+                }
                 handleUpdateProfile({
                   ...profile,
-                  pantry: [...(profile.pantry || []), newItem]
+                  pantry: updatedPantry
                 });
               } else {
                 handleAddMeal(meal);
@@ -503,6 +510,7 @@ export default function App() {
             userId={user?.uid}
             isCustomFoodOnlyMode={foodLoggerCustomOnly}
             targetDate={foodLoggerTargetDate || undefined}
+            pantryItems={profile.pantry || []}
             onCustomFoodAdded={() => {
               window.dispatchEvent(new CustomEvent("trophia_refresh_custom_foods"));
             }}

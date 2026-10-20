@@ -2,14 +2,19 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Plus, BookOpen, Star, Calendar, ShoppingCart, Lock, ArrowLeft, Trash2, Check, X, 
-  ChefHat, Flame, Zap, ChevronLeft, ChevronRight, MessageSquare, Lightbulb, Sparkles, AlertCircle, Send, Utensils, Package, Pencil
+  ChefHat, Flame, Zap, ChevronLeft, ChevronRight, MessageSquare, Lightbulb, Sparkles, AlertCircle, Send, Utensils, Package, Pencil,
+  Users, Copy, LogOut, CheckCheck
 } from "lucide-react";
-import { UserProfile, LoggedMeal, MealType, CustomFood } from "../types";
-import { getCustomFoods, addCustomFood, deleteCustomFood } from "../services/dbService";
+import { UserProfile, LoggedMeal, MealType, CustomFood, HouseholdGroup } from "../types";
+import { 
+  getCustomFoods, addCustomFood, deleteCustomFood,
+  createHouseholdGroup, joinHouseholdGroupByCode, leaveHouseholdGroup, updateHouseholdPantry, subscribeToHousehold
+} from "../services/dbService";
 import { getLocalDateString, isSameDay, formatFriendlyDate, createTimestampForDate } from "../utils/fitnessUtils";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { getSmartFoodSuggestionsByIA, askNutriCoachIA, SmartFoodSuggestion } from "../services/geminiService";
+import MealBuilderModal from "./MealBuilderModal";
 
 interface NutritionHubProps {
   profile: UserProfile;
@@ -82,12 +87,119 @@ export default function NutritionHub({
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [weekDates, setWeekDates] = useState(() => getWeekDates(new Date()));
   const [activeSection, setActiveSection] = useState<"custom_foods" | "calorie_bank" | "pantry" | null>(null);
+  const [isMealBuilderOpen, setIsMealBuilderOpen] = useState(false);
   
   // Custom foods state
   const [customFoods, setCustomFoods] = useState<CustomFood[]>([]);
   const [isLoadingFoods, setIsLoadingFoods] = useState(false);
 
-  // Edit Meal modal state
+  // Household shared pantry state
+  const [household, setHousehold] = useState<HouseholdGroup | null>(null);
+  const [isCreateHouseholdOpen, setIsCreateHouseholdOpen] = useState(false);
+  const [isJoinHouseholdOpen, setIsJoinHouseholdOpen] = useState(false);
+  const [newHouseholdName, setNewHouseholdName] = useState("");
+  const [joinInviteCode, setJoinInviteCode] = useState("");
+  const [householdError, setHouseholdError] = useState<string | null>(null);
+  const [isHouseholdBusy, setIsHouseholdBusy] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+
+  useEffect(() => {
+    if (!profile.householdId) {
+      setHousehold(null);
+      return;
+    }
+    const unsubscribe = subscribeToHousehold(profile.householdId, (group) => {
+      if (group) {
+        setHousehold(group);
+      } else {
+        setHousehold(null);
+      }
+    });
+    return () => unsubscribe();
+  }, [profile.householdId]);
+
+  const handleCreateHousehold = async () => {
+    if (!newHouseholdName.trim()) return;
+    setIsHouseholdBusy(true);
+    setHouseholdError(null);
+    try {
+      const created = await createHouseholdGroup(
+        userId,
+        profile.name || "Usuario",
+        newHouseholdName.trim(),
+        profile.pantry || []
+      );
+      setHousehold(created);
+      onUpdateProfile({
+        ...profile,
+        householdId: created.id,
+        householdName: created.name,
+        householdInviteCode: created.inviteCode,
+        pantry: created.pantry
+      });
+      setIsCreateHouseholdOpen(false);
+      setNewHouseholdName("");
+    } catch (err: any) {
+      setHouseholdError(err.message || "Error al crear el grupo del hogar.");
+    } finally {
+      setIsHouseholdBusy(false);
+    }
+  };
+
+  const handleJoinHousehold = async () => {
+    if (!joinInviteCode.trim()) return;
+    setIsHouseholdBusy(true);
+    setHouseholdError(null);
+    try {
+      const joined = await joinHouseholdGroupByCode(
+        userId,
+        profile.name || "Usuario",
+        joinInviteCode.trim()
+      );
+      setHousehold(joined);
+      onUpdateProfile({
+        ...profile,
+        householdId: joined.id,
+        householdName: joined.name,
+        householdInviteCode: joined.inviteCode,
+        pantry: joined.pantry
+      });
+      setIsJoinHouseholdOpen(false);
+      setJoinInviteCode("");
+    } catch (err: any) {
+      setHouseholdError(err.message || "Código inválido o error al unirse.");
+    } finally {
+      setIsHouseholdBusy(false);
+    }
+  };
+
+  const handleLeaveHousehold = async () => {
+    if (!profile.householdId) return;
+    if (!window.confirm("¿Seguro que deseas salir del grupo del hogar? Volverás a tener tu despensa personal.")) return;
+    setIsHouseholdBusy(true);
+    try {
+      await leaveHouseholdGroup(userId, profile.householdId);
+      setHousehold(null);
+      onUpdateProfile({
+        ...profile,
+        householdId: undefined,
+        householdName: undefined,
+        householdInviteCode: undefined
+      });
+    } catch (err) {
+      console.error("Error leaving household:", err);
+    } finally {
+      setIsHouseholdBusy(false);
+    }
+  };
+
+  const handleCopyInviteCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  // Edit Meal modal state with portion scaling
   const [editingMeal, setEditingMeal] = useState<LoggedMeal | null>(null);
   const [editName, setEditName] = useState("");
   const [editType, setEditType] = useState<MealType>("lunch");
@@ -96,6 +208,17 @@ export default function NutritionHub({
   const [editCarbs, setEditCarbs] = useState<number>(0);
   const [editFat, setEditFat] = useState<number>(0);
   const [editServingSize, setEditServingSize] = useState<string>("");
+  const [baseMealRef, setBaseMealRef] = useState<{
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    servingSize: string;
+    baseAmount: number;
+    unit: string;
+  } | null>(null);
+  const [portionMultiplier, setPortionMultiplier] = useState<number>(1);
+  const [customPortionAmount, setCustomPortionAmount] = useState<number | "">(100);
 
   const handleStartEditMeal = (meal: LoggedMeal) => {
     setEditingMeal(meal);
@@ -105,7 +228,70 @@ export default function NutritionHub({
     setEditProtein(meal.protein);
     setEditCarbs(meal.carbs);
     setEditFat(meal.fat);
-    setEditServingSize(meal.servingSize || "");
+    const servingStr = (meal.servingSize || "").trim();
+    setEditServingSize(servingStr);
+
+    // Parse base portion amount and unit
+    let parsedAmount = 1;
+    let parsedUnit = "porción";
+    if (servingStr) {
+      const match = servingStr.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+      if (match && parseFloat(match[1]) > 0) {
+        parsedAmount = parseFloat(match[1]);
+        parsedUnit = match[2].trim() || (servingStr.toLowerCase().includes("g") ? "g" : "porción");
+      } else if (servingStr.toLowerCase().includes("g")) {
+        const numMatch = servingStr.match(/(\d+(?:\.\d+)?)/);
+        if (numMatch) {
+          parsedAmount = parseFloat(numMatch[1]);
+          parsedUnit = "g";
+        }
+      }
+    }
+
+    setBaseMealRef({
+      calories: meal.calories,
+      protein: meal.protein,
+      carbs: meal.carbs,
+      fat: meal.fat,
+      servingSize: servingStr || `${parsedAmount} ${parsedUnit}`,
+      baseAmount: parsedAmount,
+      unit: parsedUnit,
+    });
+    setPortionMultiplier(1);
+    setCustomPortionAmount(parsedAmount);
+  };
+
+  const applyPortionScale = (multiplier: number, newAmount?: number) => {
+    if (!baseMealRef) return;
+    const mult = Math.max(0.01, multiplier);
+    const scaledCalories = Math.max(0, Math.round(baseMealRef.calories * mult));
+    const scaledProtein = Math.max(0, Math.round(baseMealRef.protein * mult * 10) / 10);
+    const scaledCarbs = Math.max(0, Math.round(baseMealRef.carbs * mult * 10) / 10);
+    const scaledFat = Math.max(0, Math.round(baseMealRef.fat * mult * 10) / 10);
+    const finalAmount = newAmount !== undefined ? newAmount : Math.round(baseMealRef.baseAmount * mult * 10) / 10;
+    
+    setEditCalories(scaledCalories);
+    setEditProtein(scaledProtein);
+    setEditCarbs(scaledCarbs);
+    setEditFat(scaledFat);
+    setEditServingSize(`${finalAmount} ${baseMealRef.unit}`.trim());
+    setPortionMultiplier(Math.round(mult * 100) / 100);
+    setCustomPortionAmount(finalAmount);
+  };
+
+  const handleCustomPortionAmountChange = (valStr: string) => {
+    if (!baseMealRef) return;
+    if (valStr === "") {
+      setCustomPortionAmount("");
+      return;
+    }
+    const val = parseFloat(valStr);
+    if (isNaN(val) || val <= 0) {
+      setCustomPortionAmount(0);
+      return;
+    }
+    const newMult = val / (baseMealRef.baseAmount || 1);
+    applyPortionScale(newMult, val);
   };
 
   const handleSaveEditMeal = () => {
@@ -127,10 +313,14 @@ export default function NutritionHub({
   };
 
   const handleDeletePantryItem = (itemId: string) => {
-    const currentPantry = profile.pantry || [];
+    const currentPantry = household ? household.pantry : (profile.pantry || []);
+    const nextPantry = currentPantry.filter(x => x.id !== itemId);
+    if (profile.householdId) {
+      updateHouseholdPantry(profile.householdId, nextPantry).catch(console.error);
+    }
     onUpdateProfile({
       ...profile,
-      pantry: currentPantry.filter(x => x.id !== itemId)
+      pantry: nextPantry
     });
   };
 
@@ -422,7 +612,7 @@ export default function NutritionHub({
 
   // ─── Pantry (Despensa) Sub-view ───────────────────────
   if (activeSection === "pantry") {
-    const currentPantry = profile.pantry || [];
+    const currentPantry = household ? household.pantry : (profile.pantry || []);
     return (
       <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex-1 overflow-y-auto px-5 py-6 space-y-4 no-scrollbar">
         <div className="flex items-center gap-3">
@@ -430,10 +620,95 @@ export default function NutritionHub({
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div>
-            <h2 className="text-base font-black text-white tracking-tight">Mi Despensa</h2>
-            <p className="text-[10px] text-white/40">Registra tus alimentos e ingredientes para planificar con la IA</p>
+            <h2 className="text-base font-black text-white tracking-tight flex items-center gap-2">
+              <span>{household ? `Despensa: ${household.name}` : "Mi Despensa"}</span>
+              {household && (
+                <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-mono font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  COMPARTIDA
+                </span>
+              )}
+            </h2>
+            <p className="text-[10px] text-white/40">
+              {household ? "Sincronizada en tiempo real con tu grupo familiar" : "Registra tus alimentos e ingredientes para planificar con la IA"}
+            </p>
           </div>
         </div>
+
+        {/* Household banner */}
+        {household ? (
+          <div className="p-3.5 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-2xl space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-emerald-400" />
+                <span className="text-xs font-black text-white">
+                  Grupo del Hogar: {household.name}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleLeaveHousehold}
+                disabled={isHouseholdBusy}
+                className="text-[10px] text-rose-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer font-bold transition"
+                title="Salir del grupo compartido"
+              >
+                <LogOut className="h-3 w-3" />
+                <span>Salir</span>
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between pt-1 border-t border-emerald-500/10 text-[10px] flex-wrap gap-2">
+              <div className="flex items-center gap-1.5 text-white/70">
+                <span className="text-white/40">Código para unirse:</span>
+                <span className="font-mono font-black text-white bg-black/40 px-2 py-0.5 rounded border border-white/10">
+                  {household.inviteCode}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleCopyInviteCode(household.inviteCode)}
+                  className="p-1 hover:text-emerald-400 text-white/50 transition cursor-pointer"
+                  title="Copiar código para compartir"
+                >
+                  {copiedCode ? <CheckCheck className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+              <div className="text-[9px] text-white/40 font-mono">
+                Miembros: {(household.members || []).map(m => m.name).join(", ")}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-3.5 bg-white/[0.02] border border-white/10 rounded-2xl flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                <Users className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <span className="block text-xs font-black text-white truncate">
+                  ¿Compartes casa o despensa?
+                </span>
+                <span className="block text-[9.5px] text-white/40 truncate">
+                  Crea o únete a un Hogar para ver los mismos alimentos en tiempo real
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => { setHouseholdError(null); setIsJoinHouseholdOpen(true); }}
+                className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 rounded-xl text-[10px] font-bold transition cursor-pointer"
+              >
+                Unirme
+              </button>
+              <button
+                type="button"
+                onClick={() => { setHouseholdError(null); setIsCreateHouseholdOpen(true); }}
+                className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-black rounded-xl text-[10px] font-black transition cursor-pointer shadow-sm shadow-emerald-500/10"
+              >
+                Crear Hogar
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Botón para agregar ingrediente desde API */}
         <button
@@ -445,7 +720,9 @@ export default function NutritionHub({
 
         {/* Lista de ingredientes */}
         <div className="space-y-2">
-          <span className="block text-[10px] font-bold text-white/40 uppercase tracking-wider">Ingredientes Guardados ({currentPantry.length})</span>
+          <span className="block text-[10px] font-bold text-white/40 uppercase tracking-wider">
+            Ingredientes en Despensa ({currentPantry.length})
+          </span>
           
           {currentPantry.length === 0 ? (
             <div className="text-center py-8 border border-dashed border-white/10 rounded-2xl bg-white/[0.01]">
@@ -480,6 +757,134 @@ export default function NutritionHub({
             </div>
           )}
         </div>
+
+        {/* Modal Crear Hogar */}
+        {isCreateHouseholdOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+            <div className="w-full max-w-sm bg-[#12131d] border border-white/10 rounded-3xl p-5 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                    <Users className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-white uppercase tracking-wider">Crear Grupo del Hogar</h3>
+                    <p className="text-[9px] text-white/40">Genera un código para compartir tu despensa</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsCreateHouseholdOpen(false)}
+                  className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[9px] font-bold text-white/40 uppercase tracking-wider block mb-1">
+                    Nombre del Hogar / Familia
+                  </label>
+                  <Input
+                    type="text"
+                    value={newHouseholdName}
+                    onChange={(e) => setNewHouseholdName(e.target.value)}
+                    placeholder="Ej: Casa Pérez, Depto 402, Los Gómez..."
+                    size="sm"
+                    className="bg-white/5 border-white/10"
+                  />
+                </div>
+
+                {householdError && (
+                  <p className="text-[10px] text-rose-400 font-bold">{householdError}</p>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateHouseholdOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 text-white/60 text-xs font-bold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={!newHouseholdName.trim() || isHouseholdBusy}
+                  onClick={handleCreateHousehold}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black text-xs font-black shadow-md shadow-emerald-500/20"
+                >
+                  {isHouseholdBusy ? "Creando..." : "Crear Hogar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Unirse a Hogar */}
+        {isJoinHouseholdOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+            <div className="w-full max-w-sm bg-[#12131d] border border-white/10 rounded-3xl p-5 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                    <Users className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-white uppercase tracking-wider">Unirse a un Hogar</h3>
+                    <p className="text-[9px] text-white/40">Ingresa el código que te compartió tu familiar</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsJoinHouseholdOpen(false)}
+                  className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[9px] font-bold text-white/40 uppercase tracking-wider block mb-1">
+                    Código de Invitación (ej: FAM-8392)
+                  </label>
+                  <Input
+                    type="text"
+                    value={joinInviteCode}
+                    onChange={(e) => setJoinInviteCode(e.target.value.toUpperCase())}
+                    placeholder="FAM-XXXX"
+                    size="sm"
+                    className="bg-white/5 border-white/10 font-mono text-center font-bold text-emerald-400 uppercase tracking-widest text-sm"
+                  />
+                </div>
+
+                {householdError && (
+                  <p className="text-[10px] text-rose-400 font-bold">{householdError}</p>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setIsJoinHouseholdOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 text-white/60 text-xs font-bold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={!joinInviteCode.trim() || isHouseholdBusy}
+                  onClick={handleJoinHousehold}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black text-xs font-black shadow-md shadow-emerald-500/20"
+                >
+                  {isHouseholdBusy ? "Uniendo..." : "Unirse al Hogar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </motion.div>
     );
   }
@@ -1066,6 +1471,23 @@ export default function NutritionHub({
           </div>
         </div>
 
+        {/* Meals Section Header */}
+        <div className="flex items-center justify-between pt-1 pb-0.5">
+          <h3 className="text-xs font-black text-white/80 uppercase tracking-wider">
+            Comidas del Día
+          </h3>
+          {(isToday || isPast) && (
+            <button
+              type="button"
+              onClick={() => setIsMealBuilderOpen(true)}
+              className="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/25 rounded-xl text-[10px] font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+            >
+              <span className="text-xs">🥪</span>
+              <span>Armar Sándwich / Plato</span>
+            </button>
+          )}
+        </div>
+
         {/* Meals grouped by type */}
         <div className="space-y-2">
           {mealsByType.map(({ type, meals }) => (
@@ -1209,6 +1631,64 @@ export default function NutritionHub({
                     className="bg-white/5 border-white/10"
                   />
                 </div>
+
+                {/* Quick Portion Scaler Panel */}
+                {baseMealRef && (
+                  <div className="p-3 bg-white/[0.03] border border-emerald-500/20 rounded-2xl space-y-2.5">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1">
+                        <span>⚖️</span> Ajustar Porción Rápidamente
+                      </span>
+                      <span className="font-mono text-emerald-400 font-black px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                        {portionMultiplier}x
+                      </span>
+                    </div>
+
+                    {/* Original Reference Box */}
+                    <div className="bg-black/30 rounded-xl p-2 border border-white/5 text-[9.5px] text-gray-400 flex items-center justify-between flex-wrap gap-1">
+                      <span>Registrado inicialmente:</span>
+                      <span className="text-white font-bold font-mono">
+                        {baseMealRef.servingSize || `${baseMealRef.baseAmount} ${baseMealRef.unit}`} ({baseMealRef.calories} kcal)
+                      </span>
+                    </div>
+
+                    {/* Multiplier Pills */}
+                    <div className="grid grid-cols-6 gap-1">
+                      {[0.5, 0.75, 1, 1.25, 1.5, 2].map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => applyPortionScale(m)}
+                          className={`py-1 rounded-lg text-[9px] font-mono font-bold transition cursor-pointer border ${
+                            Math.abs(portionMultiplier - m) < 0.05
+                              ? "bg-emerald-500 text-black border-emerald-400 font-black shadow-sm"
+                              : "bg-white/5 text-gray-300 border-white/5 hover:bg-white/10 hover:text-white"
+                          }`}
+                        >
+                          {m === 1 ? "1x (Orig)" : `${m}x`}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Custom Amount Input */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-[9px] text-gray-400 uppercase font-bold shrink-0">
+                        Cantidad ({baseMealRef.unit}):
+                      </span>
+                      <div className="flex-1">
+                        <Input
+                          type="number"
+                          step="any"
+                          value={customPortionAmount}
+                          onChange={(e) => handleCustomPortionAmountChange(e.target.value)}
+                          placeholder="Cantidad"
+                          size="sm"
+                          className="bg-white/5 border-white/10 font-mono text-center font-bold text-emerald-400 h-7 text-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Calories */}
                 <div className="space-y-1">
@@ -1459,6 +1939,19 @@ export default function NutritionHub({
           </div>
         )}
       </AnimatePresence>
+
+      <MealBuilderModal
+        isOpen={isMealBuilderOpen}
+        onClose={() => setIsMealBuilderOpen(false)}
+        onSaveMeal={(meal) => {
+          onAddMeal(meal);
+          setIsMealBuilderOpen(false);
+        }}
+        pantryItems={profile.pantry || []}
+        customFoods={customFoods}
+        userId={userId}
+        targetDate={selectedDate}
+      />
     </div>
   );
 }

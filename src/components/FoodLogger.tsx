@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { Search, Camera, Plus, History, Trash, AlertCircle, Check, X, RefreshCw, Star, Barcode, Sparkles, HelpCircle } from "lucide-react";
-import { LoggedMeal, FoodItem, MealType, BarcodeCorrection, CustomFood } from "../types";
+import { LoggedMeal, FoodItem, MealType, BarcodeCorrection, CustomFood, PantryItem } from "../types";
 import { GLOBAL_FOODS_DB, getLocalDateString, formatFriendlyDate, createTimestampForDate } from "../utils/fitnessUtils";
 import { analyzeFoodByIA, estimateMacrosFromDescription, getVisualServingSizesByIA, analyzeNutritionLabelByIA } from "../services/geminiService";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { searchAllFoods, getProductByBarcode } from "../services/foodDatabaseService";
 import BarcodeScannerModal from "./BarcodeScannerModal";
+import MealBuilderModal from "./MealBuilderModal";
 import { getBarcodeCorrection, saveBarcodeCorrection, voteBarcodeCorrection, addCustomFood, getCustomFoods } from "../services/dbService";
 
 interface FoodLoggerProps {
@@ -21,6 +22,7 @@ interface FoodLoggerProps {
   onCustomFoodAdded?: () => void;
   mode?: "log" | "pantry";
   targetDate?: string;
+  pantryItems?: PantryItem[];
 }
 
 export function getDefaultServingInfo(name: string, servingSizeStr: string): {
@@ -151,10 +153,12 @@ export default function FoodLogger({
   isCustomFoodOnlyMode = false,
   onCustomFoodAdded,
   mode = "log",
-  targetDate
+  targetDate,
+  pantryItems = []
 }: FoodLoggerProps) {
   const effectiveApiKey = apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || (typeof localStorage !== "undefined" ? localStorage.getItem("trophia_api_key") : "") || "";
-  const [activeTab, setActiveTab] = useState<"search" | "camera" | "personal">("search");
+  const [activeTab, setActiveTab] = useState<"search" | "ia_text" | "camera" | "personal">("search");
+  const [isMealBuilderOpen, setIsMealBuilderOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMealType, setSelectedMealType] = useState<MealType>(defaultMealType || "lunch");
 
@@ -397,27 +401,20 @@ export default function FoodLogger({
     try {
       const data = await estimateMacrosFromDescription(effectiveApiKey, iaDescription.trim());
       if (data) {
-        setCustomName(data.name || "Alimento IA");
-        setCustomCalories(data.calories || 0);
-        setCustomProtein(Number(data.protein) || 0);
-        setCustomCarbs(Number(data.carbs) || 0);
-        setCustomFat(Number(data.fat) || 0);
-        
-        const foodItem: FoodItem = {
-          name: "",
-          calories: data.calories || 0,
-          protein: Number(data.protein) || 0,
-          carbs: Number(data.carbs) || 0,
-          fat: Number(data.fat) || 0,
+        const calculatedFood: FoodItem = {
+          name: data.name || iaDescription.trim().slice(0, 45) || "Plato IA",
+          calories: Math.max(0, Math.round(Number(data.calories) || 0)),
+          protein: Math.max(0, Math.round((Number(data.protein) || 0) * 10) / 10),
+          carbs: Math.max(0, Math.round((Number(data.carbs) || 0) * 10) / 10),
+          fat: Math.max(0, Math.round((Number(data.fat) || 0) * 10) / 10),
           servingSize: data.servingSize || "1 porción",
-          source: "local",
+          source: "ai",
           ingredients: data.ingredients || []
         };
-        setSelectedFood(foodItem);
+        handleSelectFood(calculatedFood);
         setShowIaEstimation(false);
-        setIaDescription("");
       } else {
-        setIaEstimationError("No se pudo estimar los macros del alimento. Intenta describirlo de otra forma.");
+        setIaEstimationError("No se pudo estimar los macros del alimento. Intenta describirlo con más detalle.");
       }
     } catch (err: any) {
       console.error(err);
@@ -880,27 +877,36 @@ export default function FoodLogger({
 
         {/* Tab Selection */}
         {selectedFood === null && (
-          <div className="px-5 pt-3 flex border-b border-gray-100 dark:border-white/5 flex-shrink-0 z-10">
+          <div className="px-3 sm:px-5 pt-3 flex border-b border-gray-100 dark:border-white/5 flex-shrink-0 z-10 overflow-x-auto no-scrollbar gap-1">
             <button
               onClick={() => setActiveTab("search")}
-              className={`flex-1 py-3 text-xs font-extrabold border-b-2 text-center transition cursor-pointer ${
+              className={`flex-1 py-3 px-2 text-xs font-extrabold border-b-2 text-center transition cursor-pointer whitespace-nowrap ${
                 activeTab === "search" ? "border-emerald-500 text-emerald-500 dark:text-emerald-400" : "border-transparent text-gray-500 dark:text-white/40"
               }`}
             >
               Buscar Alimento
             </button>
             <button
+              onClick={() => setActiveTab("ia_text")}
+              className={`flex-1 py-3 px-2 text-xs font-extrabold border-b-2 text-center transition flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                activeTab === "ia_text" ? "border-emerald-500 text-emerald-500 dark:text-emerald-400" : "border-transparent text-gray-500 dark:text-white/40"
+              }`}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Describir con IA
+            </button>
+            <button
               onClick={() => setActiveTab("camera")}
-              className={`flex-1 py-3 text-xs font-extrabold border-b-2 text-center transition flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`flex-1 py-3 px-2 text-xs font-extrabold border-b-2 text-center transition flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
                 activeTab === "camera" ? "border-emerald-500 text-emerald-500 dark:text-emerald-400" : "border-transparent text-gray-500 dark:text-white/40"
               }`}
             >
               <Camera className="h-3.5 w-3.5" />
-              Fotografía IA
+              Foto IA
             </button>
             <button
               onClick={() => setActiveTab("personal")}
-              className={`flex-1 py-3 text-xs font-extrabold border-b-2 text-center transition cursor-pointer ${
+              className={`flex-1 py-3 px-2 text-xs font-extrabold border-b-2 text-center transition cursor-pointer whitespace-nowrap ${
                 activeTab === "personal" ? "border-emerald-500 text-emerald-500 dark:text-emerald-400" : "border-transparent text-gray-500 dark:text-white/40"
               }`}
             >
@@ -935,15 +941,26 @@ export default function FoodLogger({
                       <Barcode className="h-5 w-5" />
                     </button>
                   </div>
-                         {/* Create Custom Food Shortcut */}
-                  <button
-                    type="button"
-                    onClick={handleCreateCustom}
-                    className="w-full py-2.5 bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-emerald-500/30 text-white/70 hover:text-white rounded-xl transition flex items-center justify-center gap-1.5 font-bold text-xs cursor-pointer shadow-sm"
-                  >
-                    <Plus className="h-4 w-4 text-emerald-400" />
-                    Crear Alimento Personalizado
-                  </button>
+
+                  {/* Fast Creation Shortcuts */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsMealBuilderOpen(true)}
+                      className="py-2.5 px-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 hover:text-emerald-300 rounded-xl transition flex items-center justify-center gap-1.5 font-bold text-[11px] cursor-pointer shadow-sm"
+                    >
+                      <span className="text-sm">🥪</span>
+                      <span>Armar Sándwich / Plato</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCreateCustom}
+                      className="py-2.5 px-2 bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-emerald-500/30 text-white/70 hover:text-white rounded-xl transition flex items-center justify-center gap-1.5 font-bold text-[11px] cursor-pointer shadow-sm"
+                    >
+                      <Plus className="h-3.5 w-3.5 text-emerald-400" />
+                      <span>Alimento Manual</span>
+                    </button>
+                  </div>
 
                   {/* Search Error banner */}
                   {searchError && (
@@ -1004,6 +1021,84 @@ export default function FoodLogger({
                       No se encontraron alimentos en la base de datos de Trophia.
                     </div>
                   ) : null}
+                </div>
+              )}
+
+              {activeTab === "ia_text" && (
+                <div className="space-y-3.5">
+                  <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-emerald-400 shrink-0" />
+                      <h4 className="text-xs font-black text-gray-900 dark:text-white">
+                        Describir Alimento con IA
+                      </h4>
+                    </div>
+                    <p className="text-[10px] text-gray-600 dark:text-gray-300 leading-relaxed">
+                      Escribe lo que comiste con tus propias palabras (ingredientes, porciones aproximadas o platos caseros). La IA desglosará las calorías y macronutrientes al instante.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[9.5px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">
+                      ¿Qué comiste?
+                    </label>
+                    <textarea
+                      value={iaDescription}
+                      onChange={(e) => setIaDescription(e.target.value)}
+                      placeholder="Ej: 2 rebanadas de pan de molde integral con 1 lata de atún al agua, 1 huevo cocido y 1 cucharada sopera de mayonesa light..."
+                      className="w-full p-3 bg-white dark:bg-[#0c0d15] border border-gray-250 dark:border-white/10 rounded-2xl text-xs text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500/40 transition placeholder-gray-400 min-h-[90px] resize-none font-sans shadow-inner"
+                    />
+                  </div>
+
+                  {/* Ejemplos rápidos en chips */}
+                  <div className="space-y-1.5">
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">
+                      Ejemplos rápidos:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        "2 rebanadas pan de molde con 1 lata atún y 1 huevo",
+                        "Bowl de 60g avena con 250ml leche descremada y 1 plátano",
+                        "2 huevos revueltos con 1 tostada y café cortado",
+                        "Pechuga de pollo 180g con 1 taza de arroz y ensalada"
+                      ].map((eg, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setIaDescription(eg)}
+                          className="text-[9px] font-medium text-gray-600 dark:text-gray-300 bg-gray-100 hover:bg-emerald-500/15 hover:text-emerald-500 dark:bg-white/5 dark:hover:bg-emerald-500/15 dark:hover:text-emerald-300 px-2.5 py-1 rounded-xl border border-gray-200 dark:border-white/5 transition cursor-pointer text-left"
+                        >
+                          + {eg}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleEstimateMacrosByText}
+                    disabled={isEstimating || !iaDescription.trim()}
+                    className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-200 dark:disabled:bg-white/5 text-white disabled:text-gray-400 dark:disabled:text-white/20 rounded-2xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
+                  >
+                    {isEstimating ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        <span>Analizando ingredientes y calculando macros...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4" />
+                        <span>Estimar Macros con IA</span>
+                      </>
+                    )}
+                  </button>
+
+                  {iaEstimationError && (
+                    <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center gap-2 text-rose-500 text-xs">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      <span>{iaEstimationError}</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1839,14 +1934,26 @@ export default function FoodLogger({
         {/* Footer actions */}
         <div className="p-5 border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-[#12131d]/90 flex-shrink-0 flex gap-3">
           {selectedFood === null ? (
-            <Button
-              variant="secondary"
-              onClick={onClose}
-              className="w-full rounded-xl"
-              size="md"
-            >
-              Cancelar
-            </Button>
+            <div className="w-full flex gap-2">
+              <Button
+                variant="secondary"
+                onClick={onClose}
+                className="flex-1 rounded-xl"
+                size="md"
+              >
+                Cancelar
+              </Button>
+              {mode !== "pantry" && (
+                <button
+                  type="button"
+                  onClick={() => setIsMealBuilderOpen(true)}
+                  className="flex-1 py-2.5 px-3 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>🥪</span>
+                  <span>Armar Plato</span>
+                </button>
+              )}
+            </div>
           ) : (
             <>
               <Button
@@ -1877,6 +1984,20 @@ export default function FoodLogger({
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         onScanSuccess={handleBarcodeScanSuccess}
+      />
+
+      <MealBuilderModal
+        isOpen={isMealBuilderOpen}
+        onClose={() => setIsMealBuilderOpen(false)}
+        onSaveMeal={(meal) => {
+          onAddMeal(meal);
+          onClose();
+        }}
+        pantryItems={pantryItems}
+        customFoods={customFoodsList}
+        userId={userId}
+        targetDate={targetDate}
+        defaultMealType={selectedMealType}
       />
     </div>
   );

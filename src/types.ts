@@ -86,6 +86,9 @@ export interface UserProfile {
   };
 
   bodyMetricLogs?: BodyMetricLog[];
+  householdId?: string;
+  householdName?: string;
+  householdInviteCode?: string;
 }
 
 export interface BodyMetricLog {
@@ -215,7 +218,7 @@ export interface FoodItem {
   carbs: number;
   fat: number;
   servingSize: string;
-  source?: "local" | "history" | "usda" | "off";
+  source?: "local" | "history" | "usda" | "off" | "ai";
   brand?: string;
   image?: string;
   barcode?: string;
@@ -274,4 +277,20 @@ export interface PantryItem {
   protein: number;
   carbs: number;
   fat: number;
+}
+
+export interface HouseholdMember {
+  userId: string;
+  name: string;
+  joinedAt: string;
+}
+
+export interface HouseholdGroup {
+  id: string;
+  name: string;
+  inviteCode: string;
+  createdBy: string;
+  members: HouseholdMember[];
+  pantry: PantryItem[];
+  updatedAt: string;
 }
