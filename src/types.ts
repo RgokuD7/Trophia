@@ -103,6 +103,25 @@ export interface BodyMetricLog {
   notes?: string;
 }
 
+export interface MealBuilderIngredient {
+  id: string;
+  name: string;
+  amount: number;
+  unit: "g" | "ml" | "unit";
+  unitLabel: string; // e.g. "rebanada", "unidad", "g", "ml"
+  equivalentGrams: number;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  raw100gCalories: number;
+  raw100gProtein: number;
+  raw100gCarbs: number;
+  raw100gFat: number;
+  unitWeight: number;
+  barcode?: string;
+}
+
 export interface LoggedMeal {
   id: string;
   name: string;
@@ -113,6 +132,7 @@ export interface LoggedMeal {
   timestamp: string; // ISO string
   type: MealType;
   servingSize?: string;
+  compositeIngredients?: MealBuilderIngredient[];
 }
 
 export interface WaterLog {

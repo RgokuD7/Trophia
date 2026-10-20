@@ -884,7 +884,7 @@ export default function FoodLogger({
                 activeTab === "search" ? "border-emerald-500 text-emerald-500 dark:text-emerald-400" : "border-transparent text-gray-500 dark:text-white/40"
               }`}
             >
-              Buscar Alimento
+              Buscar
             </button>
             <button
               onClick={() => setActiveTab("ia_text")}
@@ -893,7 +893,7 @@ export default function FoodLogger({
               }`}
             >
               <Sparkles className="h-3.5 w-3.5" />
-              Describir con IA
+              <span>Describir</span>
             </button>
             <button
               onClick={() => setActiveTab("camera")}
@@ -902,7 +902,7 @@ export default function FoodLogger({
               }`}
             >
               <Camera className="h-3.5 w-3.5" />
-              Foto IA
+              <span>Foto</span>
             </button>
             <button
               onClick={() => setActiveTab("personal")}
@@ -1934,25 +1934,15 @@ export default function FoodLogger({
         {/* Footer actions */}
         <div className="p-5 border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-[#12131d]/90 flex-shrink-0 flex gap-3">
           {selectedFood === null ? (
-            <div className="w-full flex gap-2">
+            <div className="w-full">
               <Button
                 variant="secondary"
                 onClick={onClose}
-                className="flex-1 rounded-xl"
+                className="w-full rounded-xl"
                 size="md"
               >
                 Cancelar
               </Button>
-              {mode !== "pantry" && (
-                <button
-                  type="button"
-                  onClick={() => setIsMealBuilderOpen(true)}
-                  className="flex-1 py-2.5 px-3 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <span>🥪</span>
-                  <span>Armar Plato</span>
-                </button>
-              )}
             </div>
           ) : (
             <>
@@ -1998,6 +1988,7 @@ export default function FoodLogger({
         userId={userId}
         targetDate={targetDate}
         defaultMealType={selectedMealType}
+        apiKey={effectiveApiKey}
       />
     </div>
   );

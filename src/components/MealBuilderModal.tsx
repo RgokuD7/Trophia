@@ -1,76 +1,118 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   X, Plus, Trash2, Barcode, Search, Sparkles, Check, 
-  Utensils, ChefHat, Package, Layers, Star, AlertCircle, RefreshCw
+  Utensils, ChefHat, Package, Layers, Star, AlertCircle, RefreshCw,
+  Camera, Upload
 } from "lucide-react";
-import { MealType, LoggedMeal, FoodItem, PantryItem, CustomFood } from "../types";
+import { MealType, LoggedMeal, FoodItem, PantryItem, CustomFood, MealBuilderIngredient } from "../types";
 import { searchAllFoods, getProductByBarcode } from "../services/foodDatabaseService";
 import { getDefaultServingInfo } from "./FoodLogger";
 import BarcodeScannerModal from "./BarcodeScannerModal";
 import { addCustomFood } from "../services/dbService";
 import { createTimestampForDate } from "../utils/fitnessUtils";
+import { estimateMacrosFromDescription, analyzeFoodByIA } from "../services/geminiService";
 
-export interface MealBuilderIngredient {
-  id: string;
-  name: string;
-  amount: number;
-  unit: "g" | "ml" | "unit";
-  unitLabel: string; // e.g. "rebanada", "unidad", "g", "ml"
-  equivalentGrams: number;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  raw100gCalories: number;
-  raw100gProtein: number;
-  raw100gCarbs: number;
-  raw100gFat: number;
-  unitWeight: number;
-  barcode?: string;
-}
+export type { MealBuilderIngredient };
 
 export interface MealBuilderModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSaveMeal: (meal: Omit<LoggedMeal, "id" | "timestamp"> & { timestamp?: string }) => void;
+  onSaveMeal: (meal: Omit<LoggedMeal, "id" | "timestamp"> & { timestamp?: string; compositeIngredients?: MealBuilderIngredient[] }) => void;
+  onUpdateMeal?: (meal: LoggedMeal) => void;
+  initialMeal?: LoggedMeal | null;
   pantryItems?: PantryItem[];
   customFoods?: CustomFood[];
   userId?: string;
   targetDate?: string;
   defaultMealType?: MealType;
+  apiKey?: string;
 }
-
-const PRESET_IDEAS = [
-  { label: "🥪 Sándwich de Atún", name: "Sándwich de atún con huevo y mayo" },
-  { label: "🥪 Tostada con Huevo", name: "Tostadas de pan integral con huevo y palta" },
-  { label: "🥣 Bowl de Avena", name: "Bowl de avena con leche y proteína" },
-  { label: "🥗 Wrap de Pollo", name: "Wrap integral de pollo con palta y lechuga" },
-];
 
 export default function MealBuilderModal({
   isOpen,
   onClose,
   onSaveMeal,
+  onUpdateMeal,
+  initialMeal,
   pantryItems = [],
   customFoods = [],
   userId,
   targetDate,
-  defaultMealType = "lunch"
+  defaultMealType = "lunch",
+  apiKey
 }: MealBuilderModalProps) {
+  const effectiveApiKey = apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || (typeof localStorage !== "undefined" ? localStorage.getItem("trophia_api_key") : "") || "";
+
   const [dishName, setDishName] = useState("");
   const [selectedMealType, setSelectedMealType] = useState<MealType>(defaultMealType);
   const [ingredients, setIngredients] = useState<MealBuilderIngredient[]>([]);
   const [saveAsCustom, setSaveAsCustom] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Ingredient adding drawer / picker state
-  const [addMode, setAddMode] = useState<"search" | "pantry" | "custom" | null>(null);
+  const [addMode, setAddMode] = useState<"search" | "ia_text" | "camera" | "pantry" | "custom" | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<FoodItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
+
+  // IA Text Description state
+  const [iaDescription, setIaDescription] = useState("");
+  const [isIaEstimating, setIsIaEstimating] = useState(false);
+  const [iaError, setIaError] = useState<string | null>(null);
+
+  // IA Camera state
+  const [photoData, setPhotoData] = useState<string | null>(null);
+  const [photoDescription, setPhotoDescription] = useState("");
+  const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
+
+  // Initialize or reset when modal opens or initialMeal changes
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialMeal) {
+      setDishName(initialMeal.name || "");
+      setSelectedMealType(initialMeal.type || defaultMealType);
+      if (initialMeal.compositeIngredients && initialMeal.compositeIngredients.length > 0) {
+        setIngredients(initialMeal.compositeIngredients);
+      } else {
+        // Synthesize single initial ingredient from meal data if none saved
+        const synthIng: MealBuilderIngredient = {
+          id: "ing_" + Date.now(),
+          name: initialMeal.name,
+          amount: 1,
+          unit: "unit",
+          unitLabel: initialMeal.servingSize || "porción",
+          equivalentGrams: 100,
+          calories: initialMeal.calories,
+          protein: initialMeal.protein,
+          carbs: initialMeal.carbs,
+          fat: initialMeal.fat,
+          raw100gCalories: initialMeal.calories,
+          raw100gProtein: initialMeal.protein,
+          raw100gCarbs: initialMeal.carbs,
+          raw100gFat: initialMeal.fat,
+          unitWeight: 100
+        };
+        setIngredients([synthIng]);
+      }
+    } else {
+      setDishName("");
+      setSelectedMealType(defaultMealType);
+      setIngredients([]);
+    }
+    setAddMode(null);
+    setSearchQuery("");
+    setSearchResults([]);
+    setIaDescription("");
+    setPhotoData(null);
+    setPhotoDescription("");
+    setScannerError(null);
+    setIaError(null);
+    setConfirmDeleteId(null);
+  }, [isOpen, initialMeal, defaultMealType]);
 
   if (!isOpen) return null;
 
@@ -134,6 +176,10 @@ export default function MealBuilderModal({
     setAddMode(null);
     setSearchQuery("");
     setSearchResults([]);
+    setIaDescription("");
+    setPhotoData(null);
+    setPhotoDescription("");
+    setConfirmDeleteId(null);
   };
 
   const handleUpdateIngredientAmount = (id: string, newAmount: number) => {
@@ -161,6 +207,7 @@ export default function MealBuilderModal({
 
   const handleRemoveIngredient = (id: string) => {
     setIngredients(prev => prev.filter(ing => ing.id !== id));
+    setConfirmDeleteId(null);
   };
 
   const handleSearchFoods = async (q: string) => {
@@ -196,6 +243,103 @@ export default function MealBuilderModal({
     }
   };
 
+  // IA Text Description estimation
+  const handleEstimateWithIa = async () => {
+    if (!iaDescription.trim() || isIaEstimating) return;
+    setIsIaEstimating(true);
+    setIaError(null);
+    try {
+      const result = await estimateMacrosFromDescription(effectiveApiKey, iaDescription.trim());
+      if (result && result.name && typeof result.calories === "number") {
+        handleAddFoodAsIngredient({
+          name: result.name,
+          calories: result.calories,
+          protein: Number(result.protein) || 0,
+          carbs: Number(result.carbs) || 0,
+          fat: Number(result.fat) || 0,
+          servingSize: result.servingSize || "1 porción"
+        });
+      } else {
+        setIaError("No pudimos estimar los macros del ingrediente. Intenta ser más descriptivo.");
+      }
+    } catch (err) {
+      console.error("Error estimating ingredient with IA:", err);
+      setIaError("Error de conexión al analizar con IA.");
+    } finally {
+      setIsIaEstimating(false);
+    }
+  };
+
+  // IA Photo processing
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const rawDataUrl = reader.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1024;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          setPhotoData(canvas.toDataURL("image/jpeg", 0.82));
+        } else {
+          setPhotoData(rawDataUrl);
+        }
+      };
+      img.onerror = () => setPhotoData(rawDataUrl);
+      img.src = rawDataUrl;
+      setIaError(null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAnalyzePhoto = async () => {
+    if (!photoData || isAnalyzingPhoto) return;
+    setIsAnalyzingPhoto(true);
+    setIaError(null);
+    try {
+      const data = await analyzeFoodByIA(effectiveApiKey, {
+        image: photoData,
+        mealType: selectedMealType,
+        description: photoDescription.trim() || undefined
+      });
+      if (data && data.name && typeof data.calories === "number") {
+        const estimatedGrams = Math.max(1, Number(data.estimatedGrams) || 100);
+        handleAddFoodAsIngredient({
+          name: data.name,
+          calories: data.calories,
+          protein: Number(data.protein) || 0,
+          carbs: Number(data.carbs) || 0,
+          fat: Number(data.fat) || 0,
+          servingSize: data.servingSize || `${estimatedGrams}g`
+        });
+      } else {
+        setIaError("No se pudo identificar el alimento en la imagen.");
+      }
+    } catch (err) {
+      console.error("Error analyzing photo:", err);
+      setIaError("Error al procesar la foto con IA.");
+    } finally {
+      setIsAnalyzingPhoto(false);
+    }
+  };
+
   // Aggregated totals
   const totalCalories = ingredients.reduce((sum, ing) => sum + ing.calories, 0);
   const totalProtein = Math.round(ingredients.reduce((sum, ing) => sum + ing.protein, 0) * 10) / 10;
@@ -209,7 +353,7 @@ export default function MealBuilderModal({
   }).join(" + ");
 
   const handleSaveCompositeMeal = async () => {
-    const finalName = dishName.trim() || "Plato Compuesto";
+    const finalName = dishName.trim() || (initialMeal ? initialMeal.name : "Sándwich de atún con huevo");
     if (ingredients.length === 0) return;
 
     setIsSaving(true);
@@ -228,17 +372,32 @@ export default function MealBuilderModal({
         });
       }
 
-      // 2. Log into daily meals
-      onSaveMeal({
-        name: finalName,
-        calories: totalCalories,
-        protein: totalProtein,
-        carbs: totalCarbs,
-        fat: totalFat,
-        type: selectedMealType,
-        servingSize: ingredientsSummary.slice(0, 120) || "1 porción",
-        timestamp: targetDate ? createTimestampForDate(targetDate) : undefined
-      });
+      // 2. Either update existing meal or create new one
+      if (initialMeal && onUpdateMeal) {
+        onUpdateMeal({
+          ...initialMeal,
+          name: finalName,
+          calories: totalCalories,
+          protein: totalProtein,
+          carbs: totalCarbs,
+          fat: totalFat,
+          type: selectedMealType,
+          servingSize: ingredientsSummary.slice(0, 120) || initialMeal.servingSize || "1 porción",
+          compositeIngredients: ingredients
+        });
+      } else {
+        onSaveMeal({
+          name: finalName,
+          calories: totalCalories,
+          protein: totalProtein,
+          carbs: totalCarbs,
+          fat: totalFat,
+          type: selectedMealType,
+          servingSize: ingredientsSummary.slice(0, 120) || "1 porción",
+          compositeIngredients: ingredients,
+          timestamp: targetDate ? createTimestampForDate(targetDate) : undefined
+        });
+      }
 
       onClose();
     } catch (err) {
@@ -264,13 +423,13 @@ export default function MealBuilderModal({
             </div>
             <div>
               <h3 className="text-sm font-black text-white tracking-wide flex items-center gap-1.5">
-                <span>Armar Sándwich o Plato</span>
-                <span className="text-[9px] bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full font-mono">
-                  MULTICOMPUESTO
+                <span>{initialMeal ? "Editar Sándwich o Plato" : "Armar Sándwich o Plato"}</span>
+                <span className="text-[9px] bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full font-mono uppercase">
+                  {initialMeal ? "Edición" : "Multicompuesto"}
                 </span>
               </h3>
               <p className="text-[10px] text-white/50">
-                Combina varios ingredientes (pan, atún, huevo...) y regístralos como 1 sola comida limpia
+                Combina varios ingredientes (pan, atún, huevo...) y regístralos como 1 sola comida
               </p>
             </div>
           </div>
@@ -284,66 +443,19 @@ export default function MealBuilderModal({
 
         {/* Scrollable Body */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 no-scrollbar">
-          
-          {/* Preset Ideas */}
-          {ingredients.length === 0 && (
-            <div className="space-y-1.5">
-              <span className="text-[9px] font-bold text-white/40 uppercase tracking-wider block">
-                Ideas rápidas de platos:
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {PRESET_IDEAS.map((p, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setDishName(p.name)}
-                    className="text-[10px] font-bold px-2.5 py-1 rounded-xl bg-white/5 hover:bg-emerald-500/15 hover:text-emerald-400 text-white/70 border border-white/5 transition cursor-pointer"
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
-          {/* Dish Name & Meal Type */}
-          <div className="space-y-2">
-            <div>
-              <label className="text-[9.5px] font-bold text-white/50 uppercase tracking-wider block mb-1">
-                Nombre de tu plato o preparación
-              </label>
-              <input
-                type="text"
-                value={dishName}
-                onChange={(e) => setDishName(e.target.value)}
-                placeholder="Ej: Sándwich de atún con huevo y mayo light"
-                className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-2xl text-xs text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/40 transition font-bold"
-              />
-            </div>
-
-            {/* Meal Type Picker */}
-            <div className="grid grid-cols-4 gap-1.5 pt-1">
-              {[
-                { type: "breakfast", label: "Desayuno", emoji: "🌅" },
-                { type: "lunch", label: "Almuerzo", emoji: "☀️" },
-                { type: "snack", label: "Once / Snack", emoji: "☕" },
-                { type: "dinner", label: "Cena", emoji: "🌙" }
-              ].map((t) => (
-                <button
-                  key={t.type}
-                  type="button"
-                  onClick={() => setSelectedMealType(t.type as MealType)}
-                  className={`py-1.5 rounded-xl text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer border ${
-                    selectedMealType === t.type
-                      ? "bg-emerald-500 text-black border-emerald-400 font-black shadow-sm"
-                      : "bg-white/[0.02] border-white/5 text-white/60 hover:text-white"
-                  }`}
-                >
-                  <span>{t.emoji}</span>
-                  <span className="truncate">{t.label}</span>
-                </button>
-              ))}
-            </div>
+          {/* Dish Name Input */}
+          <div className="space-y-1">
+            <label className="text-[9.5px] font-bold text-white/50 uppercase tracking-wider block">
+              Nombre de tu plato o preparación
+            </label>
+            <input
+              type="text"
+              value={dishName}
+              onChange={(e) => setDishName(e.target.value)}
+              placeholder="Ej: Sándwich de atún con huevo y mayo"
+              className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-2xl text-xs text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/40 transition font-bold"
+            />
           </div>
 
           {/* Ingredient List */}
@@ -351,7 +463,7 @@ export default function MealBuilderModal({
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black text-white/60 uppercase tracking-wider flex items-center gap-1.5">
                 <Layers className="h-3.5 w-3.5 text-emerald-400" />
-                Ingredientes del Plato ({ingredients.length})
+                Ingredientes ({ingredients.length})
               </span>
               <span className="text-[10px] text-emerald-400 font-bold font-mono">
                 {totalCalories} kcal acumuladas
@@ -361,10 +473,10 @@ export default function MealBuilderModal({
             {ingredients.length === 0 ? (
               <div className="p-6 rounded-2xl bg-white/[0.02] border border-dashed border-white/10 text-center space-y-2">
                 <p className="text-xs text-white/60 font-medium">
-                  Tu plato aún no tiene ingredientes añadidos.
+                  Aún no has agregado ingredientes.
                 </p>
                 <p className="text-[10px] text-white/40">
-                  Escanea el código de barras del envase (pan, atún, etc.) o búscalo abajo para armar la mezcla.
+                  Usa cualquiera de las opciones de abajo para añadir pan, atún, huevo, salsas, etc.
                 </p>
               </div>
             ) : (
@@ -398,68 +510,144 @@ export default function MealBuilderModal({
                       </span>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveIngredient(ing.id)}
-                      className="p-1.5 text-white/30 hover:text-rose-400 transition cursor-pointer"
-                      title="Eliminar ingrediente"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {/* Safeguard delete: two-tap confirmation to prevent accidental taps */}
+                    {confirmDeleteId === ing.id ? (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveIngredient(ing.id)}
+                          className="px-2 py-1 rounded-lg bg-rose-500 text-white font-bold text-[9px] hover:bg-rose-600 transition cursor-pointer"
+                        >
+                          ¿Borrar?
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="px-1.5 py-1 rounded-lg bg-white/10 text-white/60 hover:text-white text-[9px] transition cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(ing.id)}
+                        className="p-1.5 text-white/30 hover:text-rose-400 transition cursor-pointer"
+                        title="Eliminar ingrediente"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Add Ingredient Actions */}
-          <div className="space-y-2">
-            {!addMode ? (
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsScannerOpen(true)}
-                  className="py-2.5 px-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-2xl text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Barcode className="h-3.5 w-3.5" />
-                  <span>Escanear Envase</span>
-                </button>
+          {/* Full Tools to Add Ingredients */}
+          <div className="space-y-2 pt-2 border-t border-white/5">
+            <span className="text-[9.5px] font-bold text-white/40 uppercase tracking-wider block">
+              Agregar ingrediente al plato:
+            </span>
 
-                <button
-                  type="button"
-                  onClick={() => setAddMode("search")}
-                  className="py-2.5 px-2 bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 rounded-2xl text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Search className="h-3.5 w-3.5" />
-                  <span>Buscar Catálogo</span>
-                </button>
+            {/* Quick Mode Buttons */}
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+              <button
+                type="button"
+                onClick={() => setAddMode(addMode === "search" ? null : "search")}
+                className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
+                  addMode === "search"
+                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                    : "bg-white/[0.03] hover:bg-white/[0.06] text-white/70 border-white/5"
+                }`}
+              >
+                <Search className="h-3.5 w-3.5" />
+                <span>Buscar</span>
+              </button>
 
-                <button
-                  type="button"
-                  onClick={() => setAddMode("pantry")}
-                  className="py-2.5 px-2 bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 rounded-2xl text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Package className="h-3.5 w-3.5" />
-                  <span>Mi Despensa</span>
-                </button>
-              </div>
-            ) : (
+              <button
+                type="button"
+                onClick={() => setAddMode(addMode === "ia_text" ? null : "ia_text")}
+                className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
+                  addMode === "ia_text"
+                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                    : "bg-white/[0.03] hover:bg-white/[0.06] text-white/70 border-white/5"
+                }`}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Describir</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAddMode(addMode === "camera" ? null : "camera")}
+                className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
+                  addMode === "camera"
+                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                    : "bg-white/[0.03] hover:bg-white/[0.06] text-white/70 border-white/5"
+                }`}
+              >
+                <Camera className="h-3.5 w-3.5" />
+                <span>Foto</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAddMode(addMode === "pantry" ? null : "pantry")}
+                className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
+                  addMode === "pantry"
+                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                    : "bg-white/[0.03] hover:bg-white/[0.06] text-white/70 border-white/5"
+                }`}
+              >
+                <Package className="h-3.5 w-3.5" />
+                <span>Despensa</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAddMode(addMode === "custom" ? null : "custom")}
+                className={`py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border ${
+                  addMode === "custom"
+                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                    : "bg-white/[0.03] hover:bg-white/[0.06] text-white/70 border-white/5"
+                }`}
+              >
+                <Star className="h-3.5 w-3.5" />
+                <span>Frecuentes</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsScannerOpen(true)}
+                className="py-2 px-1 rounded-xl text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer border bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/25"
+              >
+                <Barcode className="h-3.5 w-3.5" />
+                <span>Escanear</span>
+              </button>
+            </div>
+
+            {/* Active Drawer Sub-view */}
+            {addMode && (
               <div className="p-3.5 bg-white/[0.03] border border-white/10 rounded-2xl space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider">
-                    {addMode === "search" && "Buscar en catálogo"}
-                    {addMode === "pantry" && "Seleccionar de mi despensa"}
-                    {addMode === "custom" && "Mis alimentos guardados"}
+                  <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider flex items-center gap-1.5">
+                    {addMode === "search" && <><Search className="h-3 w-3 text-emerald-400" /> Buscar en catálogo</>}
+                    {addMode === "ia_text" && <><Sparkles className="h-3 w-3 text-emerald-400" /> Describir con IA</>}
+                    {addMode === "camera" && <><Camera className="h-3 w-3 text-emerald-400" /> Foto o Etiqueta con IA</>}
+                    {addMode === "pantry" && <><Package className="h-3 w-3 text-emerald-400" /> Mi despensa ({pantryItems.length})</>}
+                    {addMode === "custom" && <><Star className="h-3 w-3 text-emerald-400" /> Frecuentes y Guardados ({customFoods.length})</>}
                   </span>
                   <button
                     type="button"
-                    onClick={() => { setAddMode(null); setSearchResults([]); }}
-                    className="text-white/40 hover:text-white text-xs font-bold transition"
+                    onClick={() => { setAddMode(null); setSearchResults([]); setIaError(null); }}
+                    className="text-white/40 hover:text-white text-xs font-bold transition cursor-pointer"
                   >
                     Cerrar
                   </button>
                 </div>
 
+                {/* Mode 1: Search Catalog */}
                 {addMode === "search" && (
                   <div className="space-y-2">
                     <div className="relative">
@@ -468,7 +656,7 @@ export default function MealBuilderModal({
                         type="text"
                         value={searchQuery}
                         onChange={(e) => handleSearchFoods(e.target.value)}
-                        placeholder="Escribe el ingrediente (ej: pan de molde, atún, huevo, mayo)..."
+                        placeholder="Escribe el ingrediente (ej: pan, atún, huevo, palta)..."
                         className="w-full pl-9 pr-3 py-2 bg-black/40 border border-white/10 rounded-xl text-xs text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/40 font-medium"
                       />
                     </div>
@@ -501,6 +689,102 @@ export default function MealBuilderModal({
                   </div>
                 )}
 
+                {/* Mode 2: Describe with IA */}
+                {addMode === "ia_text" && (
+                  <div className="space-y-2">
+                    <textarea
+                      value={iaDescription}
+                      onChange={(e) => setIaDescription(e.target.value)}
+                      placeholder="Describe el ingrediente, ej: 1 lata de atún al agua, 2 cucharadas de mayonesa light, 50g de queso gauda..."
+                      rows={2}
+                      className="w-full p-2.5 bg-black/40 border border-white/10 rounded-xl text-xs text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/40 font-medium resize-none"
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        disabled={!iaDescription.trim() || isIaEstimating}
+                        onClick={handleEstimateWithIa}
+                        className="py-2 px-3 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black text-[11px] font-black rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        {isIaEstimating ? (
+                          <>
+                            <RefreshCw className="h-3 w-3 animate-spin" />
+                            <span>Calculando macros...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-3.5 w-3.5" />
+                            <span>Añadir Ingrediente con IA</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Mode 3: Photo IA */}
+                {addMode === "camera" && (
+                  <div className="space-y-2.5">
+                    {photoData ? (
+                      <div className="space-y-2">
+                        <div className="relative rounded-xl overflow-hidden border border-white/10 max-h-36 flex items-center justify-center bg-black/50">
+                          <img src={photoData} alt="Preview" className="w-full h-36 object-contain" />
+                          <button
+                            type="button"
+                            onClick={() => setPhotoData(null)}
+                            className="absolute top-2 right-2 p-1 rounded-full bg-black/70 text-white hover:text-rose-400"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={photoDescription}
+                          onChange={(e) => setPhotoDescription(e.target.value)}
+                          placeholder="Contexto adicional opcional (ej: pechuga de pavo cocida)..."
+                          className="w-full px-3 py-1.5 bg-black/40 border border-white/10 rounded-xl text-[11px] text-white placeholder-white/30 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          disabled={isAnalyzingPhoto}
+                          onClick={handleAnalyzePhoto}
+                          className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black text-xs font-black rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          {isAnalyzingPhoto ? (
+                            <>
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                              <span>Analizando con IA...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Check className="h-3.5 w-3.5 stroke-[3]" />
+                              <span>Analizar y Añadir al Plato</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="p-4 rounded-xl border border-dashed border-white/20 hover:border-emerald-500/40 bg-black/20 flex flex-col items-center justify-center gap-2 cursor-pointer transition">
+                        <Camera className="h-6 w-6 text-emerald-400" />
+                        <span className="text-xs font-bold text-white/80">
+                          Toma o sube una foto del ingrediente o etiqueta
+                        </span>
+                        <span className="text-[10px] text-white/40">
+                          La IA detectará automáticamente el alimento y sus macros
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handlePhotoUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                {/* Mode 4: Pantry Items */}
                 {addMode === "pantry" && (
                   <div className="space-y-1.5 max-h-48 overflow-y-auto no-scrollbar">
                     {pantryItems.length > 0 ? (
@@ -528,6 +812,45 @@ export default function MealBuilderModal({
                     ) : (
                       <p className="text-[10px] text-white/40 text-center py-3">Tu despensa está vacía.</p>
                     )}
+                  </div>
+                )}
+
+                {/* Mode 5: Custom / Frequent Foods */}
+                {addMode === "custom" && (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto no-scrollbar">
+                    {customFoods.length > 0 ? (
+                      customFoods.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => handleAddFoodAsIngredient({
+                            name: c.name,
+                            calories: c.calories,
+                            protein: c.protein,
+                            carbs: c.carbs,
+                            fat: c.fat,
+                            servingSize: c.servingSize
+                          })}
+                          className="w-full text-left p-2 rounded-xl hover:bg-emerald-500/10 transition flex items-center justify-between gap-2 cursor-pointer border border-white/5"
+                        >
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold text-white block truncate">{c.name}</span>
+                            <span className="text-[9px] text-white/40 font-mono">{c.servingSize}</span>
+                          </div>
+                          <span className="text-xs font-black text-emerald-400 shrink-0 font-mono">{c.calories} kcal</span>
+                        </button>
+                      ))
+                    ) : (
+                      <p className="text-[10px] text-white/40 text-center py-3">No tienes alimentos guardados aún.</p>
+                    )}
+                  </div>
+                )}
+
+                {/* IA Error message */}
+                {iaError && (
+                  <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-[10px] flex items-center gap-1.5">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    <span>{iaError}</span>
                   </div>
                 )}
               </div>
@@ -574,19 +897,21 @@ export default function MealBuilderModal({
                 <strong className="text-white/70">Desglose:</strong> {ingredientsSummary}
               </div>
 
-              {/* Save as favorite custom food */}
-              <label className="flex items-center gap-2 text-xs text-white/80 cursor-pointer pt-1">
-                <input
-                  type="checkbox"
-                  checked={saveAsCustom}
-                  onChange={(e) => setSaveAsCustom(e.target.checked)}
-                  className="rounded border-white/20 text-emerald-500 focus:ring-0 w-4 h-4"
-                />
-                <span className="flex items-center gap-1 font-medium">
-                  <Star className="h-3.5 w-3.5 text-amber-400" />
-                  Guardar como plato favorito para registrarlo en 1 click otro día
-                </span>
-              </label>
+              {/* Save as favorite custom food (only if creating new) */}
+              {!initialMeal && (
+                <label className="flex items-center gap-2 text-xs text-white/80 cursor-pointer pt-1">
+                  <input
+                    type="checkbox"
+                    checked={saveAsCustom}
+                    onChange={(e) => setSaveAsCustom(e.target.checked)}
+                    className="rounded border-white/20 text-emerald-500 focus:ring-0 w-4 h-4"
+                  />
+                  <span className="flex items-center gap-1 font-medium">
+                    <Star className="h-3.5 w-3.5 text-amber-400" />
+                    Guardar como plato favorito para registrarlo en 1 click otro día
+                  </span>
+                </label>
+              )}
             </div>
           )}
         </div>
@@ -611,6 +936,11 @@ export default function MealBuilderModal({
               <>
                 <RefreshCw className="h-4 w-4 animate-spin" />
                 <span>Guardando plato...</span>
+              </>
+            ) : initialMeal ? (
+              <>
+                <Check className="h-4 w-4 stroke-[3]" />
+                <span>Guardar Cambios ({totalCalories} kcal)</span>
               </>
             ) : (
               <>

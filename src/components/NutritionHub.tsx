@@ -5,7 +5,7 @@ import {
   ChefHat, Flame, Zap, ChevronLeft, ChevronRight, MessageSquare, Lightbulb, Sparkles, AlertCircle, Send, Utensils, Package, Pencil,
   Users, Copy, LogOut, CheckCheck
 } from "lucide-react";
-import { UserProfile, LoggedMeal, MealType, CustomFood, HouseholdGroup } from "../types";
+import { UserProfile, LoggedMeal, MealType, CustomFood, HouseholdGroup, PantryItem } from "../types";
 import { 
   getCustomFoods, addCustomFood, deleteCustomFood,
   createHouseholdGroup, joinHouseholdGroupByCode, leaveHouseholdGroup, updateHouseholdPantry, subscribeToHousehold
@@ -88,6 +88,10 @@ export default function NutritionHub({
   const [weekDates, setWeekDates] = useState(() => getWeekDates(new Date()));
   const [activeSection, setActiveSection] = useState<"custom_foods" | "calorie_bank" | "pantry" | null>(null);
   const [isMealBuilderOpen, setIsMealBuilderOpen] = useState(false);
+  const [editingCompositeMeal, setEditingCompositeMeal] = useState<LoggedMeal | null>(null);
+  const [mealToDelete, setMealToDelete] = useState<LoggedMeal | null>(null);
+  const [foodToDelete, setFoodToDelete] = useState<CustomFood | null>(null);
+  const [pantryItemToDelete, setPantryItemToDelete] = useState<PantryItem | null>(null);
   
   // Custom foods state
   const [customFoods, setCustomFoods] = useState<CustomFood[]>([]);
@@ -747,8 +751,9 @@ export default function NutritionHub({
                     </div>
                   </div>
                   <button
-                    onClick={() => handleDeletePantryItem(item.id)}
+                    onClick={() => setPantryItemToDelete(item)}
                     className="p-1.5 bg-transparent text-white/20 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition border-none cursor-pointer"
+                    title="Eliminar de la despensa"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -933,7 +938,7 @@ export default function NutritionHub({
                 </div>
                 <div className="flex gap-1.5 shrink-0">
                   <button onClick={() => { onAddMeal({ name: food.name, calories: food.calories, protein: food.protein, carbs: food.carbs, fat: food.fat, type: "lunch" }); }} className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 hover:bg-emerald-500/20 transition cursor-pointer"><Plus className="h-3.5 w-3.5" /></button>
-                  <button onClick={() => handleDeleteFood(food.id)} className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 hover:bg-rose-500/20 transition cursor-pointer"><Trash2 className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => setFoodToDelete(food)} className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 hover:bg-rose-500/20 transition cursor-pointer" title="Eliminar alimento guardado"><Trash2 className="h-3.5 w-3.5" /></button>
                 </div>
               </motion.div>
             ))}
@@ -1517,6 +1522,20 @@ export default function NutritionHub({
                       <div className="min-w-0 pr-2">
                         <span className="text-xs font-bold text-white block truncate">{meal.name}</span>
                         <span className="text-[9px] text-white/30">P:{Number(meal.protein).toFixed(1).replace(/\.0$/, "")}g · C:{Number(meal.carbs).toFixed(1).replace(/\.0$/, "")}g · G:{Number(meal.fat).toFixed(1).replace(/\.0$/, "")}g</span>
+                        {meal.compositeIngredients && meal.compositeIngredients.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingCompositeMeal(meal);
+                              setIsMealBuilderOpen(true);
+                            }}
+                            className="mt-1 text-[9px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 px-1.5 py-0.5 rounded border border-emerald-500/20 transition cursor-pointer"
+                            title="Editar ingredientes del plato"
+                          >
+                            <span>🥪</span>
+                            <span>{meal.compositeIngredients.length} ingredientes</span>
+                          </button>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-xs font-black text-emerald-400 font-mono">{meal.calories} kcal</span>
@@ -1530,7 +1549,7 @@ export default function NutritionHub({
                               <Pencil className="h-3.5 w-3.5" />
                             </button>
                             <button
-                              onClick={() => onDeleteMeal(meal.id)}
+                              onClick={() => setMealToDelete(meal)}
                               className="p-1.5 text-white/30 hover:text-rose-400 transition cursor-pointer rounded-lg hover:bg-white/5 border-none bg-transparent"
                               title="Eliminar comida"
                             >
@@ -1631,6 +1650,25 @@ export default function NutritionHub({
                     className="bg-white/5 border-white/10"
                   />
                 </div>
+
+                {/* Edit with Meal Builder (Composite ingredients) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = editingMeal;
+                    setEditingMeal(null);
+                    setEditingCompositeMeal(target);
+                    setIsMealBuilderOpen(true);
+                  }}
+                  className="w-full py-2.5 px-3 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-400 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition shadow-sm"
+                >
+                  <span>🥪</span>
+                  <span>
+                    {editingMeal.compositeIngredients && editingMeal.compositeIngredients.length > 0
+                      ? `Editar ${editingMeal.compositeIngredients.length} Ingredientes del Plato`
+                      : "Desglosar o Editar con Armador de Platos"}
+                  </span>
+                </button>
 
                 {/* Quick Portion Scaler Panel */}
                 {baseMealRef && (
@@ -1940,17 +1978,183 @@ export default function NutritionHub({
         )}
       </AnimatePresence>
 
+      {/* Confirmation Modal: Delete Meal */}
+      <AnimatePresence>
+        {mealToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fadeIn">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#12131d] border border-rose-500/20 rounded-3xl p-5 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">¿Eliminar comida?</h3>
+                  <p className="text-[11px] text-white/50">Esta acción no se puede deshacer.</p>
+                </div>
+              </div>
+              
+              <div className="p-3 bg-white/[0.03] border border-white/5 rounded-2xl">
+                <span className="text-xs font-bold text-white block">{mealToDelete.name}</span>
+                <span className="text-[10px] text-emerald-400 font-mono">
+                  {mealToDelete.calories} kcal · {getMealLabel(mealToDelete.type)}
+                </span>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setMealToDelete(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDeleteMeal(mealToDelete.id);
+                    setMealToDelete(null);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-black transition cursor-pointer shadow-lg shadow-rose-500/20"
+                >
+                  Sí, Eliminar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirmation Modal: Delete Custom Food */}
+      <AnimatePresence>
+        {foodToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fadeIn">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#12131d] border border-rose-500/20 rounded-3xl p-5 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">¿Eliminar alimento guardado?</h3>
+                  <p className="text-[11px] text-white/50">Se quitará de tu lista de favoritos.</p>
+                </div>
+              </div>
+              
+              <div className="p-3 bg-white/[0.03] border border-white/5 rounded-2xl">
+                <span className="text-xs font-bold text-white block">{foodToDelete.name}</span>
+                <span className="text-[10px] text-emerald-400 font-mono">
+                  {foodToDelete.calories} kcal · {foodToDelete.servingSize}
+                </span>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setFoodToDelete(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDeleteFood(foodToDelete.id);
+                    setFoodToDelete(null);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-black transition cursor-pointer shadow-lg shadow-rose-500/20"
+                >
+                  Sí, Eliminar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirmation Modal: Delete Pantry Item */}
+      <AnimatePresence>
+        {pantryItemToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fadeIn">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#12131d] border border-rose-500/20 rounded-3xl p-5 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">¿Quitar de la despensa?</h3>
+                  <p className="text-[11px] text-white/50">Se eliminará del inventario compartido.</p>
+                </div>
+              </div>
+              
+              <div className="p-3 bg-white/[0.03] border border-white/5 rounded-2xl">
+                <span className="text-xs font-bold text-white block">{pantryItemToDelete.name}</span>
+                <span className="text-[10px] text-white/50 font-mono">
+                  Cantidad: {pantryItemToDelete.quantity}
+                </span>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setPantryItemToDelete(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDeletePantryItem(pantryItemToDelete.id);
+                    setPantryItemToDelete(null);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-black transition cursor-pointer shadow-lg shadow-rose-500/20"
+                >
+                  Sí, Eliminar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <MealBuilderModal
         isOpen={isMealBuilderOpen}
-        onClose={() => setIsMealBuilderOpen(false)}
+        onClose={() => {
+          setIsMealBuilderOpen(false);
+          setEditingCompositeMeal(null);
+        }}
+        initialMeal={editingCompositeMeal}
         onSaveMeal={(meal) => {
           onAddMeal(meal);
           setIsMealBuilderOpen(false);
+          setEditingCompositeMeal(null);
         }}
-        pantryItems={profile.pantry || []}
+        onUpdateMeal={(updated) => {
+          if (onUpdateMeal) {
+            onUpdateMeal(updated);
+          }
+          setIsMealBuilderOpen(false);
+          setEditingCompositeMeal(null);
+        }}
+        pantryItems={household ? household.pantry : (profile.pantry || [])}
         customFoods={customFoods}
         userId={userId}
         targetDate={selectedDate}
+        apiKey={profile.apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || ""}
       />
     </div>
   );
