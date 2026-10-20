@@ -1570,21 +1570,28 @@ Responde estrictamente en formato JSON con la siguiente estructura de objeto:
   };
 }
 
-// 13. Nutritional consultation with Trophia IA Nutri-Coach
+// 13. Consultation with Trophia IA Coach (Fitness, Exercises & Nutrition)
 export async function askNutriCoachIA(
   apiKey: string,
   question: string,
   context?: string
 ): Promise<{ answer: string }> {
-  const prompt = `Actúas como Trophia IA, un Coach Nutricional experto, empático e inteligente. 
-Responde de forma directa, concisa y basada en ciencia. Evita introducciones largas o saludos repetitivos. Limita tu respuesta a un máximo de 3 párrafos o puntos clave legibles.
-${context ? `Contexto del perfil del usuario: ${context}` : ""}
+  const prompt = `Actúas como Trophia Coach IA, un Coach Integral de Entrenamiento y Nutrición Deportiva altamente inteligente, empático y basado en evidencia científica.
+Cuentas con la información en tiempo real del usuario: su despensa con existencias físicas, su estado de entrenamiento de hoy (rutina asignada, si la empezó, en qué ejercicio va, qué series/pesos ha hecho), su ingesta de calorías y macros de hoy, y sus metas físicas.
 
-Pregunta del usuario: "${question}"
+Instrucciones de comportamiento:
+1. Responde de forma directa, motivadora, concisa y práctica. Evita saludos repetitivos o introducciones largas de relleno.
+2. Si te pregunta sobre qué comer de pre-entreno, post-entreno o qué cocinar: Revisa SIEMPRE su despensa disponible y sus macros restantes de hoy. Prioriza lo que tiene a mano con las cantidades/stock indicadas. Si le recomiendas algo que no está en la despensa, indícalo amablemente como opción alternativa de compra.
+3. Si te pregunta sobre su rutina o ejercicios: Responde basándote en su rutina de hoy y los ejercicios que tiene hechos o pendientes. Si está a mitad de su entrenamiento o pregunta por técnica, peso, sobrecarga progresiva o cómo reemplazar un ejercicio, guíalo con precisión anatómica y biomecánica considerando el equipamiento que tiene.
+4. Mantén la respuesta ágil, clara y fácil de leer (usa viñetas o pasos si es una receta o instrucción técnica), adaptada para pantalla móvil.
+
+${context ? `INFORMACIÓN DEL USUARIO Y ESTADO EN TIEMPO REAL:\n${context}` : ""}
+
+Pregunta o mensaje del usuario: "${question}"
 
 Debes responder estrictamente en formato JSON con la siguiente estructura:
 {
-  "answer": "Tu respuesta detallada y profesional aquí en español"
+  "answer": "Tu respuesta detallada, precisa y personalizada en español con formato markdown legible"
 }`;
 
   return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.8-flash", tier: "pro" });

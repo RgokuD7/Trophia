@@ -14,7 +14,7 @@ import FoodLogger from "./components/FoodLogger";
 import Auth from "./components/Auth";
 import RecipeAssistantModal from "./components/RecipeAssistantModal";
 import NutritionHub from "./components/NutritionHub";
-import Workouts from "./components/Workouts";
+import Workouts, { getDayKeyFromDateStr } from "./components/Workouts";
 import { getSuggestedMealTypeByTime, createTimestampForDate } from "./utils/fitnessUtils";
 
 // Import Firebase services
@@ -57,35 +57,132 @@ export default function App() {
   const [isCoachOpen, setIsCoachOpen] = useState(false);
   const [coachMessage, setCoachMessage] = useState("");
   const [coachChatHistory, setCoachChatHistory] = useState<{ sender: "user" | "coach"; text: string }[]>([
-    { sender: "coach", text: "¡Hola! Soy tu Nutri-Coach de Trophia IA. ¿Tienes alguna pregunta sobre tu dieta, suplementos o cómo mejorar tu alimentación hoy? Escribe tu duda aquí abajo." }
+    { sender: "coach", text: "¡Hola! Soy tu Coach de Trophia IA. Conozco en tiempo real tu despensa, tu rutina y ejercicios de hoy, y tus macros restantes. ¿En qué te ayudo? Puedes preguntarme qué cocinar de pre/post-entreno, dudas sobre tus ejercicios de hoy o cómo vas con tus metas." }
   ]);
   const [isCoachTyping, setIsCoachTyping] = useState(false);
 
-  const handleSendCoachMessage = async () => {
-    if (!coachMessage.trim() || !profile) return;
-    const userText = coachMessage.trim();
+  const buildCoachContext = (): string => {
+    if (!profile) return "";
+    const todayStr = getLocalDateString();
+    const dayKey = getDayKeyFromDateStr(todayStr);
+
+    // 1. Profile & Goals
+    const goalStr =
+      profile.goal === "lose_weight"
+        ? "Pérdida de grasa / Definición"
+        : profile.goal === "gain_muscle"
+        ? "Ganancia muscular / Hipertrofia"
+        : "Mantenimiento / Salud";
+
+    const userBasics = [
+      `PERFIL Y METAS DEL USUARIO:`,
+      `- Nombre: ${profile.name || "Usuario"}`,
+      `- Meta principal: ${goalStr}`,
+      `- Peso actual: ${profile.weight || "?"} kg, Altura: ${profile.height || "?"} cm, Nivel: ${profile.level || "intermedio"}`,
+      profile.dietType ? `- Tipo de dieta: ${profile.dietType}` : null,
+      profile.allergies && profile.allergies.length > 0 ? `- Alergias o restricciones: ${profile.allergies.join(", ")}` : null,
+      profile.equipment && profile.equipment.length > 0
+        ? `- Equipamiento disponible: ${profile.equipment.join(", ")}${profile.homeEquipmentNotes ? ` (${profile.homeEquipmentNotes})` : ""}`
+        : null
+    ].filter(Boolean).join("\n");
+
+    // 2. Nutrition today
+    const todayMeals = loggedMeals.filter(m => isSameDay(m.timestamp, todayStr));
+    const totalCal = todayMeals.reduce((s, m) => s + m.calories, 0);
+    const totalP = todayMeals.reduce((s, m) => s + m.protein, 0);
+    const totalC = todayMeals.reduce((s, m) => s + m.carbs, 0);
+    const totalF = todayMeals.reduce((s, m) => s + m.fat, 0);
+
+    const targetCal = profile.dailyCalorieTarget || 2000;
+    const targetP = profile.proteinTarget || 140;
+    const targetC = profile.carbsTarget || 230;
+    const targetF = profile.fatTarget || 65;
+
+    const remCal = targetCal - totalCal;
+    const remP = Math.max(0, targetP - totalP);
+    const remC = Math.max(0, targetC - totalC);
+    const remF = Math.max(0, targetF - totalF);
+
+    const mealsListStr = todayMeals.length > 0
+      ? todayMeals.map(m => `  * [${m.type}] ${m.name} (${m.calories} kcal, P:${m.protein}g, C:${m.carbs}g, G:${m.fat}g${m.servingSize ? `, porción: ${m.servingSize}` : ""})`).join("\n")
+      : "  * Aún no ha registrado comidas hoy.";
+
+    const nutritionSection = `ESTADO NUTRICIONAL DE HOY (${todayStr}):
+- Calorías: ${totalCal} / ${targetCal} kcal (${remCal >= 0 ? `Quedan ${remCal} kcal` : `Superado por ${Math.abs(remCal)} kcal`})
+- Proteínas: ${Math.round(totalP)} / ${targetP}g (${remP > 0 ? `Faltan ${Math.round(remP)}g` : "Meta de proteína cumplida"})
+- Carbohidratos: ${Math.round(totalC)} / ${targetC}g (${remC > 0 ? `Faltan ${Math.round(remC)}g` : "Meta de carbos cumplida"})
+- Grasas: ${Math.round(totalF)} / ${targetF}g (${remF > 0 ? `Faltan ${Math.round(remF)}g` : "Meta de grasas cumplida"})
+- Comidas consumidas hoy:
+${mealsListStr}`;
+
+    // 3. Pantry
+    const pantryItems = profile.pantry || [];
+    const pantryStr = pantryItems.length > 0
+      ? pantryItems.map(p => `  * ${p.name} (Stock: ${p.quantity || "Disponible"}${p.calories ? ` · ${p.calories} kcal/100g, P:${p.protein || 0}g, C:${p.carbs || 0}g, G:${p.fat || 0}g` : ""})`).join("\n")
+      : "  * La despensa no tiene ingredientes registrados.";
+
+    const pantrySection = `DESPENSA DEL USUARIO (Alimentos e ingredientes físicos que tiene en casa):
+${pantryStr}`;
+
+    // 4. Workout Today
+    const todaySession = workoutHistory.find(w => w.date === todayStr);
+    const scheduledRoutine = profile.weeklyRoutinePlan?.routines?.find(r => r.assignedDay === dayKey);
+
+    let workoutSection = "";
+    if (todaySession) {
+      const isCompleted = todaySession.completed;
+      const totalExercises = todaySession.exercises.length;
+      const completedExercises = todaySession.exercises.filter(ex => ex.completedSets && ex.completedSets.length > 0 && ex.completedSets.every(s => s.completed));
+      const pendingExercises = todaySession.exercises.filter(ex => !ex.completedSets || !ex.completedSets.every(s => s.completed));
+      const currentEx = pendingExercises[0] || null;
+
+      const exercisesDetails = todaySession.exercises.map((ex, idx) => {
+        const setsDone = (ex.completedSets || []).filter(s => s.completed).length;
+        const totalSets = ex.completedSets?.length || ex.sets || 3;
+        const lastLoggedSet = (ex.completedSets || []).filter(s => s.completed).slice(-1)[0];
+        const statusStr = setsDone === totalSets && totalSets > 0 ? "✓ COMPLETADO" : setsDone > 0 ? `EN PROGRESO (${setsDone}/${totalSets} series hechas)` : "PENDIENTE";
+        const weightsStr = lastLoggedSet ? ` [Última serie: ${lastLoggedSet.weight}kg x ${lastLoggedSet.reps} reps]` : ` [Objetivo: ${ex.sets}x${ex.reps} con ${ex.weight || 0}kg]`;
+        return `  ${idx + 1}. ${ex.name}: ${statusStr}${weightsStr}`;
+      }).join("\n");
+
+      workoutSection = `ESTADO DE ENTRENAMIENTO DE HOY (${todayStr}):
+- Rutina de hoy: "${todaySession.name}"
+- Estado general: ${isCompleted ? "¡ENTRENAMIENTO YA COMPLETADO HOY!" : todaySession.startTime ? "EN PROGRESO AHORA MISMO (iniciado)" : "CREADO / INICIADO HOY"}
+${currentEx && !isCompleted ? `- Ejercicio en el que se encuentra actualmente: "${currentEx.name}"` : ""}
+- Progreso: ${completedExercises.length} de ${totalExercises} ejercicios completados.
+- Lista detallada de ejercicios y series:
+${exercisesDetails}`;
+    } else if (scheduledRoutine) {
+      const exercisesList = scheduledRoutine.exercises.map((ex, idx) => `  ${idx + 1}. ${ex.name} (${ex.sets} series x ${ex.reps} reps)`).join("\n");
+      workoutSection = `ESTADO DE ENTRENAMIENTO DE HOY (${todayStr}):
+- Rutina asignada para hoy (${dayKey}): "${scheduledRoutine.name}" (Enfoque: ${scheduledRoutine.focus || "General"})
+- Estado general: AÚN NO HA COMENZADO (no ha iniciado sesión de pesas hoy).
+- Ejercicios programados:
+${exercisesList}`;
+    } else {
+      workoutSection = `ESTADO DE ENTRENAMIENTO DE HOY (${todayStr}):
+- Estado general: Hoy no tiene rutina programada en su plan semanal (Día de descanso o entrenamiento libre).
+- No se han registrado entrenamientos hoy aún.`;
+    }
+
+    // 5. Hydration
+    const todayWater = waterLogs.filter(w => isSameDay(w.timestamp, todayStr)).reduce((s, w) => s + w.amount, 0);
+    const hydrationSection = `HIDRATACIÓN HOY: ${todayWater} ml registrados.`;
+
+    return `${userBasics}\n\n${nutritionSection}\n\n${pantrySection}\n\n${workoutSection}\n\n${hydrationSection}`;
+  };
+
+  const handleSendCoachMessage = async (customMessage?: string) => {
+    const textToSend = (customMessage || coachMessage).trim();
+    if (!textToSend || !profile) return;
     setCoachMessage("");
-    setCoachChatHistory(prev => [...prev, { sender: "user", text: userText }]);
+    setCoachChatHistory(prev => [...prev, { sender: "user", text: textToSend }]);
     setIsCoachTyping(true);
 
     try {
       const apiKey = profile.apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || "";
-      
-      const todayStr = getLocalDateString();
-      const todayMeals = loggedMeals.filter(m => isSameDay(m.timestamp, todayStr));
-      const totalCal = todayMeals.reduce((s, m) => s + m.calories, 0);
-      const totalP = todayMeals.reduce((s, m) => s + m.protein, 0);
-      const totalC = todayMeals.reduce((s, m) => s + m.carbs, 0);
-      const totalF = todayMeals.reduce((s, m) => s + m.fat, 0);
-      
-      const targetCal = profile.dailyCalorieTarget || 2000;
-      const targetP = profile.proteinTarget || 140;
-      const targetC = profile.carbsTarget || 230;
-      const targetF = profile.fatTarget || 65;
-
-      const context = `Usuario: ${profile.name}. Meta: ${profile.goal === "lose_weight" ? "Pérdida de peso" : "Ganancia de masa"}. Consumido hoy: ${totalCal}/${targetCal} kcal. P: ${Math.round(totalP)}/${targetP}g, C: ${Math.round(totalC)}/${targetC}g, G: ${Math.round(totalF)}/${targetF}g.`;
-      
-      const response = await askNutriCoachIA(apiKey, userText, context);
+      const context = buildCoachContext();
+      const response = await askNutriCoachIA(apiKey, textToSend, context);
       setCoachChatHistory(prev => [...prev, { sender: "coach", text: response.answer }]);
     } catch (err: any) {
       console.error(err);
@@ -555,10 +652,10 @@ export default function App() {
                     </div>
                     <div>
                       <h3 className="text-xs font-black text-white tracking-tight uppercase tracking-wide flex items-center gap-1.5">
-                        Nutri-Coach IA
+                        Coach Trophia IA
                         <Sparkles className="h-3 w-3 text-emerald-400 fill-emerald-400/10" />
                       </h3>
-                      <p className="text-[9px] text-white/40">Resuelve dudas sobre alimentación y macros</p>
+                      <p className="text-[9px] text-white/40">Nutrición, despensa, ejercicios y progreso en tiempo real</p>
                     </div>
                   </div>
                   <button
@@ -577,10 +674,10 @@ export default function App() {
                       className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${
+                        className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed whitespace-pre-wrap ${
                           msg.sender === "user"
-                            ? "bg-emerald-500 text-black font-semibold rounded-tr-none"
-                            : "bg-white/5 text-white/80 rounded-tl-none border border-white/5"
+                            ? "bg-emerald-500 text-black font-semibold rounded-tr-none shadow-md"
+                            : "bg-white/5 text-white/90 rounded-tl-none border border-white/5"
                         }`}
                       >
                         {msg.text}
@@ -594,24 +691,44 @@ export default function App() {
                         <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
                         <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
                         <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                        Escribiendo respuesta...
+                        Analizando tu despensa y rutina...
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* Quick Action Suggestion Chips */}
+                <div className="px-4 py-2 flex gap-1.5 overflow-x-auto no-scrollbar border-t border-white/5 bg-white/[0.01]">
+                  {[
+                    { label: "⚡ Pre-entreno con despensa", query: "¿Qué me recomiendas preparar de pre-entreno con lo que tengo en mi despensa?" },
+                    { label: "🥤 Post-entreno con despensa", query: "¿Qué me preparo de post-entreno con los ingredientes de mi despensa para recuperarme bien?" },
+                    { label: "🏋️ ¿Cómo voy con mi entrenamiento?", query: "¿Cómo voy con mi entrenamiento de hoy? ¿Qué ejercicios he completado y cuáles me faltan?" },
+                    { label: "🥗 ¿Qué ceno según mis macros?", query: "¿Qué me sugieres cenar según los macros que me quedan hoy y lo que tengo en mi despensa?" }
+                  ].map((chip, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleSendCoachMessage(chip.query)}
+                      disabled={isCoachTyping}
+                      className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/30 text-white/70 hover:text-emerald-400 text-[10px] font-bold transition whitespace-nowrap cursor-pointer shrink-0 disabled:opacity-50"
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
                 </div>
 
                 {/* Chat Input panel */}
                 <div className="p-4 border-t border-white/5 bg-white/[0.01] shrink-0 flex gap-2 items-center">
                   <input
                     type="text"
-                    placeholder="Ej: ¿El arroz blanco de noche es malo?"
+                    placeholder="Pregúntame sobre tu despensa, tu rutina, pre-entreno..."
                     value={coachMessage}
                     onChange={(e) => setCoachMessage(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSendCoachMessage()}
                     className="flex-1 p-3 bg-white/5 border border-white/10 rounded-2xl text-xs text-white placeholder-white/20 focus:outline-none focus:border-emerald-500/40 focus:bg-white/[0.07] transition"
                   />
                   <button
-                    onClick={handleSendCoachMessage}
+                    onClick={() => handleSendCoachMessage()}
                     disabled={!coachMessage.trim() || isCoachTyping}
                     className="w-10 h-10 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-30 flex items-center justify-center text-black font-black transition cursor-pointer border-none shadow-md"
                   >
