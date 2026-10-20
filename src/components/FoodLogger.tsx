@@ -129,6 +129,18 @@ export function getDefaultServingInfo(name: string, servingSizeStr: string): {
           defaultUnit = "unit";
         }
       }
+    } else {
+      const lowerServing = servingSizeStr.toLowerCase();
+      if (lowerServing.includes("porción") || lowerServing.includes("porcion")) {
+        defaultUnit = "unit";
+        unitLabel = "porción";
+      } else if (lowerServing.includes("unidad")) {
+        defaultUnit = "unit";
+        unitLabel = "unidad";
+      } else if (lowerServing.includes("plato") || lowerServing.includes("sandwich") || lowerServing.includes("sándwich")) {
+        defaultUnit = "unit";
+        unitLabel = "plato";
+      }
     }
   }
 
@@ -257,30 +269,102 @@ export default function FoodLogger({
       setSelectedMealType("dinner");
     }
 
-    // Load personal history sorted by frequency of consumption
-    const freqMap = new Map<string, { count: number; meal: LoggedMeal }>();
+    // Load personal history sorted by recency (most recent first) and frequency
+    const freqMap = new Map<string, { count: number; lastUsedTs: number; latestMeal: LoggedMeal }>();
     loggedMeals.forEach(m => {
       const key = m.name.trim().toLowerCase();
+      const ts = m.timestamp ? new Date(m.timestamp).getTime() : 0;
       const existing = freqMap.get(key);
       if (existing) {
         existing.count += 1;
+        if (ts >= existing.lastUsedTs) {
+          existing.lastUsedTs = ts;
+          existing.latestMeal = m;
+        }
       } else {
-        freqMap.set(key, { count: 1, meal: m });
+        freqMap.set(key, { count: 1, lastUsedTs: ts, latestMeal: m });
       }
     });
 
     const frequentList = Array.from(freqMap.values())
-      .sort((a, b) => b.count - a.count)
-      .map(({ count, meal }) => ({
-        name: meal.name,
-        calories: meal.calories,
-        protein: meal.protein,
-        carbs: meal.carbs,
-        fat: meal.fat,
-        servingSize: meal.servingSize || "1 porción",
-        source: "local" as const,
-        description: count > 1 ? `Consumido ${count} veces` : undefined
-      }));
+      .sort((a, b) => {
+        // Most recent first
+        if (b.lastUsedTs !== a.lastUsedTs) {
+          return b.lastUsedTs - a.lastUsedTs;
+        }
+        return b.count - a.count;
+      })
+      .map(({ count, latestMeal }) => {
+        let portionGrams = latestMeal.portionGrams || 0;
+        let portionValue = latestMeal.portionValue || 1;
+        let portionUnit: "g" | "ml" | "unit" = latestMeal.portionUnit || "g";
+        let unitWeight = latestMeal.unitWeight || portionGrams || 100;
+        let unitLabel = latestMeal.unitLabel || "porción";
+
+        // If legacy meal without explicit portion metadata, parse from servingSize
+        if (!portionGrams && latestMeal.servingSize) {
+          const match = latestMeal.servingSize.match(/(\d+(?:\.\d+)?)\s*(g|ml)/i);
+          if (match) {
+            portionGrams = parseFloat(match[1]);
+            portionUnit = match[2].toLowerCase() === "ml" ? "ml" : "g";
+            portionValue = portionGrams;
+            unitWeight = portionGrams;
+          } else {
+            const info = getDefaultServingInfo(latestMeal.name, latestMeal.servingSize);
+            portionUnit = info.defaultUnit;
+            unitWeight = info.unitWeight;
+            unitLabel = info.unitLabel;
+            portionValue = info.defaultUnit === "unit" ? 1 : info.unitWeight;
+            portionGrams = info.unitWeight;
+          }
+        }
+
+        // Calculate 100g base rates
+        let raw100gCalories = latestMeal.raw100gCalories;
+        let raw100gProtein = latestMeal.raw100gProtein;
+        let raw100gCarbs = latestMeal.raw100gCarbs;
+        let raw100gFat = latestMeal.raw100gFat;
+
+        if (raw100gCalories === undefined) {
+          if (portionGrams > 0 && portionGrams !== 100) {
+            const factor = 100 / portionGrams;
+            raw100gCalories = Math.round(latestMeal.calories * factor);
+            raw100gProtein = Number((latestMeal.protein * factor).toFixed(1));
+            raw100gCarbs = Number((latestMeal.carbs * factor).toFixed(1));
+            raw100gFat = Number((latestMeal.fat * factor).toFixed(1));
+          } else {
+            raw100gCalories = latestMeal.calories;
+            raw100gProtein = latestMeal.protein;
+            raw100gCarbs = latestMeal.carbs;
+            raw100gFat = latestMeal.fat;
+          }
+        }
+
+        return {
+          name: latestMeal.name,
+          calories: raw100gCalories,
+          protein: raw100gProtein ?? latestMeal.protein,
+          carbs: raw100gCarbs ?? latestMeal.carbs,
+          fat: raw100gFat ?? latestMeal.fat,
+          servingSize: latestMeal.servingSize || (portionGrams > 0 ? `${portionGrams}g` : "1 porción"),
+          source: "history" as const,
+          description: count > 1 ? `Consumido ${count} veces` : "Reciente",
+          raw100gCalories,
+          raw100gProtein,
+          raw100gCarbs,
+          raw100gFat,
+          portionGrams: portionGrams > 0 ? portionGrams : 100,
+          portionValue,
+          portionUnit,
+          unitWeight,
+          unitLabel,
+          barcode: latestMeal.barcode,
+          portionCalories: latestMeal.calories,
+          portionProtein: latestMeal.protein,
+          portionCarbs: latestMeal.carbs,
+          portionFat: latestMeal.fat
+        };
+      });
 
     setPersonalHistory(frequentList);
   }, [loggedMeals]);
@@ -322,23 +406,38 @@ export default function FoodLogger({
     setShowPortionsInfo(false);
     setPortionsError(null);
 
-    const info = getDefaultServingInfo(food.name, food.servingSize);
-    setPortionUnit(info.defaultUnit);
-    setUnitWeight(info.unitWeight);
-    setUnitLabel(info.unitLabel);
-    
-    const initialVal = info.defaultUnit === "unit" ? 1 : 100;
-    setPortionValue(initialVal);
-    setPortionGrams(info.defaultUnit === "unit" ? info.unitWeight : 100);
-
     const displayName = food.brand ? `${food.name} (${food.brand.split(',')[0].trim()})` : food.name;
     setCustomName(displayName);
 
-    const scale = info.defaultUnit === "unit" ? info.unitWeight / 100 : 1;
-    setCustomCalories(Math.round(food.calories * scale));
-    setCustomProtein(Number((food.protein * scale).toFixed(1)));
-    setCustomCarbs(Number((food.carbs * scale).toFixed(1)));
-    setCustomFat(Number((food.fat * scale).toFixed(1)));
+    if (food.portionGrams && food.portionUnit && food.raw100gCalories !== undefined) {
+      // Preserved portion from personal history
+      setPortionUnit(food.portionUnit);
+      setUnitWeight(food.unitWeight || food.portionGrams);
+      setUnitLabel(food.unitLabel || (food.portionUnit === "unit" ? "porción" : food.portionUnit));
+      setPortionValue(food.portionValue || (food.portionUnit === "unit" ? 1 : food.portionGrams));
+      setPortionGrams(food.portionGrams);
+
+      setCustomCalories(food.portionCalories !== undefined ? food.portionCalories : Math.round((food.calories * food.portionGrams) / 100));
+      setCustomProtein(food.portionProtein !== undefined ? food.portionProtein : Number(((food.protein * food.portionGrams) / 100).toFixed(1)));
+      setCustomCarbs(food.portionCarbs !== undefined ? food.portionCarbs : Number(((food.carbs * food.portionGrams) / 100).toFixed(1)));
+      setCustomFat(food.portionFat !== undefined ? food.portionFat : Number(((food.fat * food.portionGrams) / 100).toFixed(1)));
+    } else {
+      // Standard search / API item flow
+      const info = getDefaultServingInfo(food.name, food.servingSize);
+      setPortionUnit(info.defaultUnit);
+      setUnitWeight(info.unitWeight);
+      setUnitLabel(info.unitLabel);
+      
+      const initialVal = info.defaultUnit === "unit" ? 1 : 100;
+      setPortionValue(initialVal);
+      setPortionGrams(info.defaultUnit === "unit" ? info.unitWeight : 100);
+
+      const scale = info.defaultUnit === "unit" ? info.unitWeight / 100 : 1;
+      setCustomCalories(Math.round(food.calories * scale));
+      setCustomProtein(Number((food.protein * scale).toFixed(1)));
+      setCustomCarbs(Number((food.carbs * scale).toFixed(1)));
+      setCustomFat(Number((food.fat * scale).toFixed(1)));
+    }
 
     // Check Firestore for community correction if it has a barcode
     if (food.barcode) {
@@ -365,11 +464,16 @@ export default function FoodLogger({
     setPortionGrams(Math.round(equivalentGrams));
 
     if (selectedFood && selectedFood.name !== "") {
+      const base100gCals = selectedFood.raw100gCalories !== undefined ? selectedFood.raw100gCalories : selectedFood.calories;
+      const base100gProt = selectedFood.raw100gProtein !== undefined ? selectedFood.raw100gProtein : selectedFood.protein;
+      const base100gCarbs = selectedFood.raw100gCarbs !== undefined ? selectedFood.raw100gCarbs : selectedFood.carbs;
+      const base100gFat = selectedFood.raw100gFat !== undefined ? selectedFood.raw100gFat : selectedFood.fat;
+      
       const scale = equivalentGrams / 100;
-      setCustomCalories(Math.round(selectedFood.calories * scale));
-      setCustomProtein(Number((selectedFood.protein * scale).toFixed(1)));
-      setCustomCarbs(Number((selectedFood.carbs * scale).toFixed(1)));
-      setCustomFat(Number((selectedFood.fat * scale).toFixed(1)));
+      setCustomCalories(Math.round(base100gCals * scale));
+      setCustomProtein(Number((base100gProt * scale).toFixed(1)));
+      setCustomCarbs(Number((base100gCarbs * scale).toFixed(1)));
+      setCustomFat(Number((base100gFat * scale).toFixed(1)));
     }
   };
 
@@ -762,7 +866,22 @@ export default function FoodLogger({
       const protVal = Number(customProtein) || 0;
       const carbVal = Number(customCarbs) || 0;
       const fatVal = Number(customFat) || 0;
-      const servVal = `${portionValue}${portionUnit === "unit" ? " unidad" : portionUnit}`;
+      const servVal = portionUnit === "unit"
+        ? `${portionValue} ${unitLabel || "porción"}${portionGrams > 0 ? ` (${portionGrams}g)` : ""}`
+        : `${portionValue}${portionUnit}`;
+
+      const raw100gCals = selectedFood?.raw100gCalories !== undefined 
+        ? selectedFood.raw100gCalories 
+        : (selectedFood?.calories !== undefined ? selectedFood.calories : (portionGrams > 0 ? Math.round((calVal / portionGrams) * 100) : calVal));
+      const raw100gProt = selectedFood?.raw100gProtein !== undefined 
+        ? selectedFood.raw100gProtein 
+        : (selectedFood?.protein !== undefined ? selectedFood.protein : (portionGrams > 0 ? Number(((protVal / portionGrams) * 100).toFixed(1)) : protVal));
+      const raw100gCarb = selectedFood?.raw100gCarbs !== undefined 
+        ? selectedFood.raw100gCarbs 
+        : (selectedFood?.carbs !== undefined ? selectedFood.carbs : (portionGrams > 0 ? Number(((carbVal / portionGrams) * 100).toFixed(1)) : carbVal));
+      const raw100gFt = selectedFood?.raw100gFat !== undefined 
+        ? selectedFood.raw100gFat 
+        : (selectedFood?.fat !== undefined ? selectedFood.fat : (portionGrams > 0 ? Number(((fatVal / portionGrams) * 100).toFixed(1)) : fatVal));
 
       if (isCustomFoodOnlyMode) {
         if (userId) {
@@ -790,7 +909,17 @@ export default function FoodLogger({
           fat: fatVal,
           type: selectedMealType,
           servingSize: servVal,
-          timestamp: targetDate ? createTimestampForDate(targetDate) : undefined
+          timestamp: targetDate ? createTimestampForDate(targetDate) : undefined,
+          raw100gCalories: raw100gCals,
+          raw100gProtein: raw100gProt,
+          raw100gCarbs: raw100gCarb,
+          raw100gFat: raw100gFt,
+          portionGrams,
+          portionValue,
+          portionUnit,
+          unitWeight,
+          unitLabel,
+          barcode: selectedFood?.barcode
         });
 
         // Also save to template collection
@@ -1385,17 +1514,26 @@ export default function FoodLogger({
                             className="w-full p-3 text-left hover:bg-gray-100 dark:hover:bg-white/5 transition flex justify-between items-center cursor-pointer"
                           >
                             <div className="flex items-center gap-2">
-                              <History className="h-3.5 w-3.5 text-gray-400" />
-                              <div>
-                                <span className="text-xs font-bold text-gray-900 dark:text-white block">{food.name}</span>
-                                {food.description && (
-                                  <span className="text-[9px] text-emerald-400 font-bold font-mono">{food.description}</span>
-                                )}
+                              <History className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                              <div className="min-w-0">
+                                <span className="text-xs font-bold text-gray-900 dark:text-white block truncate">{food.name}</span>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <span className="text-[9px] text-gray-400 dark:text-white/40 font-mono truncate">
+                                    {food.servingSize}
+                                  </span>
+                                  {food.description && (
+                                    <span className="text-[9px] text-emerald-400 font-bold font-mono shrink-0">· {food.description}</span>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <span className="block text-xs font-bold text-emerald-500 dark:text-emerald-400">{food.calories} kcal</span>
-                              <span className="text-[9px] text-gray-400 dark:text-white/40 font-mono">P:{formatMacro(food.protein)}g C:{formatMacro(food.carbs)}g F:{formatMacro(food.fat)}g</span>
+                            <div className="text-right shrink-0">
+                              <span className="block text-xs font-bold text-emerald-500 dark:text-emerald-400">
+                                {food.portionCalories !== undefined ? food.portionCalories : food.calories} kcal
+                              </span>
+                              <span className="text-[9px] text-gray-400 dark:text-white/40 font-mono">
+                                P:{formatMacro(food.portionProtein ?? food.protein)}g C:{formatMacro(food.portionCarbs ?? food.carbs)}g F:{formatMacro(food.portionFat ?? food.fat)}g
+                              </span>
                             </div>
                           </button>
                         ))}

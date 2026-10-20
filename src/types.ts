@@ -133,6 +133,16 @@ export interface LoggedMeal {
   type: MealType;
   servingSize?: string;
   compositeIngredients?: MealBuilderIngredient[];
+  raw100gCalories?: number;
+  raw100gProtein?: number;
+  raw100gCarbs?: number;
+  raw100gFat?: number;
+  portionGrams?: number;
+  portionValue?: number;
+  portionUnit?: "g" | "ml" | "unit";
+  unitWeight?: number;
+  unitLabel?: string;
+  barcode?: string;
 }
 
 export interface WaterLog {
@@ -243,6 +253,19 @@ export interface FoodItem {
   image?: string;
   barcode?: string;
   ingredients?: string[];
+  raw100gCalories?: number;
+  raw100gProtein?: number;
+  raw100gCarbs?: number;
+  raw100gFat?: number;
+  portionGrams?: number;
+  portionValue?: number;
+  portionUnit?: "g" | "ml" | "unit";
+  unitWeight?: number;
+  unitLabel?: string;
+  portionCalories?: number;
+  portionProtein?: number;
+  portionCarbs?: number;
+  portionFat?: number;
 }
 
 export interface FrequentRoute {

@@ -84,30 +84,95 @@ export default function MealBuilderModal({
   const [photoDescription, setPhotoDescription] = useState("");
   const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
 
-  // Calculate genuine frequent foods from loggedMeals
+  // Calculate genuine frequent foods from loggedMeals (sorted by recency and frequency)
   const frequentHistory = React.useMemo(() => {
-    const freqMap = new Map<string, { count: number; meal: LoggedMeal }>();
+    const freqMap = new Map<string, { count: number; lastUsedTs: number; latestMeal: LoggedMeal }>();
     (loggedMeals || []).forEach(m => {
       const key = m.name.trim().toLowerCase();
+      const ts = m.timestamp ? new Date(m.timestamp).getTime() : 0;
       const existing = freqMap.get(key);
       if (existing) {
         existing.count += 1;
+        if (ts >= existing.lastUsedTs) {
+          existing.lastUsedTs = ts;
+          existing.latestMeal = m;
+        }
       } else {
-        freqMap.set(key, { count: 1, meal: m });
+        freqMap.set(key, { count: 1, lastUsedTs: ts, latestMeal: m });
       }
     });
 
     return Array.from(freqMap.values())
-      .sort((a, b) => b.count - a.count)
-      .map(({ count, meal }) => ({
-        name: meal.name,
-        calories: meal.calories,
-        protein: meal.protein,
-        carbs: meal.carbs,
-        fat: meal.fat,
-        servingSize: meal.servingSize || "1 porción",
-        count
-      }));
+      .sort((a, b) => {
+        if (b.lastUsedTs !== a.lastUsedTs) {
+          return b.lastUsedTs - a.lastUsedTs;
+        }
+        return b.count - a.count;
+      })
+      .map(({ count, latestMeal }) => {
+        let portionGrams = latestMeal.portionGrams || 0;
+        let portionValue = latestMeal.portionValue || 1;
+        let portionUnit: "g" | "ml" | "unit" = latestMeal.portionUnit || "g";
+        let unitWeight = latestMeal.unitWeight || portionGrams || 100;
+        let unitLabel = latestMeal.unitLabel || "porción";
+
+        if (!portionGrams && latestMeal.servingSize) {
+          const match = latestMeal.servingSize.match(/(\d+(?:\.\d+)?)\s*(g|ml)/i);
+          if (match) {
+            portionGrams = parseFloat(match[1]);
+            portionUnit = match[2].toLowerCase() === "ml" ? "ml" : "g";
+            portionValue = portionGrams;
+            unitWeight = portionGrams;
+          } else {
+            const info = getDefaultServingInfo(latestMeal.name, latestMeal.servingSize);
+            portionUnit = info.defaultUnit;
+            unitWeight = info.unitWeight;
+            unitLabel = info.unitLabel;
+            portionValue = info.defaultUnit === "unit" ? 1 : info.unitWeight;
+            portionGrams = info.unitWeight;
+          }
+        }
+
+        let raw100gCalories = latestMeal.raw100gCalories;
+        let raw100gProtein = latestMeal.raw100gProtein;
+        let raw100gCarbs = latestMeal.raw100gCarbs;
+        let raw100gFat = latestMeal.raw100gFat;
+
+        if (raw100gCalories === undefined) {
+          if (portionGrams > 0 && portionGrams !== 100) {
+            const factor = 100 / portionGrams;
+            raw100gCalories = Math.round(latestMeal.calories * factor);
+            raw100gProtein = Number((latestMeal.protein * factor).toFixed(1));
+            raw100gCarbs = Number((latestMeal.carbs * factor).toFixed(1));
+            raw100gFat = Number((latestMeal.fat * factor).toFixed(1));
+          } else {
+            raw100gCalories = latestMeal.calories;
+            raw100gProtein = latestMeal.protein;
+            raw100gCarbs = latestMeal.carbs;
+            raw100gFat = latestMeal.fat;
+          }
+        }
+
+        return {
+          name: latestMeal.name,
+          calories: latestMeal.calories,
+          protein: latestMeal.protein,
+          carbs: latestMeal.carbs,
+          fat: latestMeal.fat,
+          servingSize: latestMeal.servingSize || (portionGrams > 0 ? `${portionGrams}g` : "1 porción"),
+          count,
+          raw100gCalories,
+          raw100gProtein,
+          raw100gCarbs,
+          raw100gFat,
+          portionGrams: portionGrams > 0 ? portionGrams : 100,
+          portionValue,
+          portionUnit,
+          unitWeight,
+          unitLabel,
+          barcode: latestMeal.barcode
+        };
+      });
   }, [loggedMeals]);
 
   // Initialize or reset when modal opens or initialMeal changes
@@ -220,23 +285,40 @@ export default function MealBuilderModal({
     fat: number;
     servingSize?: string;
     barcode?: string;
+    raw100gCalories?: number;
+    raw100gProtein?: number;
+    raw100gCarbs?: number;
+    raw100gFat?: number;
+    portionGrams?: number;
+    portionValue?: number;
+    portionUnit?: "g" | "ml" | "unit";
+    unitWeight?: number;
+    unitLabel?: string;
   }) => {
     const info = getDefaultServingInfo(food.name, food.servingSize || "100g");
-    const initialAmount = info.defaultUnit === "unit" ? (food.name.toLowerCase().includes("pan ") ? 2 : 1) : (info.unitWeight || 100);
+    const unit = food.portionUnit || info.defaultUnit;
+    const unitWeight = food.unitWeight || info.unitWeight;
+    const unitLabel = food.unitLabel || info.unitLabel;
+
     const raw100g = {
-      calories: food.calories,
-      protein: food.protein,
-      carbs: food.carbs,
-      fat: food.fat,
+      calories: food.raw100gCalories !== undefined ? food.raw100gCalories : food.calories,
+      protein: food.raw100gProtein !== undefined ? food.raw100gProtein : food.protein,
+      carbs: food.raw100gCarbs !== undefined ? food.raw100gCarbs : food.carbs,
+      fat: food.raw100gFat !== undefined ? food.raw100gFat : food.fat,
     };
-    const calculated = calculateMacros(initialAmount, info.defaultUnit, info.unitWeight, raw100g);
+
+    const initialAmount = food.portionValue !== undefined
+      ? food.portionValue
+      : (unit === "unit" ? (food.name.toLowerCase().includes("pan ") ? 2 : 1) : (unitWeight || 100));
+
+    const calculated = calculateMacros(initialAmount, unit, unitWeight, raw100g);
 
     const newIng: MealBuilderIngredient = {
       id: "ing_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
       name: food.name,
       amount: initialAmount,
-      unit: info.defaultUnit,
-      unitLabel: info.unitLabel,
+      unit: unit,
+      unitLabel: unitLabel,
       equivalentGrams: calculated.equivalentGrams,
       calories: calculated.calories,
       protein: calculated.protein,
@@ -246,7 +328,7 @@ export default function MealBuilderModal({
       raw100gProtein: raw100g.protein,
       raw100gCarbs: raw100g.carbs,
       raw100gFat: raw100g.fat,
-      unitWeight: info.unitWeight,
+      unitWeight: unitWeight,
       barcode: food.barcode,
     };
 

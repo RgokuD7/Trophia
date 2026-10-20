@@ -20,9 +20,11 @@ export default function BarcodeScannerModal({
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [successCode, setSuccessCode] = useState<string | null>(null);
+  const [isScanningFile, setIsScanningFile] = useState(false);
 
   const qrCodeRef = useRef<Html5Qrcode | null>(null);
   const hasScannedRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const viewportId = "scanner-viewport";
 
   useEffect(() => {
@@ -42,8 +44,32 @@ export default function BarcodeScannerModal({
         const html5Qrcode = new Html5Qrcode(viewportId);
         qrCodeRef.current = html5Qrcode;
 
+        let cameraConfig: any = { facingMode: "environment" };
+
+        try {
+          // Attempt to get device cameras to target back camera directly
+          // Using exact deviceId avoids repeated WebRTC permission prompts on Safari/Chrome
+          const cameras = await Html5Qrcode.getCameras();
+          if (cameras && cameras.length > 0) {
+            const savedCamId = localStorage.getItem("trophia_scanner_cam_id");
+            let targetCam = cameras.find(c => c.id === savedCamId);
+            if (!targetCam) {
+              targetCam = cameras.find(c => {
+                const label = c.label.toLowerCase();
+                return label.includes("back") || label.includes("rear") || label.includes("trasera") || label.includes("environment");
+              }) || cameras[cameras.length - 1];
+            }
+            if (targetCam) {
+              localStorage.setItem("trophia_scanner_cam_id", targetCam.id);
+              cameraConfig = targetCam.id;
+            }
+          }
+        } catch (camErr) {
+          console.warn("Could not enumerate camera devices directly, fallback to facingMode:", camErr);
+        }
+
         await html5Qrcode.start(
-          { facingMode: "environment" },
+          cameraConfig,
           {
             fps: 15,
             qrbox: (width, height) => {
@@ -86,7 +112,7 @@ export default function BarcodeScannerModal({
       } catch (err: any) {
         console.error("Camera access failed:", err);
         setScannerError(
-          "No se pudo acceder a la cámara. Concede los permisos necesarios o introduce el código manualmente abajo."
+          "No se pudo acceder a la cámara en vivo. Puedes pulsar 'Tomar foto' para abrir tu cámara de forma nativa sin confirmaciones, o ingresar los dígitos abajo."
         );
         setIsCameraActive(false);
       }
@@ -117,6 +143,39 @@ export default function BarcodeScannerModal({
   const handleClose = async () => {
     await stopScanner();
     onClose();
+  };
+
+  const handlePhotoScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsScanningFile(true);
+      setScannerError(null);
+
+      const helperScanner = new Html5Qrcode("scanner-helper-file-viewport");
+      const decodedText = await helperScanner.scanFile(file, false);
+      try {
+        helperScanner.clear();
+      } catch (e) {}
+
+      if (decodedText) {
+        if (navigator.vibrate) navigator.vibrate(100);
+        setSuccessCode(decodedText);
+        setTimeout(() => {
+          onScanSuccess(decodedText);
+          handleClose();
+        }, 400);
+      } else {
+        setScannerError("No se detectó ningún código de barras en la foto. Intenta enfocar más cerca.");
+      }
+    } catch (err: any) {
+      console.error("Error scanning barcode file:", err);
+      setScannerError("No se detectó un código nítido en la imagen. Intenta con mejor iluminación o escribe los dígitos abajo.");
+    } finally {
+      setIsScanningFile(false);
+      if (e.target) e.target.value = "";
+    }
   };
 
   const handleManualSearch = (e: React.FormEvent) => {
@@ -226,6 +285,46 @@ export default function BarcodeScannerModal({
               </span>
             </div>
           )}
+        </div>
+
+        {/* Hidden helper element for static photo decoding */}
+        <div id="scanner-helper-file-viewport" style={{ display: "none" }}></div>
+
+        {/* Alternative: Direct Native Camera Photo (Never asks for WebRTC permissions) */}
+        <div className="flex items-center justify-between gap-2 bg-white/[0.04] border border-white/5 p-2.5 rounded-2xl">
+          <div className="flex items-center gap-2 pl-1 min-w-0">
+            <Camera className="h-4 w-4 text-emerald-400 shrink-0" />
+            <div className="text-left min-w-0">
+              <span className="block text-[11px] font-bold text-white truncate">¿Te pide permiso cada vez?</span>
+              <span className="block text-[9px] text-white/40 truncate">Toma una foto directa sin confirmaciones</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isScanningFile}
+            className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 rounded-xl font-bold text-[10px] transition cursor-pointer shrink-0 flex items-center gap-1.5"
+          >
+            {isScanningFile ? (
+              <>
+                <RefreshCw className="h-3 w-3 animate-spin" />
+                <span>Leyendo...</span>
+              </>
+            ) : (
+              <>
+                <Camera className="h-3 w-3" />
+                <span>Tomar foto</span>
+              </>
+            )}
+          </button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handlePhotoScan}
+          />
         </div>
 
         {/* Manual Fallback Input Form */}
