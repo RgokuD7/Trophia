@@ -15,7 +15,7 @@ import {
   onSnapshot
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { UserProfile, LoggedMeal, WaterLog, WorkoutSession, CustomFood, CustomExercise, BarcodeCorrection, HouseholdGroup, PantryItem } from "../types";
+import { UserProfile, LoggedMeal, WaterLog, WorkoutSession, CustomFood, CustomExercise, BarcodeCorrection, HouseholdGroup, PantryItem, CoachChatMessage } from "../types";
 
 // User Profile Operations
 export const getUserProfile = async (userId: string): Promise<UserProfile | null> => {
@@ -323,7 +323,11 @@ export const deleteUserAllData = async (userId: string): Promise<void> => {
       await pushBatch.commit();
     }
 
-    // 5. Finally, delete the user profile document itself
+    // 5. Delete coach chat history if any
+    const coachChatRef = doc(db, "users", userId, "coachChat", "history");
+    await deleteDoc(coachChatRef).catch(() => {});
+
+    // 6. Finally, delete the user profile document itself
     const userDocRef = doc(db, "users", userId);
     await deleteDoc(userDocRef);
   } catch (error) {
@@ -651,3 +655,43 @@ export const subscribeToHousehold = (
     }
   );
 };
+
+// Coach Chat History Operations
+export const getCoachChatHistory = async (userId: string): Promise<CoachChatMessage[]> => {
+  try {
+    const chatDocRef = doc(db, "users", userId, "coachChat", "history");
+    const snap = await getDoc(chatDocRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      return (data?.messages || []) as CoachChatMessage[];
+    }
+    return [];
+  } catch (error) {
+    console.error("Error getting coach chat history:", error);
+    return [];
+  }
+};
+
+export const saveCoachChatHistory = async (userId: string, messages: CoachChatMessage[]): Promise<void> => {
+  try {
+    const chatDocRef = doc(db, "users", userId, "coachChat", "history");
+    // Cap at the latest 40 messages to keep document lightweight and fast
+    const cappedMessages = messages.slice(-40);
+    await setDoc(chatDocRef, {
+      messages: cappedMessages,
+      lastUpdated: new Date().toISOString()
+    }, { merge: true });
+  } catch (error) {
+    console.error("Error saving coach chat history:", error);
+  }
+};
+
+export const clearCoachChatHistory = async (userId: string): Promise<void> => {
+  try {
+    const chatDocRef = doc(db, "users", userId, "coachChat", "history");
+    await deleteDoc(chatDocRef);
+  } catch (error) {
+    console.error("Error clearing coach chat history:", error);
+  }
+};
+

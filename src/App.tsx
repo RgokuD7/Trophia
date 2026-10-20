@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { 
-  Utensils, Droplets, Dumbbell, Settings, Lock, CookingPot, MessageSquare, Sparkles, X, Send
+  Utensils, Droplets, Dumbbell, Settings, Lock, CookingPot, MessageSquare, Sparkles, X, Send, Trash2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { askNutriCoachIA } from "./services/geminiService";
 import { User } from "firebase/auth";
-import { UserProfile, LoggedMeal, WaterLog, WorkoutSession, MealType } from "./types";
+import { UserProfile, LoggedMeal, WaterLog, WorkoutSession, MealType, CoachChatMessage } from "./types";
 import Onboarding from "./components/Onboarding";
 import Dashboard from "./components/Dashboard";
 import Hydration from "./components/Hydration";
@@ -34,7 +34,10 @@ import {
   saveWorkoutSession, 
   clearWorkoutHistory,
   deleteUserAllData,
-  updateHouseholdPantry
+  updateHouseholdPantry,
+  getCoachChatHistory,
+  saveCoachChatHistory,
+  clearCoachChatHistory
 } from "./services/dbService";
 
 import { getLocalDateString, isSameDay } from "./utils/fitnessUtils";
@@ -55,12 +58,24 @@ export default function App() {
   const [isRecalibrating, setIsRecalibrating] = useState(false);
 
   // Nutri-Coach state
+  const DEFAULT_COACH_WELCOME: CoachChatMessage = {
+    id: "welcome",
+    sender: "coach",
+    text: "¡Hola! Soy tu Coach de Trophia IA. Conozco en tiempo real tu despensa, tu rutina y ejercicios de hoy, y tus macros restantes. ¿En qué te ayudo? Puedes preguntarme qué cocinar de pre/post-entreno, dudas sobre tus ejercicios de hoy o cómo vas con tus metas.",
+    timestamp: new Date().toISOString()
+  };
+
   const [isCoachOpen, setIsCoachOpen] = useState(false);
   const [coachMessage, setCoachMessage] = useState("");
-  const [coachChatHistory, setCoachChatHistory] = useState<{ sender: "user" | "coach"; text: string }[]>([
-    { sender: "coach", text: "¡Hola! Soy tu Coach de Trophia IA. Conozco en tiempo real tu despensa, tu rutina y ejercicios de hoy, y tus macros restantes. ¿En qué te ayudo? Puedes preguntarme qué cocinar de pre/post-entreno, dudas sobre tus ejercicios de hoy o cómo vas con tus metas." }
-  ]);
+  const [coachChatHistory, setCoachChatHistory] = useState<CoachChatMessage[]>([DEFAULT_COACH_WELCOME]);
   const [isCoachTyping, setIsCoachTyping] = useState(false);
+  const coachChatEndRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isCoachOpen) {
+      coachChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [coachChatHistory, isCoachOpen, isCoachTyping]);
 
   const buildCoachContext = (): string => {
     if (!profile) return "";
@@ -177,19 +192,57 @@ ${exercisesList}`;
     const textToSend = (customMessage || coachMessage).trim();
     if (!textToSend || !profile) return;
     setCoachMessage("");
-    setCoachChatHistory(prev => [...prev, { sender: "user", text: textToSend }]);
+
+    const userMsg: CoachChatMessage = {
+      id: `user_${Date.now()}`,
+      sender: "user",
+      text: textToSend,
+      timestamp: new Date().toISOString()
+    };
+    const updatedWithUser = [...coachChatHistory, userMsg];
+    setCoachChatHistory(updatedWithUser);
+    if (user) {
+      localStorage.setItem(`trophia_coach_chat_${user.uid}`, JSON.stringify(updatedWithUser));
+      saveCoachChatHistory(user.uid, updatedWithUser);
+    }
     setIsCoachTyping(true);
 
     try {
       const apiKey = profile.apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || "";
       const context = buildCoachContext();
-      const response = await askNutriCoachIA(apiKey, textToSend, context);
-      setCoachChatHistory(prev => [...prev, { sender: "coach", text: response.answer }]);
+      const response = await askNutriCoachIA(apiKey, textToSend, context, coachChatHistory);
+      const coachMsg: CoachChatMessage = {
+        id: `coach_${Date.now()}`,
+        sender: "coach",
+        text: response.answer,
+        timestamp: new Date().toISOString()
+      };
+      const updatedWithCoach = [...updatedWithUser, coachMsg];
+      setCoachChatHistory(updatedWithCoach);
+      if (user) {
+        localStorage.setItem(`trophia_coach_chat_${user.uid}`, JSON.stringify(updatedWithCoach));
+        saveCoachChatHistory(user.uid, updatedWithCoach);
+      }
     } catch (err: any) {
       console.error(err);
-      setCoachChatHistory(prev => [...prev, { sender: "coach", text: `Lo siento, ocurrió un error al procesar tu duda: ${err.message || "Inténtalo de nuevo."}` }]);
+      const errorMsg: CoachChatMessage = {
+        id: `coach_${Date.now()}`,
+        sender: "coach",
+        text: `Lo siento, ocurrió un error al procesar tu duda: ${err.message || "Inténtalo de nuevo."}`,
+        timestamp: new Date().toISOString()
+      };
+      setCoachChatHistory(prev => [...prev, errorMsg]);
     } finally {
       setIsCoachTyping(false);
+    }
+  };
+
+  const handleClearCoachChat = async () => {
+    if (!window.confirm("¿Seguro que deseas reiniciar y borrar el historial de conversación con el Coach?")) return;
+    setCoachChatHistory([DEFAULT_COACH_WELCOME]);
+    if (user) {
+      localStorage.removeItem(`trophia_coach_chat_${user.uid}`);
+      await clearCoachChatHistory(user.uid);
     }
   };
 
@@ -232,13 +285,26 @@ ${exercisesList}`;
           }
         }
 
+        const cachedChatStr = localStorage.getItem(`trophia_coach_chat_${currentUser.uid}`);
+        if (cachedChatStr) {
+          try {
+            const cachedChat = JSON.parse(cachedChatStr);
+            if (Array.isArray(cachedChat) && cachedChat.length > 0) {
+              setCoachChatHistory(cachedChat);
+            }
+          } catch (e) {
+            console.warn("Could not parse cached coach chat:", e);
+          }
+        }
+
         try {
           // Fetch all data in parallel for efficiency
-          const [profileData, mealsData, waterData, workoutsData] = await Promise.all([
+          const [profileData, mealsData, waterData, workoutsData, chatData] = await Promise.all([
             getUserProfile(currentUser.uid),
             getMeals(currentUser.uid),
             getWaterLogs(currentUser.uid),
-            getWorkoutHistory(currentUser.uid)
+            getWorkoutHistory(currentUser.uid),
+            getCoachChatHistory(currentUser.uid)
           ]);
 
           if (profileData) {
@@ -254,6 +320,10 @@ ${exercisesList}`;
           setLoggedMeals(mealsData);
           setWaterLogs(waterData);
           setWorkoutHistory(workoutsData);
+          if (chatData && chatData.length > 0) {
+            setCoachChatHistory(chatData);
+            localStorage.setItem(`trophia_coach_chat_${currentUser.uid}`, JSON.stringify(chatData));
+          }
         } catch (error) {
           console.error("Error loading user data from Firestore:", error);
         } finally {
@@ -265,6 +335,7 @@ ${exercisesList}`;
         setLoggedMeals([]);
         setWaterLogs([]);
         setWorkoutHistory([]);
+        setCoachChatHistory([DEFAULT_COACH_WELCOME]);
         setIsCheckingStorage(false);
       }
     });
@@ -429,6 +500,7 @@ ${exercisesList}`;
       localStorage.removeItem("trophia_usda_api_key");
       localStorage.removeItem("trophia_grocery_list");
       localStorage.removeItem("trophia_progress_photos");
+      localStorage.removeItem(`trophia_coach_chat_${user.uid}`);
 
       // 3. Log out to reset the authentication state
       await logout();
@@ -659,12 +731,23 @@ ${exercisesList}`;
                       <p className="text-[9px] text-white/40">Nutrición, despensa, ejercicios y progreso en tiempo real</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setIsCoachOpen(false)}
-                    className="w-8 h-8 rounded-full bg-white/5 border border-white/5 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition cursor-pointer"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handleClearCoachChat}
+                      title="Reiniciar conversación"
+                      className="w-8 h-8 rounded-full bg-white/5 border border-white/5 flex items-center justify-center text-white/40 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsCoachOpen(false)}
+                      className="w-8 h-8 rounded-full bg-white/5 border border-white/5 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Chat Messages scroll area */}
@@ -700,6 +783,7 @@ ${exercisesList}`;
                       </div>
                     </div>
                   )}
+                  <div ref={coachChatEndRef} />
                 </div>
 
                 {/* Quick Action Suggestion Chips */}

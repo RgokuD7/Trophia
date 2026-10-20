@@ -348,3 +348,11 @@ export interface HouseholdGroup {
   pantry: PantryItem[];
   updatedAt: string;
 }
+
+export interface CoachChatMessage {
+  id: string;
+  sender: "user" | "coach";
+  text: string;
+  timestamp: string;
+}
+
