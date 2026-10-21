@@ -2185,88 +2185,102 @@ export default function NutritionHub({
                   key={recipe.id}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white/[0.03] border border-white/5 hover:border-purple-500/30 rounded-2xl p-4 transition-all space-y-2.5 group"
+                  className="bg-white/[0.03] border border-white/5 hover:border-purple-500/30 rounded-2xl p-4 transition-all space-y-3 group text-left"
                 >
+                  {/* Fila 1: Título completo a la izquierda | Badge Público/Privado a la derecha */}
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setSelectedRecipeForDetail(recipe)}>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-sm font-black text-white hover:text-purple-300 transition truncate">
-                          {recipe.name}
-                        </h3>
+                    <div 
+                      className="flex-1 min-w-0 cursor-pointer"
+                      onClick={() => setSelectedRecipeForDetail(recipe)}
+                    >
+                      <h3 className="text-sm font-black text-white group-hover:text-purple-300 transition line-clamp-1">
+                        {recipe.name}
+                      </h3>
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        {recipesTab === "community" && recipe.authorName && (
+                          <span className="text-[9.5px] text-purple-400 font-bold">
+                            Por: {recipe.authorName} ·
+                          </span>
+                        )}
                         {recipe.prepTimeMinutes && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/50 font-bold">
+                          <span className="text-[9px] px-2 py-0.5 rounded-md bg-white/5 text-white/60 font-semibold flex items-center gap-1">
                             ⏱️ {recipe.prepTimeMinutes}m
                           </span>
                         )}
                         {recipe.difficulty && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/50 font-bold">
+                          <span className="text-[9px] px-2 py-0.5 rounded-md bg-white/5 text-white/60 font-semibold">
                             {recipe.difficulty}
                           </span>
                         )}
                       </div>
-
-                      {recipesTab === "community" && recipe.authorName && (
-                        <span className="text-[9.5px] text-purple-400 font-bold block mt-0.5">
-                          Por: {recipe.authorName}
-                        </span>
-                      )}
-
-                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        <span className="text-xs font-black text-emerald-400 flex items-center gap-1">
-                          <Flame className="h-3 w-3" />
-                          {recipe.calories} kcal
-                        </span>
-                        <span className="text-[10px] font-mono flex items-center gap-1.5">
-                          <span className="text-blue-400 font-bold">P: {recipe.protein}g</span>
-                          <span className="text-white/20">·</span>
-                          <span className="text-amber-400 font-bold">C: {recipe.carbs}g</span>
-                          <span className="text-white/20">·</span>
-                          <span className="text-rose-400 font-bold">G: {recipe.fat}g</span>
-                        </span>
-                      </div>
-
-                      {recipe.ingredients && recipe.ingredients.length > 0 && (
-                        <p className="text-[10px] text-white/45 mt-1 truncate">
-                          <strong className="text-white/60">Ingredientes:</strong> {recipe.ingredients.map(i => i.name).filter(Boolean).join(", ")}
-                        </p>
-                      )}
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {/* Public / Private toggle (Only for own recipes) */}
-                      {recipesTab === "mine" && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleRecipePublic(recipe);
-                          }}
-                          title={recipe.isPublic ? "Pública (Haz clic para hacer privada)" : "Privada (Haz clic para compartir con la comunidad)"}
-                          className={`relative z-20 px-2 py-1 rounded-lg text-[9px] font-bold border transition cursor-pointer flex items-center gap-1 active:scale-95 ${
-                            recipe.isPublic
-                              ? "bg-purple-500/15 border-purple-500/30 text-purple-300 hover:bg-purple-500/25"
-                              : "bg-white/5 border-white/10 text-white/40 hover:text-white"
-                          }`}
-                        >
-                          <Globe className="h-3 w-3" />
-                          <span>{recipe.isPublic ? "Pública" : "Privada"}</span>
-                        </button>
-                      )}
-
-                      {/* View Detail button */}
+                    {/* Badge / Toggle de Privacidad en esquina superior derecha */}
+                    {recipesTab === "mine" ? (
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedRecipeForDetail(recipe);
+                          handleToggleRecipePublic(recipe);
                         }}
-                        className="relative z-20 w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white flex items-center justify-center transition cursor-pointer active:scale-95"
-                        title="Ver receta completa"
+                        title={recipe.isPublic ? "Receta pública (clic para hacer privada)" : "Receta privada (clic para compartir con la comunidad)"}
+                        className={`relative z-20 shrink-0 px-2.5 py-1 rounded-xl text-[10px] font-bold border transition cursor-pointer flex items-center gap-1.5 active:scale-95 ${
+                          recipe.isPublic
+                            ? "bg-purple-500/15 border-purple-500/30 text-purple-300 hover:bg-purple-500/25"
+                            : "bg-white/5 border-white/10 text-white/50 hover:text-white hover:bg-white/10"
+                        }`}
                       >
-                        <Eye className="h-3.5 w-3.5" />
+                        <Globe className="h-3 w-3" />
+                        <span>{recipe.isPublic ? "Pública" : "Privada"}</span>
                       </button>
+                    ) : (
+                      <span className="shrink-0 px-2 py-0.5 rounded-lg text-[9px] font-bold bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                        Comunidad
+                      </span>
+                    )}
+                  </div>
 
-                      {/* Edit button (Only for own recipes) */}
+                  {/* Fila 2: Macronutrientes y Calorías con espacio completo */}
+                  <div 
+                    className="flex items-center gap-2 flex-wrap cursor-pointer"
+                    onClick={() => setSelectedRecipeForDetail(recipe)}
+                  >
+                    <span className="text-xs font-black text-emerald-400 flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg">
+                      <Flame className="h-3 w-3" />
+                      {recipe.calories} kcal
+                    </span>
+                    <div className="flex items-center gap-1.5 text-[10px] font-mono bg-white/[0.02] border border-white/5 px-2 py-0.5 rounded-lg">
+                      <span className="text-blue-400 font-bold">P: {recipe.protein}g</span>
+                      <span className="text-white/20">·</span>
+                      <span className="text-amber-400 font-bold">C: {recipe.carbs}g</span>
+                      <span className="text-white/20">·</span>
+                      <span className="text-rose-400 font-bold">G: {recipe.fat}g</span>
+                    </div>
+                  </div>
+
+                  {/* Fila 3: Resumen de Ingredientes */}
+                  {recipe.ingredients && recipe.ingredients.length > 0 && (
+                    <p 
+                      className="text-[10.5px] text-white/50 line-clamp-1 cursor-pointer"
+                      onClick={() => setSelectedRecipeForDetail(recipe)}
+                    >
+                      <strong className="text-white/70">Ingredientes:</strong> {recipe.ingredients.map(i => i.name).filter(Boolean).join(", ")}
+                    </p>
+                  )}
+
+                  {/* Fila 4: Barra inferior de acciones (Ver preparación a la izq | Acciones a la der) */}
+                  <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRecipeForDetail(recipe)}
+                      className="text-[11px] font-bold text-purple-400 hover:text-purple-300 flex items-center gap-1 cursor-pointer py-1 transition"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      <span>Ver preparación</span>
+                    </button>
+
+                    <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                      {/* Editar receta */}
                       {(recipesTab === "mine" || recipe.userId === userId) && (
                         <button
                           type="button"
@@ -2274,14 +2288,15 @@ export default function NutritionHub({
                             e.stopPropagation();
                             setEditingRecipe({ ...recipe });
                           }}
-                          className="relative z-20 w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white flex items-center justify-center transition cursor-pointer active:scale-95"
+                          className="relative z-20 px-2 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white flex items-center gap-1 text-[10px] font-bold transition cursor-pointer border border-white/5 active:scale-95"
                           title="Editar receta"
                         >
                           <Pencil className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Editar</span>
                         </button>
                       )}
 
-                      {/* Delete button (Only for own recipes) */}
+                      {/* Eliminar receta */}
                       {(recipesTab === "mine" || recipe.userId === userId) && (
                         <button
                           type="button"
@@ -2289,14 +2304,14 @@ export default function NutritionHub({
                             e.stopPropagation();
                             setRecipeToDelete(recipe);
                           }}
-                          className="relative z-20 w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 flex items-center justify-center transition cursor-pointer active:scale-95"
+                          className="relative z-20 p-1.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 flex items-center justify-center transition cursor-pointer active:scale-95"
                           title="Eliminar receta"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       )}
 
-                      {/* Quick log to diary */}
+                      {/* Registrar en diario */}
                       <button
                         type="button"
                         onClick={(e) => {
@@ -2311,10 +2326,11 @@ export default function NutritionHub({
                           });
                           alert(`¡"${recipe.name}" registrada en tu diario de hoy!`);
                         }}
-                        className="relative z-20 w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 flex items-center justify-center transition cursor-pointer active:scale-95"
+                        className="relative z-20 px-2.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 flex items-center gap-1 text-[10px] font-black transition cursor-pointer active:scale-95 shadow-sm"
                         title="Registrar en diario de hoy"
                       >
-                        <Plus className="h-3.5 w-3.5" />
+                        <Plus className="h-3.5 w-3.5 stroke-[3]" />
+                        <span>Registrar</span>
                       </button>
                     </div>
                   </div>

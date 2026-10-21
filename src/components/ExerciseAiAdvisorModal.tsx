@@ -77,6 +77,18 @@ export default function ExerciseAiAdvisorModal({
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
+  // Handle ESC key to close modal
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen || !exercise) return null;
 
   const handleSendMessage = async (textToSend?: string) => {
@@ -203,7 +215,12 @@ export default function ExerciseAiAdvisorModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md select-none">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md select-none"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -211,12 +228,12 @@ export default function ExerciseAiAdvisorModal({
         className="bg-white dark:bg-[#0e101a] border border-gray-200 dark:border-gray-800 rounded-3xl w-full max-w-xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-left"
       >
         {/* Header */}
-        <div className="p-4 border-b border-gray-100 dark:border-gray-800/80 bg-gray-50/70 dark:bg-white/[0.02] flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
+        <div className="p-3.5 sm:p-4 border-b border-gray-100 dark:border-gray-800/80 bg-gray-50/70 dark:bg-white/[0.02] flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
             <div className="w-9 h-9 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
               <Sparkles className="h-4.5 w-4.5" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[9px] font-mono font-bold text-emerald-400 uppercase tracking-wider">
                   Asistente IA de Biomecánica
@@ -233,11 +250,15 @@ export default function ExerciseAiAdvisorModal({
             </div>
           </div>
 
+          {/* Close button with high visibility and contrast */}
           <button
+            type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white flex items-center justify-center transition cursor-pointer border border-gray-200 dark:border-white/5"
+            aria-label="Cerrar modal"
+            title="Cerrar (Esc)"
+            className="shrink-0 w-9 h-9 rounded-xl bg-gray-100 hover:bg-rose-500/15 dark:bg-white/10 dark:hover:bg-rose-500/20 text-gray-700 hover:text-rose-600 dark:text-gray-200 dark:hover:text-rose-400 flex items-center justify-center transition cursor-pointer border border-gray-300 dark:border-white/15 shadow-sm active:scale-95"
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 

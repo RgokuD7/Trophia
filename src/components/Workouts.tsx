@@ -348,10 +348,23 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
 
   const handleStartActiveWorkout = () => {
     if (!activeSession) return;
+    if (selectedDay !== todayStr) return; // Prevent live stopwatch on past or future dates
     const nowIso = new Date().toISOString();
     const updated: WorkoutSession = {
       ...activeSession,
       startTime: nowIso
+    };
+    onAddWorkout(updated);
+    setActiveSession(updated);
+  };
+
+  const handleUnmarkSessionCompleted = () => {
+    if (!activeSession) return;
+    const updated: WorkoutSession = {
+      ...activeSession,
+      completed: false,
+      startTime: undefined,
+      endTime: undefined
     };
     onAddWorkout(updated);
     setActiveSession(updated);
@@ -956,6 +969,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
   // Toggle single set completion state & handle progressive overload edit
   const handleToggleSet = (exId: string, setIndex: number) => {
     if (!activeSession) return;
+    if (selectedDay > todayStr) return; // Future days cannot be marked/started
 
     const updatedExercises = activeSession.exercises.map(ex => {
       if (ex.id === exId) {
@@ -1874,7 +1888,13 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                     <button
                       type="button"
                       onClick={() => setIsSportModalOpen(true)}
-                      className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-md shadow-orange-500/15 active:scale-95 cursor-pointer"
+                      disabled={selectedDay > todayStr}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-md shadow-orange-500/15 ${
+                        selectedDay > todayStr
+                          ? "bg-gray-200 dark:bg-white/5 text-gray-400 cursor-not-allowed opacity-50"
+                          : "bg-orange-500 hover:bg-orange-600 text-white cursor-pointer active:scale-95"
+                      }`}
+                      title={selectedDay > todayStr ? "No puedes registrar deportes en días futuros" : undefined}
                     >
                       <Plus className="h-3.5 w-3.5 stroke-[3]" />
                       <span>{selectedDaySports.length > 0 ? "Añadir Otro" : "Registrar Deporte"}</span>
@@ -2152,6 +2172,16 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
                           <span>⏱️ En curso · {formatWorkoutTime(workoutElapsedSeconds)}</span>
                         </span>
+                      ) : selectedDay > todayStr ? (
+                        <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 font-bold flex items-center gap-1">
+                          <Eye className="h-2.5 w-2.5" />
+                          <span>Programada (Día futuro)</span>
+                        </span>
+                      ) : selectedDay < todayStr ? (
+                        <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-bold flex items-center gap-1">
+                          <Clock className="h-2.5 w-2.5" />
+                          <span>Sin registrar (Día pasado)</span>
+                        </span>
                       ) : (
                         <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500 font-bold">
                           ⏳ Lista para iniciar
@@ -2198,33 +2228,56 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                           </span>
                         )}
                       </button>
-                      <button
-                        onClick={handleStartActiveWorkout}
-                        className="text-[10px] font-bold text-gray-500 hover:text-emerald-400 underline cursor-pointer"
-                        title="Reiniciar temporizador y registrar de nuevo"
-                      >
-                        Reiniciar
-                      </button>
+
+                      {selectedDay === todayStr ? (
+                        <button
+                          onClick={handleStartActiveWorkout}
+                          className="text-[10px] font-bold text-gray-500 hover:text-emerald-400 underline cursor-pointer"
+                          title="Reiniciar temporizador y registrar de nuevo"
+                        >
+                          Reiniciar
+                        </button>
+                      ) : selectedDay < todayStr ? (
+                        <button
+                          onClick={handleUnmarkSessionCompleted}
+                          className="text-[10px] font-bold text-gray-500 hover:text-amber-400 underline cursor-pointer"
+                          title="Desmarcar para editar o volver a registrar"
+                        >
+                          Desmarcar
+                        </button>
+                      ) : null}
                     </div>
                   ) : !activeSession.startTime ? (
-                    /* BOTÓN INICIAR ENTRENAMIENTO / GUARDAR COMO REALIZADA */
                     <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-                      <button
-                        onClick={handleStartActiveWorkout}
-                        className="py-2.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-xs rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/25 active:scale-95 cursor-pointer"
-                      >
-                        <Play className="h-4 w-4 fill-current" />
-                        <span>{selectedDay === todayStr ? "Iniciar Entrenamiento" : "Iniciar en Vivo"}</span>
-                      </button>
+                      {/* DÍA DE HOY: Iniciar cronómetro en vivo */}
+                      {selectedDay === todayStr && (
+                        <button
+                          onClick={handleStartActiveWorkout}
+                          className="py-2.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-xs rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/25 active:scale-95 cursor-pointer"
+                        >
+                          <Play className="h-4 w-4 fill-current" />
+                          <span>Iniciar Entrenamiento</span>
+                        </button>
+                      )}
+
+                      {/* DÍAS PASADOS: Marcar como hecho directamente (sin cronómetro en vivo) */}
                       {selectedDay < todayStr && (
                         <button
                           onClick={() => handleMarkSessionCompleteDirectly()}
-                          className="py-2.5 px-3.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 font-bold text-xs rounded-xl transition flex items-center gap-1.5 border border-emerald-500/25 active:scale-95 cursor-pointer shadow-sm"
-                          title="Guardar esta sesión pasada como completada con todas sus series"
+                          className="py-2.5 px-4 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 font-bold text-xs rounded-xl transition flex items-center gap-1.5 border border-emerald-500/25 active:scale-95 cursor-pointer shadow-sm"
+                          title="Guardar esta sesión pasada como realizada sin cronómetro en vivo"
                         >
                           <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                          <span>Guardar como Realizada</span>
+                          <span>Marcar como Hecho</span>
                         </button>
+                      )}
+
+                      {/* DÍAS FUTUROS: Solo ver */}
+                      {selectedDay > todayStr && (
+                        <div className="flex items-center gap-1.5 px-3 py-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-xl text-xs font-bold">
+                          <Eye className="h-3.5 w-3.5" />
+                          <span>Solo lectura (Día futuro)</span>
+                        </div>
                       )}
                     </div>
                   ) : (
@@ -2254,6 +2307,33 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                     </div>
                   )}
                 </div>
+
+                {/* Banner de Ayuda Contextual para Días Futuros o Pasados */}
+                {selectedDay > todayStr && (
+                  <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center gap-2.5 text-xs text-blue-300 text-left">
+                    <Eye className="h-4 w-4 text-blue-400 shrink-0" />
+                    <span>
+                      Estás viendo la rutina programada para un día futuro. Podrás iniciar el entrenamiento y registrar series cuando llegue la fecha.
+                    </span>
+                  </div>
+                )}
+                {selectedDay < todayStr && !activeSession.completed && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-between gap-2.5 text-xs text-amber-300 text-left">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-amber-400 shrink-0" />
+                      <span>
+                        Esta sesión corresponde a un día pasado. Puedes marcarla como completada directamente.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleMarkSessionCompleteDirectly()}
+                      className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg font-bold text-[11px] shrink-0 cursor-pointer"
+                    >
+                      Marcar como Hecho
+                    </button>
+                  </div>
+                )}
 
                 {/* Warm up block */}
                 <div className="bg-white dark:bg-[#12131d] p-3.5 rounded-2xl border border-gray-200 dark:border-gray-800/60 space-y-2 text-left">
@@ -2445,13 +2525,17 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                                 </div>
 
                                 <button
+                                  type="button"
                                   onClick={() => handleToggleSet(ex.id, set.setIndex)}
-                                  className={`w-7 h-7 rounded-xl border flex items-center justify-center transition cursor-pointer shadow-sm ${
-                                    set.completed
-                                      ? "bg-emerald-500 border-emerald-400 text-white shadow-emerald-500/20"
-                                      : "bg-white dark:bg-[#161824] border-gray-300 dark:border-gray-700 text-gray-400 hover:text-emerald-400 hover:border-emerald-400"
+                                  disabled={selectedDay > todayStr}
+                                  className={`w-7 h-7 rounded-xl border flex items-center justify-center transition shadow-sm ${
+                                    selectedDay > todayStr
+                                      ? "opacity-30 cursor-not-allowed bg-gray-100 dark:bg-white/5 border-gray-300 dark:border-gray-800 text-gray-400"
+                                      : set.completed
+                                        ? "bg-emerald-500 border-emerald-400 text-white shadow-emerald-500/20 cursor-pointer"
+                                        : "bg-white dark:bg-[#161824] border-gray-300 dark:border-gray-700 text-gray-400 hover:text-emerald-400 hover:border-emerald-400 cursor-pointer"
                                   }`}
-                                  title={set.completed ? "Serie completada" : "Marcar como completada"}
+                                  title={selectedDay > todayStr ? "Día futuro (solo lectura): no puedes marcar series antes de la fecha" : (set.completed ? "Serie completada" : "Marcar como completada")}
                                 >
                                   {set.completed ? <Check className="h-4 w-4 stroke-[3]" /> : <Play className="h-3 w-3 fill-current ml-0.5" />}
                                 </button>
