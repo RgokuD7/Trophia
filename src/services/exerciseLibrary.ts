@@ -468,6 +468,71 @@ export const DEFAULT_EXERCISES: Omit<CustomExercise, "id" | "createdAt">[] = [
     caloriesBurnedPerSet: 8,
     equipmentNeeded: "Comba",
   },
+  {
+    name: "Bicicleta Elíptica",
+    normalizedName: "bicicleta eliptica eliptica",
+    trackingType: "time",
+    defaultSets: 1,
+    defaultReps: 900, // 15 minutos (900 seg)
+    defaultWeight: 0,
+    primaryMuscles: ["Cardiovascular", "Cuádriceps", "Glúteos"],
+    secondaryMuscles: ["Isquiotibiales", "Gemelos"],
+    techniqueTips: "Mantén la espalda erguida, los pies planos sobre los pedales y empuja/tira con fluidez de los manillares sin botar el cuerpo.",
+    caloriesBurnedPerSet: 135,
+    equipmentNeeded: "Máquina Elíptica",
+  },
+  {
+    name: "Cinta de Correr / Caminadora",
+    normalizedName: "cinta de correr caminadora treadmill",
+    trackingType: "time",
+    defaultSets: 1,
+    defaultReps: 900, // 15 minutos (900 seg)
+    defaultWeight: 0,
+    primaryMuscles: ["Cardiovascular", "Gemelos", "Cuádriceps"],
+    secondaryMuscles: ["Glúteos", "Core"],
+    techniqueTips: "Mantén la vista al frente, pisada media sin talonar en exceso y brazos flexionados a 90° acompañando la zancada.",
+    caloriesBurnedPerSet: 140,
+    equipmentNeeded: "Cinta de correr",
+  },
+  {
+    name: "Bicicleta Estática (Spinning)",
+    normalizedName: "bicicleta estatica spinning ciclo indoor",
+    trackingType: "time",
+    defaultSets: 1,
+    defaultReps: 900, // 15 minutos (900 seg)
+    defaultWeight: 0,
+    primaryMuscles: ["Cardiovascular", "Cuádriceps"],
+    secondaryMuscles: ["Glúteos", "Isquiotibiales"],
+    techniqueTips: "Ajusta la altura del sillín al hueso de la cadera. Pedalea en círculos continuos sin bloquear las rodillas en la extensión.",
+    caloriesBurnedPerSet: 125,
+    equipmentNeeded: "Bicicleta estática",
+  },
+  {
+    name: "Remoergómetro (Máquina de Remo)",
+    normalizedName: "remoergometro maquina de remo remo cardio",
+    trackingType: "time",
+    defaultSets: 1,
+    defaultReps: 600, // 10 minutos (600 seg)
+    defaultWeight: 0,
+    primaryMuscles: ["Cardiovascular", "Dorsal ancho", "Piernas"],
+    secondaryMuscles: ["Core", "Bíceps"],
+    techniqueTips: "Secuencia: Piernas, torso, brazos al tirar; brazos, torso, piernas al volver. Empuja con fuerza desde los talones.",
+    caloriesBurnedPerSet: 110,
+    equipmentNeeded: "Remoergómetro",
+  },
+  {
+    name: "Escaladora (Stairmaster)",
+    normalizedName: "escaladora stairmaster maquina de escaleras",
+    trackingType: "time",
+    defaultSets: 1,
+    defaultReps: 600, // 10 minutos (600 seg)
+    defaultWeight: 0,
+    primaryMuscles: ["Cardiovascular", "Glúteos", "Cuádriceps"],
+    secondaryMuscles: ["Gemelos", "Isquiotibiales"],
+    techniqueTips: "Sube los peldaños apoyando todo el pie, con postura erguida sin colgarte del pasamanos para un gasto calórico real.",
+    caloriesBurnedPerSet: 120,
+    equipmentNeeded: "Escaladora / Stairmaster",
+  },
 ];
 
 // Search an exercise in custom user DB or in default baseline catalog
@@ -505,6 +570,23 @@ export function findExerciseInCatalog(
   return null;
 }
 
+export function isContinuousCardioExercise(exerciseName: string): boolean {
+  const norm = normalizeExerciseName(exerciseName);
+  return (
+    norm.includes("eliptica") ||
+    norm.includes("caminadora") ||
+    norm.includes("cinta") ||
+    norm.includes("treadmill") ||
+    norm.includes("bicicleta estatica") ||
+    norm.includes("spinning") ||
+    norm.includes("stairmaster") ||
+    norm.includes("escaladora") ||
+    norm.includes("remoergometro") ||
+    norm.includes("maquina de remo") ||
+    norm.includes("cardio continuo")
+  );
+}
+
 // Convert any CustomExercise or AnalyzedExerciseResult to a WorkoutExercise
 export function createWorkoutExerciseFromData(
   data: {
@@ -518,13 +600,15 @@ export function createWorkoutExerciseFromData(
     secondaryMuscles?: string[];
     techniqueTips?: string;
     equipmentNeeded?: string;
+    restSeconds?: number;
   },
   overrideSets?: number,
   overrideReps?: number,
   overrideWeight?: number
 ): WorkoutExercise {
-  const setsCount = overrideSets ?? data.defaultSets ?? 3;
-  const repsVal = overrideReps ?? data.defaultReps ?? (data.trackingType === "time" ? 45 : 10);
+  const isCardio = isContinuousCardioExercise(data.name) || (data.trackingType === "time" && (data.defaultReps || 0) >= 300);
+  const setsCount = overrideSets ?? (isCardio ? 1 : (data.defaultSets ?? 3));
+  const repsVal = overrideReps ?? data.defaultReps ?? (data.trackingType === "time" ? (isCardio ? 900 : 45) : 10);
   const weightVal = overrideWeight ?? data.defaultWeight ?? 0;
 
   const completedSets = Array.from({ length: setsCount }, (_, i) => ({
@@ -537,15 +621,16 @@ export function createWorkoutExerciseFromData(
   return {
     id: `ex_${Date.now()}_${Math.random().toString(36).substr(2, 7)}`,
     name: data.name,
-    trackingType: data.trackingType || "reps",
+    trackingType: data.trackingType || (isCardio ? "time" : "reps"),
     sets: setsCount,
     reps: repsVal,
     weight: weightVal,
-    caloriesBurnedPerSet: data.caloriesBurnedPerSet || 5,
+    caloriesBurnedPerSet: data.caloriesBurnedPerSet || (isCardio ? 130 : 5),
     primaryMuscles: data.primaryMuscles || [],
     secondaryMuscles: data.secondaryMuscles || [],
     techniqueTips: data.techniqueTips,
     equipmentNeeded: data.equipmentNeeded,
+    restSeconds: data.restSeconds || (isCardio ? 0 : 60),
     completedSets,
   };
 }

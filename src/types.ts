@@ -183,6 +183,7 @@ export interface WorkoutExercise {
   secondaryMuscles?: string[];
   techniqueTips?: string;
   equipmentNeeded?: string;
+  restSeconds?: number; // descanso sugerido entre series en segundos (ej: 60, 90, 120)
   completedSets: {
     setIndex: number;
     completed: boolean;
@@ -202,6 +203,10 @@ export interface WorkoutSession {
   durationMinutes: number;
   startTime?: string; // ISO timestamp when user clicked Iniciar
   endTime?: string;   // ISO timestamp when workout was completed
+  caloriesBurned?: number; // total kcal quemadas (sumatoria base o recalculo IA)
+  totalVolumeKg?: number; // tonelaje total levantado en kg
+  caloriesBreakdown?: string; // explicación del gasto calórico por la IA
+  recalculatedWithIA?: boolean;
 }
 
 export type RoutineDayKey = 
@@ -222,6 +227,7 @@ export interface RoutineTemplate {
   warmup: string[];
   exercises: WorkoutExercise[];
   cooldown: string[];
+  restBetweenExercisesSeconds?: number; // descanso sugerido antes del sig ejercicio
 }
 
 export interface WeeklyRoutinePlan {

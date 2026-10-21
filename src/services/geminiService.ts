@@ -654,18 +654,20 @@ Para CADA UNA de las ${targetDays} rutinas:
 1. "name": Título motivador y claro (ej: "Día 1: Empuje (Pecho, Hombro y Tríceps)").
 2. "focus": Grupo muscular o enfoque principal (ej: "Pectoral, Hombro y Tríceps").
 3. "suggestedDay": "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday".
-4. "warmup": 2 o 3 ejercicios de movilidad articular o calentamiento específico.
-5. "exercises": 3 a 5 ejercicios adaptados al equipamiento y restricciones.
-   - trackingType: "reps" para fuerza con repeticiones, "time" para ejercicios basados en tiempo (planchas, isométricos).
-   - sets: número de series de trabajo (3 o 4).
-   - reps: repeticiones recomendadas por serie o segundos si es time.
+4. "restBetweenExercisesSeconds": Descanso sugerido antes de pasar al siguiente ejercicio (ej: 90 o 120 segundos).
+5. "warmup": 2 o 3 ejercicios de movilidad articular o calentamiento específico.
+6. "exercises": 3 a 5 ejercicios adaptados al equipamiento y restricciones.
+   - trackingType: "reps" para fuerza con repeticiones, "time" para ejercicios basados en tiempo (planchas, cardio continuo).
+   - sets: número de series de trabajo (3 o 4 para fuerza; 1 para cardio continuo como elíptica o cinta).
+   - reps: repeticiones recomendadas por serie o segundos si es time (ej: 10 reps, o 45 seg para plancha, o 900 seg para 15 min de elíptica).
    - weight: peso de inicio recomendado en kg (0 si es peso corporal). ¡IMPORTANTE!: En ejercicios con mancuernas (dumbbell), el valor DEBE ser el peso de CADA mancuerna individual (ej: 10 kg significa una mancuerna de 10 kg en cada mano, total 20 kg). NUNCA dividas el peso.
-   - caloriesBurnedPerSet: gasto calórico conservador por serie (3 a 8 kcal).
+   - restSeconds: tiempo de descanso sugerido entre series en segundos (ej: 60s para accesorios, 90-120s para sentadillas/presses pesados, 0 para cardio continuo).
+   - caloriesBurnedPerSet: gasto calórico conservador por serie (3 a 8 kcal para series de fuerza; 100-150 kcal si es un bloque continuo de cardio de 15 min).
    - primaryMuscles: músculos principales trabajados.
    - secondaryMuscles: músculos sinergistas o secundarios.
    - techniqueTips: indicación clara de alineación, respiración y seguridad.
    - equipmentNeeded: implemento necesario.
-6. "cooldown": 2 o 3 estiramientos o relajación final.
+7. "cooldown": 2 o 3 estiramientos o relajación final.
 
 Responde estrictamente en formato JSON con la siguiente estructura:
 {
@@ -678,6 +680,7 @@ Responde estrictamente en formato JSON con la siguiente estructura:
       "name": "Día 1: Empuje (Pecho, Hombro y Tríceps)",
       "focus": "Pecho y Hombros",
       "suggestedDay": "monday",
+      "restBetweenExercisesSeconds": 120,
       "warmup": ["Movilidad articular escapular - 3 min"],
       "exercises": [
         {
@@ -686,6 +689,7 @@ Responde estrictamente en formato JSON con la siguiente estructura:
           "sets": 3,
           "reps": 10,
           "weight": 14,
+          "restSeconds": 90,
           "caloriesBurnedPerSet": 5,
           "primaryMuscles": ["Pectoral mayor"],
           "secondaryMuscles": ["Tríceps braquial", "Deltoides anterior"],
@@ -1715,6 +1719,7 @@ export interface AnalyzedExerciseResult {
   techniqueTips?: string;
   caloriesBurnedPerSet: number;
   equipmentNeeded?: string;
+  restSeconds?: number;
 }
 
 // 16. Analyze single exercise biomechanics, muscles, tracking type and technique tips
@@ -1732,16 +1737,22 @@ Analiza biomecánicamente el siguiente ejercicio introducido por el usuario: "${
 ${equipStr}
 
 Determina de forma rigurosa y científica:
-1. "name": Nombre limpio, profesional y estandarizado del ejercicio en español (ej: "Press de Banca Plano", "Sentadilla Búlgara", "Plancha Frontal Isométrica", "Dominadas Pronas").
-2. "trackingType": "reps" (si se entrena contando repeticiones de fuerza como sentadillas, press, dominadas), "time" (si es isométrico o por duración como planchas, paseos del granjero, sentadilla isométrica en pared, saltos de comba), o "distance" (si es de desplazamiento o carrera).
-3. "defaultSets": Número recomendado de series (típicamente 3 o 4).
-4. "defaultReps": Si trackingType es "reps", repeticiones recomendadas por serie (ej: 8, 10, 12). Si trackingType es "time", segundos recomendados de duración por serie (ej: 30, 45, 60).
-5. "defaultWeight": Peso inicial de referencia en kg (ej: 10, 20; o 0 si es calistenia/peso corporal). Si es con mancuernas, debe ser el peso de CADA mancuerna individual (ej: 10 kg significa 10 kg en cada mano, total 20 kg).
+1. "name": Nombre limpio, profesional y estandarizado del ejercicio en español (ej: "Press de Banca Plano", "Sentadilla Búlgara", "Bicicleta Elíptica", "Plancha Frontal Isométrica", "Dominadas Pronas").
+2. "trackingType": "reps" (si se entrena contando repeticiones de fuerza como sentadillas, press, dominadas), "time" (si es isométrico, de duración continua o cardio como elíptica, cinta, bicicleta estática, planchas), o "distance" (si es de desplazamiento o carrera).
+3. "defaultSets": Número recomendado de series.
+   ¡REGLA OBLIGATORIA CARDIO CONTINUO!: Si el ejercicio es una máquina de cardio continuo (ej: Elíptica, Cinta de correr, Caminadora, Bicicleta estática, Spinning, Escaladora, Remo cardio):
+   - "defaultSets" DEBE ser 1 (un solo bloque continuo). ¡NUNCA pongas 3 o 4 series para elíptica o caminadora continua!
+   - "defaultReps" debe ser la duración lógica en segundos (ej: 900 para 15 minutos, o 1200 para 20 min).
+   - "caloriesBurnedPerSet": Gasto calórico total realista para ese bloque completo (ej: 120-160 kcal, NUNCA 5 kcal).
+   - "restSeconds": 0.
+4. "defaultReps": Si trackingType es "reps", repeticiones recomendadas por serie (ej: 8, 10, 12). Si trackingType es "time", segundos recomendados (ej: 30, 45, 60 para planchas; o 900 para 15 min de cardio continuo).
+5. "defaultWeight": Peso inicial de referencia en kg (ej: 10, 20; o 0 si es calistenia/peso corporal o máquina de cardio). Si es con mancuernas, debe ser el peso de CADA mancuerna individual (ej: 10 kg significa 10 kg en cada mano, total 20 kg).
 6. "primaryMuscles": Array de músculos principales trabajados (ej: ["Pectoral mayor", "Tríceps braquial"]).
 7. "secondaryMuscles": Array de músculos sinergistas o estabilizadores (ej: ["Deltoides anterior", "Core"]).
-8. "techniqueTips": 2 o 3 indicaciones directas de técnica, alineación postural, respiración y prevención de lesiones (ej: "Retrae escápulas y apoya los pies firmes. Desciende la carga controlando la fase excéntrica sin rebotar.").
-9. "caloriesBurnedPerSet": Gasto calórico estimado CONSERVADOR por serie (entre 3 y 8 kcal).
-10. "equipmentNeeded": Material requerido (ej: "Mancuernas", "Barra", "Peso corporal", "Polea", "Banda elástica").
+8. "techniqueTips": 2 o 3 indicaciones directas de técnica, alineación postural, respiración y prevención de lesiones.
+9. "caloriesBurnedPerSet": Gasto calórico estimado por serie/bloque (entre 3 y 8 kcal para series de fuerza; 100-160 kcal para bloques de cardio continuo de 10-20 min).
+10. "equipmentNeeded": Material requerido (ej: "Mancuernas", "Barra", "Máquina Elíptica", "Peso corporal").
+11. "restSeconds": Segundos sugeridos de descanso entre series (ej: 60s para aislamiento, 90-120s para sentadillas/presses pesados, 0 para cardio continuo).
 
 Responde estrictamente en formato JSON con la siguiente estructura:
 {
@@ -1750,6 +1761,7 @@ Responde estrictamente en formato JSON con la siguiente estructura:
   "defaultSets": 3,
   "defaultReps": 10,
   "defaultWeight": 0,
+  "restSeconds": 60,
   "primaryMuscles": ["Músculo principal 1"],
   "secondaryMuscles": ["Músculo secundario 1"],
   "techniqueTips": "Consejos clave de ejecución y seguridad biomecánica",
@@ -1778,9 +1790,12 @@ ${rawText}
 ${equipStr}
 
 Tu tarea es descomponer y estructurar cada ejercicio individualmente:
-- Si el usuario especificó series, repeticiones o peso en el texto (ej: "Press banca 4x10 con 50kg" o "Plancha 3x45s"), extrae esos valores exactos en defaultSets, defaultReps y defaultWeight.
+- Si el usuario especificó series, repeticiones, tiempo o peso en el texto (ej: "Press banca 4x10 con 50kg", "Plancha 3x45s" o "Elíptica 16 min / 960s"):
+  * Extrae esos valores exactos en defaultSets, defaultReps y defaultWeight.
+  * Si es un ejercicio de cardio continuo (como elíptica, cinta o bicicleta) y el usuario anotó un tiempo total (ej: 960s o 16m), asígnalo como defaultSets: 1 y defaultReps: 960 (segundos). ¡No multipliques por series múltiples!
 - Si no especificó números, asigna valores predeterminados seguros y óptimos basados en biomecánica.
 - Clasifica con precisión trackingType ("reps" para repeticiones, "time" para ejercicios basados en tiempo en segundos, "distance" para desplazamientos).
+- Incluye restSeconds (descanso entre series en segundos, ej: 60s, 90s, 120s; 0 para cardio).
 - Identifica músculos principales, secundarios, tips de postura y equipamiento.
 
 Responde estrictamente en formato JSON con un arreglo dentro del campo "exercises":
@@ -1792,6 +1807,7 @@ Responde estrictamente en formato JSON con un arreglo dentro del campo "exercise
       "defaultSets": 3,
       "defaultReps": 10,
       "defaultWeight": 14,
+      "restSeconds": 60,
       "primaryMuscles": ["Pectoral mayor"],
       "secondaryMuscles": ["Tríceps braquial"],
       "techniqueTips": "Instrucciones biomecánicas clave y postura segura",
@@ -1805,6 +1821,81 @@ Responde estrictamente en formato JSON con un arreglo dentro del campo "exercise
   if (Array.isArray(res)) return res;
   if (res && Array.isArray(res.exercises)) return res.exercises;
   return [];
+}
+
+// 18. Recalculate actual burned calories and volume load with Gemini IA
+export interface RecalculatedWorkoutCalories {
+  caloriesBurned: number;
+  totalVolumeKg: number;
+  breakdown: string;
+}
+
+export async function recalculateWorkoutCaloriesByIA(
+  apiKey: string,
+  userProfile: {
+    weight: number;
+    sex: "male" | "female";
+    height: number;
+    age: number;
+  },
+  workout: {
+    name: string;
+    durationMinutes: number;
+    exercises: {
+      name: string;
+      trackingType?: "reps" | "time" | "distance";
+      completedSets: {
+        setIndex: number;
+        completed: boolean;
+        reps: number;
+        weight: number;
+      }[];
+    }[];
+  }
+): Promise<RecalculatedWorkoutCalories> {
+  const completedExercises = workout.exercises
+    .map(ex => {
+      const done = ex.completedSets.filter(s => s.completed);
+      return {
+        name: ex.name,
+        trackingType: ex.trackingType || "reps",
+        completedSetsCount: done.length,
+        setsDetail: done.map(s => `${ex.trackingType === "time" ? `${s.reps}s` : `${s.reps} reps`} @ ${s.weight}kg`).join(", ")
+      };
+    })
+    .filter(ex => ex.completedSetsCount > 0);
+
+  const prompt = `Actúas como un Fisiólogo del Ejercicio y Biomecánico Deportivo de Trophia.
+El usuario ha completado su entrenamiento y solicita recalcular con Inteligencia Artificial su GASTO CALÓRICO REAL basado en los pesos exactos levantados, repeticiones reales efectuadas y tiempo transcurrido.
+
+[DATOS BIOMÉTRICOS DEL USUARIO]:
+- Peso corporal: ${userProfile.weight} kg
+- Sexo: ${userProfile.sex === "male" ? "Hombre" : "Mujer"}
+- Altura: ${userProfile.height} cm
+- Edad: ${userProfile.age} años
+
+[DATOS DEL ENTRENAMIENTO REALIZADO]:
+- Nombre: "${workout.name}"
+- Duración real: ${workout.durationMinutes} minutos
+- Ejercicios y series completadas:
+${completedExercises.map(e => `* ${e.name} (${e.trackingType === "time" ? "Tiempo" : "Fuerza"}): ${e.completedSetsCount} series -> [${e.setsDetail}]`).join("\n")}
+
+Instrucciones científicas de cálculo:
+1. Calcula el Tonelaje Total de Fuerza (suma de peso en kg × repeticiones de todas las series de fuerza completadas). Para ejercicios con peso corporal sin lastre añade el equivalente gravitacional efectivo según el ejercicio (ej: flexiones ~65% peso corporal, dominadas ~95%).
+2. Si hay bloques de cardio (ej: elíptica, cinta, bicicleta continua): calcula el gasto aeróbico continuo según METs (ej: Elíptica moderada-alta ~8.0-9.5 METs para su peso corporal y minutos efectivos).
+3. Integra el coste metabólico de fuerza (típicamente 5-9 kcal/minuto de tiempo activo según densidad y tonelaje) más el efecto EPOC post-entrenamiento.
+4. "caloriesBurned": Gasto calórico total neto en kcal (número entero realista, no inflado pero fiel al esfuerzo físico y tiempo real invertido).
+5. "totalVolumeKg": Tonelaje de fuerza movido (número entero en kg).
+6. "breakdown": Explicación concisa y motivadora de 2 oraciones en español explicando cómo se calculó según su tonelaje levantado, bloques de cardio y tiempo real invertido.
+
+Responde estrictamente en formato JSON con la siguiente estructura:
+{
+  "caloriesBurned": 340,
+  "totalVolumeKg": 4250,
+  "breakdown": "Con un tonelaje total de 4,250 kg movidos y 16 min de elíptica a buen ritmo, tu gasto calórico real fue de ~340 kcal con impacto positivo en el EPOC post-entreno."
+}`;
+
+  return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.8-flash", tier: "pro" });
 }
 
 export interface RejectedEquipmentItem {

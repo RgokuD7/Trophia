@@ -13,12 +13,13 @@ import {
 } from "../types";
 import { 
   generateRoutineByIA, suggestAlternativeExercisesByIA, 
-  analyzeExerciseByIA, parseExerciseBatchByIA 
+  analyzeExerciseByIA, parseExerciseBatchByIA, recalculateWorkoutCaloriesByIA 
 } from "../services/geminiService";
 import { 
   DEFAULT_EXERCISES, findExerciseInCatalog, resolveOrAnalyzeExercise, 
   createWorkoutExerciseFromData, normalizeExerciseName,
-  isDumbbellExercise, isSingleDumbbellExercise, formatExerciseWeight
+  isDumbbellExercise, isSingleDumbbellExercise, formatExerciseWeight,
+  isContinuousCardioExercise
 } from "../services/exerciseLibrary";
 import { 
   getCustomExercises, addCustomExercise, deleteCustomExercise, updateCustomExercise 
@@ -104,6 +105,7 @@ export const buildProvisionalSessionFromTemplate = (
         secondaryMuscles: ex.secondaryMuscles || [],
         techniqueTips: ex.techniqueTips,
         equipmentNeeded: ex.equipmentNeeded,
+        restSeconds: ex.restSeconds || (ex.trackingType === "time" ? 0 : 60),
         completedSets
       };
     }),
@@ -127,8 +129,26 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
   const initialTodayStr = getLocalDateString();
   const [selectedDay, setSelectedDay] = useState<string>(initialTodayStr);
   const [activeSession, setActiveSession] = useState<WorkoutSession | null>(() => {
+    // 1. Check local storage for an in-progress session of today (survives tab switches and refreshes)
+    if (userId) {
+      try {
+        const stored = localStorage.getItem(`trophia_active_session_${userId}`);
+        if (stored) {
+          const parsed: WorkoutSession = JSON.parse(stored);
+          if (parsed && parsed.date === initialTodayStr && !parsed.completed) {
+            return parsed;
+          }
+        }
+      } catch (e) {
+        console.warn("Could not parse cached active workout:", e);
+      }
+    }
+
+    // 2. Check workoutHistory from props
     const todaySession = workoutHistory.find(w => w.date === initialTodayStr);
     if (todaySession) return todaySession;
+
+    // 3. Check assigned weekly routine
     const selectedDayKey = getDayKeyFromDateStr(initialTodayStr);
     const assigned = userProfile.weeklyRoutinePlan?.routines?.find(
       r => r.assignedDay === selectedDayKey
@@ -138,12 +158,30 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     }
     return null;
   });
+
   const [completedWorkoutSummary, setCompletedWorkoutSummary] = useState<{
     name: string;
     durationMinutes: number;
     totalCalories: number;
     completedSetsCount: number;
+    totalVolumeKg?: number;
+    breakdown?: string;
+    recalculated?: boolean;
   } | null>(null);
+
+  const [isRecalculatingCalories, setIsRecalculatingCalories] = useState(false);
+  const [planToApply, setPlanToApply] = useState<WeeklyRoutinePlan | null>(null);
+  const [isManageExistingRoutinesModalOpen, setIsManageExistingRoutinesModalOpen] = useState(false);
+
+  // Sync active workout session to localStorage in real time
+  useEffect(() => {
+    if (!userId) return;
+    if (activeSession && !activeSession.completed) {
+      localStorage.setItem(`trophia_active_session_${userId}`, JSON.stringify(activeSession));
+    } else if (activeSession?.completed) {
+      localStorage.removeItem(`trophia_active_session_${userId}`);
+    }
+  }, [activeSession, userId]);
 
   // Instantiate a routine template into active session for selectedDay
   const startSessionFromTemplate = (routine: RoutineTemplate, markCompletedDirectly = false) => {
@@ -393,6 +431,17 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     setExerciseSearchSuggestions(matches.slice(0, 6));
   }, [newExerciseName, customExercises]);
 
+  // Auto-detect cardio keywords on exercise input name
+  useEffect(() => {
+    if (isContinuousCardioExercise(newExerciseName)) {
+      setNewExerciseTrackingType("time");
+      setNewExerciseSets(1);
+      if (newExerciseReps === 10 || newExerciseReps === 45) {
+        setNewExerciseReps(900); // 15 min default for continuous cardio
+      }
+    }
+  }, [newExerciseName]);
+
   const handleOpenTechniqueGuide = async (exercise: WorkoutExercise | string) => {
     setIsGuideModalOpen(true);
     setIsLoadingGuide(true);
@@ -532,11 +581,16 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
       });
 
       if (routinePlan) {
-        const profileWithPlan: UserProfile = {
-          ...updatedProfile,
-          weeklyRoutinePlan: routinePlan
-        };
-        onUpdateProfile(profileWithPlan);
+        if (updatedProfile.weeklyRoutinePlan?.routines && updatedProfile.weeklyRoutinePlan.routines.length > 0) {
+          setPlanToApply(routinePlan);
+          setIsManageExistingRoutinesModalOpen(true);
+        } else {
+          const profileWithPlan: UserProfile = {
+            ...updatedProfile,
+            weeklyRoutinePlan: routinePlan
+          };
+          onUpdateProfile(profileWithPlan);
+        }
         // Direct the user to Tus Rutinas view as requested!
         setActiveTab("routines");
       }
@@ -560,16 +614,71 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     lastUpdated: new Date().toISOString()
   });
 
-  // Timer states (Rest / HIIT)
+  // Timer states (Rest / HIIT) - Timestamp driven to survive backgrounding & tab switches
   const [timerType, setTimerType] = useState<"rest" | "hiit">("rest");
-  const [timeRemaining, setTimeRemaining] = useState(60);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [timerTargetMs, setTimerTargetMs] = useState<number | null>(() => {
+    if (userId) {
+      try {
+        const stored = localStorage.getItem(`trophia_rest_timer_${userId}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.targetMs && parsed.targetMs > Date.now()) {
+            return parsed.targetMs;
+          }
+        }
+      } catch (e) {}
+    }
+    return null;
+  });
+  const [timerLabel, setTimerLabel] = useState<string>(() => {
+    if (userId) {
+      try {
+        const stored = localStorage.getItem(`trophia_rest_timer_${userId}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.label) return parsed.label;
+        }
+      } catch (e) {}
+    }
+    return "Descanso";
+  });
+  const [timeRemaining, setTimeRemaining] = useState<number>(() => {
+    if (userId) {
+      try {
+        const stored = localStorage.getItem(`trophia_rest_timer_${userId}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.targetMs && parsed.targetMs > Date.now()) {
+            return Math.ceil((parsed.targetMs - Date.now()) / 1000);
+          }
+        }
+      } catch (e) {}
+    }
+    return 60;
+  });
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(() => {
+    if (userId) {
+      try {
+        const stored = localStorage.getItem(`trophia_rest_timer_${userId}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          return !!(parsed && parsed.targetMs && parsed.targetMs > Date.now());
+        }
+      } catch (e) {}
+    }
+    return false;
+  });
   const [hiitCycle, setHiitCycle] = useState<"work" | "rest">("work");
   const [hiitRound, setHiitRound] = useState(1);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load the workout for the selected day if it exists, or instantiate from assigned template
   useEffect(() => {
+    // If selectedDay is today and we already have an active in-progress session, do not wipe it
+    if (selectedDay === initialTodayStr && activeSession && !activeSession.completed && activeSession.date === initialTodayStr) {
+      return;
+    }
+
     const todaySession = workoutHistory.find(w => w.date === selectedDay);
     if (todaySession) {
       setActiveSession(todaySession);
@@ -630,65 +739,99 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     });
   }, [workoutHistory]);
 
-  // Timer Tick Logic
+  // Timer Tick Logic (timestamp-driven, persists through tab backgrounding & lockscreen)
   useEffect(() => {
     if (isTimerRunning) {
-      timerRef.current = setInterval(() => {
-        setTimeRemaining(prev => {
-          if (prev <= 1) {
-            // Timer expired
-            if (timerType === "hiit") {
-              // Toggle work/rest
+      if (timerType === "rest" && timerTargetMs) {
+        const checkTimer = () => {
+          const diff = Math.ceil((timerTargetMs - Date.now()) / 1000);
+          if (diff <= 0) {
+            setTimeRemaining(0);
+            setIsTimerRunning(false);
+            setTimerTargetMs(null);
+            if (userId) localStorage.removeItem(`trophia_rest_timer_${userId}`);
+            // Beep sound
+            try {
+              const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const osc = ctx.createOscillator();
+              osc.connect(ctx.destination);
+              osc.type = "sine";
+              osc.frequency.setValueAtTime(800, ctx.currentTime);
+              osc.start();
+              osc.stop(ctx.currentTime + 0.35);
+            } catch (e) {}
+          } else {
+            setTimeRemaining(diff);
+          }
+        };
+
+        checkTimer();
+        timerRef.current = setInterval(checkTimer, 500);
+
+        const onVisibility = () => {
+          if (!document.hidden) checkTimer();
+        };
+        document.addEventListener("visibilitychange", onVisibility);
+
+        return () => {
+          if (timerRef.current) clearInterval(timerRef.current);
+          document.removeEventListener("visibilitychange", onVisibility);
+        };
+      } else if (timerType === "hiit") {
+        timerRef.current = setInterval(() => {
+          setTimeRemaining(prev => {
+            if (prev <= 1) {
               if (hiitCycle === "work") {
                 setHiitCycle("rest");
-                return 15; // 15s rest
+                return 15;
               } else {
                 setHiitCycle("work");
                 setHiitRound(r => r + 1);
-                return 30; // 30s work
+                return 30;
               }
-            } else {
-              // Rest timer ended
-              setIsTimerRunning(false);
-              // Simple beep sound simulation if supported
-              try {
-                const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-                const osc = ctx.createOscillator();
-                osc.connect(ctx.destination);
-                osc.type = "sine";
-                osc.frequency.setValueAtTime(800, ctx.currentTime);
-                osc.start();
-                osc.stop(ctx.currentTime + 0.35);
-              } catch (e) {}
-              return 0;
             }
-          }
-          return prev - 1;
-        });
-      }, 1000);
+            return prev - 1;
+          });
+        }, 1000);
+
+        return () => {
+          if (timerRef.current) clearInterval(timerRef.current);
+        };
+      }
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
     }
+  }, [isTimerRunning, timerType, timerTargetMs, hiitCycle, userId]);
 
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isTimerRunning, timerType, hiitCycle]);
-
-  const handleStartTimer = (duration: number) => {
+  const handleStartTimer = (duration: number, label?: string) => {
+    const target = Date.now() + duration * 1000;
+    setTimerTargetMs(target);
     setTimeRemaining(duration);
     setIsTimerRunning(true);
+    const lbl = label || (timerType === "rest" ? "Descanso" : "Temporizador");
+    setTimerLabel(lbl);
+    if (userId) {
+      localStorage.setItem(`trophia_rest_timer_${userId}`, JSON.stringify({
+        targetMs: target,
+        totalDuration: duration,
+        label: lbl
+      }));
+    }
   };
 
   const handlePauseTimer = () => {
     setIsTimerRunning(false);
+    setTimerTargetMs(null);
+    if (userId) localStorage.removeItem(`trophia_rest_timer_${userId}`);
   };
 
   const handleResetTimer = () => {
     setIsTimerRunning(false);
+    setTimerTargetMs(null);
     setTimeRemaining(timerType === "rest" ? 60 : 30);
     setHiitCycle("work");
     setHiitRound(1);
+    if (userId) localStorage.removeItem(`trophia_rest_timer_${userId}`);
   };
 
   // Generate Routine Plan with Gemini
@@ -712,11 +855,16 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
         weeklyTrainingDays: userProfile.weeklyTrainingDays
       });
       if (plan) {
-        onUpdateProfile({
-          ...userProfile,
-          weeklyRoutinePlan: plan
-        });
-        setActiveTab("routines");
+        if (userProfile.weeklyRoutinePlan?.routines && userProfile.weeklyRoutinePlan.routines.length > 0) {
+          setPlanToApply(plan);
+          setIsManageExistingRoutinesModalOpen(true);
+        } else {
+          onUpdateProfile({
+            ...userProfile,
+            weeklyRoutinePlan: plan
+          });
+          setActiveTab("routines");
+        }
       } else {
         setGenerationError("No se pudo formular el plan de rutinas.");
       }
@@ -748,17 +896,50 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
         weeklyTrainingDays: userProfile.weeklyTrainingDays
       });
       if (plan) {
-        onUpdateProfile({
-          ...userProfile,
-          weeklyRoutinePlan: plan
-        });
-        setActiveTab("routines");
+        if (userProfile.weeklyRoutinePlan?.routines && userProfile.weeklyRoutinePlan.routines.length > 0) {
+          setPlanToApply(plan);
+          setIsManageExistingRoutinesModalOpen(true);
+        } else {
+          onUpdateProfile({
+            ...userProfile,
+            weeklyRoutinePlan: plan
+          });
+          setActiveTab("routines");
+        }
       }
     } catch (e) {
       console.error(e);
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleReplaceExistingRoutines = () => {
+    if (!planToApply) return;
+    onUpdateProfile({
+      ...userProfile,
+      weeklyRoutinePlan: planToApply
+    });
+    setIsManageExistingRoutinesModalOpen(false);
+    setPlanToApply(null);
+    setActiveTab("routines");
+  };
+
+  const handleKeepAndAppendRoutines = () => {
+    if (!planToApply) return;
+    const existing = userProfile.weeklyRoutinePlan?.routines || [];
+    const merged = [...existing, ...planToApply.routines];
+    onUpdateProfile({
+      ...userProfile,
+      weeklyRoutinePlan: {
+        ...planToApply,
+        routines: merged,
+        weeklyDaysCount: merged.length
+      }
+    });
+    setIsManageExistingRoutinesModalOpen(false);
+    setPlanToApply(null);
+    setActiveTab("routines");
   };
 
   // Toggle single set completion state & handle progressive overload edit
@@ -782,13 +963,91 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     onAddWorkout(updatedSession);
     setActiveSession(updatedSession);
 
-    // Auto launch a 60s rest timer if a set is newly marked completed to assist resting
-    const newlyCompleted = updatedExercises
-      .find(ex => ex.id === exId)
-      ?.completedSets.find(set => set.setIndex === setIndex)?.completed;
+    // Contextual intelligent rest timer
+    const targetEx = updatedExercises.find(ex => ex.id === exId);
+    const newlyCompleted = targetEx?.completedSets.find(set => set.setIndex === setIndex)?.completed;
 
-    if (newlyCompleted && timerType === "rest" && !isTimerRunning) {
-      handleStartTimer(60);
+    if (newlyCompleted && targetEx) {
+      const allSetsInExerciseDone = targetEx.completedSets.every(s => s.completed);
+      const exIndex = updatedExercises.findIndex(ex => ex.id === exId);
+      const isLastExercise = exIndex === updatedExercises.length - 1;
+      const allExercisesDone = updatedExercises.every(ex => ex.completedSets.every(s => s.completed));
+
+      if (allExercisesDone) {
+        // Workout complete! Show celebration & allow AI calorie recalculation
+        const totalCal = updatedExercises.reduce((sum, ex) => sum + (ex.completedSets.filter(c => c.completed).length * ex.caloriesBurnedPerSet), 0);
+        const completedSetsCount = updatedExercises.reduce((sum, ex) => sum + ex.completedSets.filter(c => c.completed).length, 0);
+        const finalSession: WorkoutSession = {
+          ...updatedSession,
+          completed: true,
+          endTime: new Date().toISOString(),
+          durationMinutes: Math.max(1, Math.round(workoutElapsedSeconds / 60)) || 45,
+          caloriesBurned: totalCal
+        };
+        onAddWorkout(finalSession);
+        setActiveSession(finalSession);
+        setCompletedWorkoutSummary({
+          name: finalSession.name,
+          durationMinutes: finalSession.durationMinutes,
+          totalCalories: totalCal,
+          completedSetsCount
+        });
+      } else if (allSetsInExerciseDone && !isLastExercise) {
+        // Rest before next exercise!
+        const restSec = activeSession.restBetweenExercisesSeconds || 120;
+        const nextExName = updatedExercises[exIndex + 1]?.name;
+        handleStartTimer(restSec, `Descanso antes de: ${nextExName}`);
+      } else {
+        // Rest between sets!
+        const restSec = targetEx.restSeconds || (targetEx.trackingType === "time" ? 30 : 60);
+        handleStartTimer(restSec, `Descanso: ${targetEx.name}`);
+      }
+    }
+  };
+
+  const handleRecalculateWorkoutCalories = async () => {
+    if (!activeSession || isRecalculatingCalories) return;
+    setIsRecalculatingCalories(true);
+    try {
+      const apiKeyToUse = apiKey || import.meta.env.VITE_SYSTEM_GEMINI_API_KEY || "";
+      const result = await recalculateWorkoutCaloriesByIA(
+        apiKeyToUse,
+        {
+          weight: userProfile.weight || 70,
+          sex: userProfile.sex || "male",
+          height: userProfile.height || 175,
+          age: userProfile.age || 25
+        },
+        {
+          name: activeSession.name,
+          durationMinutes: activeSession.durationMinutes || completedWorkoutSummary?.durationMinutes || 45,
+          exercises: activeSession.exercises
+        }
+      );
+
+      const updatedSession: WorkoutSession = {
+        ...activeSession,
+        caloriesBurned: result.caloriesBurned,
+        totalVolumeKg: result.totalVolumeKg,
+        caloriesBreakdown: result.breakdown,
+        recalculatedWithIA: true
+      };
+
+      onAddWorkout(updatedSession);
+      setActiveSession(updatedSession);
+
+      setCompletedWorkoutSummary(prev => prev ? {
+        ...prev,
+        totalCalories: result.caloriesBurned,
+        totalVolumeKg: result.totalVolumeKg,
+        breakdown: result.breakdown,
+        recalculated: true
+      } : null);
+    } catch (err: any) {
+      console.error("Error recalculating workout calories:", err);
+      alert("No se pudo recalcular con la IA: " + (err?.message || "Inténtalo de nuevo."));
+    } finally {
+      setIsRecalculatingCalories(false);
     }
   };
 
@@ -2022,9 +2281,9 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
 
                         {/* Fila 2: Barra de Control (Series/Reps) a la izq | Acciones (Técnica + Cambiar con IA) a la der */}
                         <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-gray-800/50 flex-wrap sm:flex-nowrap">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-tight">
-                              {ex.sets} {ex.sets === 1 ? "serie" : "series"} × {ex.reps} {isTimeTracking ? "seg" : "reps"}
+                              {ex.sets} {ex.sets === 1 ? (isTimeTracking && ex.reps >= 300 ? "bloque continuo" : "serie") : "series"} × {isTimeTracking && ex.reps >= 60 ? `${Math.floor(ex.reps / 60)} min${ex.reps % 60 > 0 ? ` ${ex.reps % 60}s` : ""}` : `${ex.reps} ${isTimeTracking ? "seg" : "reps"}`}
                             </span>
                             <button
                               type="button"
@@ -2034,6 +2293,11 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                             >
                               {isTimeTracking ? "⏱️ Tiempo" : "🔄 Reps"}
                             </button>
+                            {ex.restSeconds !== undefined && ex.restSeconds > 0 && (
+                              <span className="text-[10px] font-bold text-gray-400 bg-gray-100 dark:bg-white/5 px-2 py-0.5 rounded-lg border border-gray-200 dark:border-white/10" title="Descanso sugerido entre series">
+                                ⏱️ {ex.restSeconds}s
+                              </span>
+                            )}
                           </div>
 
                           {/* Acciones: Técnica y Cambiar */}
@@ -2097,6 +2361,9 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                                       className="w-10 text-center text-xs font-bold bg-transparent text-gray-900 dark:text-white focus:outline-none"
                                     />
                                     <span className="text-[9px] text-gray-400 font-semibold">{isTimeTracking ? "seg" : "reps"}</span>
+                                    {isTimeTracking && set.reps >= 60 && (
+                                      <span className="text-[9px] text-emerald-400 font-mono">({Math.floor(set.reps / 60)}m)</span>
+                                    )}
                                   </div>
 
                                   {/* Edit Weight */}
@@ -2316,7 +2583,9 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                           </div>
                           <div>
                             <label className="block text-[9px] font-bold text-gray-400 mb-1">
-                              {newExerciseTrackingType === "time" ? "Segundos" : "Reps"}
+                              {newExerciseTrackingType === "time" 
+                                ? `Seg (${Math.floor(newExerciseReps / 60)}m${newExerciseReps % 60 > 0 ? ` ${newExerciseReps % 60}s` : ""})` 
+                                : "Reps"}
                             </label>
                             <input
                               type="number"
@@ -2345,6 +2614,43 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                             />
                           </div>
                         </div>
+
+                        {/* Quick Presets for Duration / Time */}
+                        {newExerciseTrackingType === "time" && (
+                          <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                            <span className="text-[9px] font-bold text-gray-400">Atajos de tiempo:</span>
+                            {[
+                              { label: "5 min", s: 300 },
+                              { label: "10 min", s: 600 },
+                              { label: "15 min", s: 900 },
+                              { label: "16 min", s: 960 },
+                              { label: "20 min", s: 1200 },
+                              { label: "30 min", s: 1800 },
+                            ].map((preset) => (
+                              <button
+                                key={preset.s}
+                                type="button"
+                                onClick={() => {
+                                  setNewExerciseReps(preset.s);
+                                  setNewExerciseSets(1);
+                                }}
+                                className={`px-2 py-0.5 rounded-md text-[9px] font-bold transition cursor-pointer border ${
+                                  newExerciseReps === preset.s
+                                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                                    : "bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-400 border-transparent hover:border-gray-300 dark:hover:border-gray-700"
+                                }`}
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {isContinuousCardioExercise(newExerciseName) && (
+                          <p className="text-[9px] text-emerald-500 font-medium">
+                            🏃 <strong>Cardio continuo:</strong> Configurado en 1 bloque continuo por tiempo. Si hiciste 16 min (960s), se guardará como 1 sola sesión continua y calculará las calorías acordes.
+                          </p>
+                        )}
 
                         {isDumbbellExercise({ name: newExerciseName }) && !isSingleDumbbellExercise({ name: newExerciseName }) && (
                           <p className="text-[9px] text-amber-500 font-medium">
@@ -3413,8 +3719,73 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                 </div>
               </div>
 
+              {/* AI Calorie Recalculation Section */}
+              <div className="bg-gradient-to-br from-purple-500/10 via-indigo-500/10 to-transparent border border-purple-500/20 rounded-2xl p-3.5 mb-4 text-left">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="h-4 w-4 text-purple-400" />
+                    <span className="text-xs font-black text-gray-900 dark:text-white">
+                      Cálculo de Calorías Real con IA
+                    </span>
+                  </div>
+                  {completedWorkoutSummary.recalculated && (
+                    <span className="text-[9px] bg-purple-500/20 text-purple-400 font-bold px-2 py-0.5 rounded-full border border-purple-500/30">
+                      ✨ Recalculado
+                    </span>
+                  )}
+                </div>
+
+                {completedWorkoutSummary.breakdown ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between bg-black/20 p-2.5 rounded-xl border border-white/5">
+                      <div>
+                        <span className="text-[10px] text-gray-400 block">Gasto Calórico Real</span>
+                        <span className="text-base font-black text-emerald-400 font-mono">
+                          {completedWorkoutSummary.totalCalories} kcal
+                        </span>
+                      </div>
+                      {completedWorkoutSummary.totalVolumeKg !== undefined && completedWorkoutSummary.totalVolumeKg > 0 && (
+                        <div className="text-right">
+                          <span className="text-[10px] text-gray-400 block">Tonelaje Movido</span>
+                          <span className="text-sm font-black text-indigo-400 font-mono">
+                            {completedWorkoutSummary.totalVolumeKg.toLocaleString()} kg
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed font-medium">
+                      {completedWorkoutSummary.breakdown}
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-[11px] text-gray-600 dark:text-gray-400 mb-2.5 leading-relaxed">
+                      ¿Ajustaste cargas, repeticiones o hiciste cardio? La IA calcula tu gasto calórico real según el tonelaje levantado y el tiempo invertido.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={isRecalculatingCalories}
+                      onClick={handleRecalculateWorkoutCalories}
+                      className="w-full py-2.5 px-3 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-purple-500/20"
+                    >
+                      {isRecalculatingCalories ? (
+                        <>
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          <span>Calculando con IA...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-3.5 w-3.5" />
+                          <span>Recalcular Calorías y Tonelaje</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Motivational note */}
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3 mb-5 text-left flex items-start gap-2.5">
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3 mb-4 text-left flex items-start gap-2.5">
                 <Sparkles className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
                 <p className="text-[11px] text-emerald-600 dark:text-emerald-300 font-medium leading-relaxed">
                   ¡Gran trabajo manteniendo la constancia! Cada sesión suma para alcanzar tu mejor versión física.
@@ -3427,6 +3798,92 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                 className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-xs font-black transition cursor-pointer shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-1.5"
               >
                 <span>¡Genial, a descansar!</span>
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 5. Modal: Gestión de Rutinas Creadas al Generar con IA */}
+      <AnimatePresence>
+        {isManageExistingRoutinesModalOpen && planToApply && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="w-full max-w-md bg-[#0f101a] border border-white/10 rounded-3xl p-6 shadow-2xl text-left space-y-4"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">
+                    ¿Cómo deseas gestionar tus rutinas?
+                  </h3>
+                  <p className="text-xs text-white/50">
+                    Nuevo plan generado: "{planToApply.planName}" ({planToApply.routines.length} rutinas)
+                  </p>
+                </div>
+              </div>
+
+              {/* Reassurance Callout */}
+              <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-start gap-2.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div className="text-[11px] text-emerald-300 font-medium leading-relaxed">
+                  <strong>Tus entrenamientos ya realizados están 100% seguros:</strong> Tu historial de entrenamientos completados nunca se borra ni se modifica. Esto solo afecta a las plantillas de rutinas programadas aún no realizadas.
+                </div>
+              </div>
+
+              <div className="space-y-2.5 pt-1">
+                {/* Option 1: Replace */}
+                <button
+                  type="button"
+                  onClick={handleReplaceExistingRoutines}
+                  className="w-full p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-500/40 transition text-left cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-black text-white group-hover:text-purple-300 transition flex items-center gap-1.5">
+                      <RotateCcw className="h-3.5 w-3.5 text-purple-400" />
+                      Reemplazar rutinas creadas actuales
+                    </span>
+                    <span className="text-[9px] bg-purple-500/20 text-purple-300 font-bold px-2 py-0.5 rounded-full">
+                      Recomendado
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-white/60 leading-relaxed">
+                    Elimina las plantillas de rutinas creadas anteriormente ({userProfile.weeklyRoutinePlan?.routines?.length || 0}) y configura tu semana con el nuevo plan de la IA.
+                  </p>
+                </button>
+
+                {/* Option 2: Keep & Append */}
+                <button
+                  type="button"
+                  onClick={handleKeepAndAppendRoutines}
+                  className="w-full p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-emerald-500/40 transition text-left cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-black text-white group-hover:text-emerald-300 transition flex items-center gap-1.5">
+                      <Plus className="h-3.5 w-3.5 text-emerald-400" />
+                      Conservar y añadir como adicionales
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-white/60 leading-relaxed">
+                    Conserva las rutinas que ya creaste en tu catálogo y añade las nuevas rutinas de la IA para tener más opciones disponibles.
+                  </p>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsManageExistingRoutinesModalOpen(false);
+                  setPlanToApply(null);
+                }}
+                className="w-full py-2.5 text-xs text-white/40 hover:text-white transition font-bold cursor-pointer"
+              >
+                Cancelar y mantener mi plan actual
               </button>
             </motion.div>
           </div>

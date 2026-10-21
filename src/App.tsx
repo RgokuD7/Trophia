@@ -77,6 +77,38 @@ export default function App() {
     }
   }, [coachChatHistory, isCoachOpen, isCoachTyping]);
 
+  // Real-time floating rest timer across tabs
+  const [activeRestTimer, setActiveRestTimer] = useState<{
+    remaining: number;
+    label: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setActiveRestTimer(null);
+      return;
+    }
+    const checkTimer = () => {
+      try {
+        const stored = localStorage.getItem(`trophia_rest_timer_${user.uid}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const diff = Math.ceil((parsed.targetMs - Date.now()) / 1000);
+          if (diff > 0) {
+            setActiveRestTimer({ remaining: diff, label: parsed.label || "Descanso" });
+            return;
+          }
+        }
+        setActiveRestTimer(null);
+      } catch (e) {
+        setActiveRestTimer(null);
+      }
+    };
+    checkTimer();
+    const interval = setInterval(checkTimer, 1000);
+    return () => clearInterval(interval);
+  }, [user]);
+
   const buildCoachContext = (): string => {
     if (!profile) return "";
     const todayStr = getLocalDateString();
@@ -843,6 +875,24 @@ ${exercisesList}`;
               onCancel={() => setIsRecalibrating(false)}
             />
           </div>
+        )}
+
+        {/* Floating Rest Timer across tabs */}
+        {activeRestTimer && activeTab !== "workouts" && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("workouts")}
+            className="fixed bottom-20 right-4 z-40 bg-[#12131d]/95 border border-emerald-500/50 text-white px-3.5 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-pulse cursor-pointer backdrop-blur-md"
+            title="Volver a la sesión de entrenamiento"
+          >
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
+            <span className="text-xs font-black text-emerald-400 font-mono shrink-0">
+              ⏱️ {activeRestTimer.remaining}s
+            </span>
+            <span className="text-[10px] text-white/80 font-bold truncate max-w-[130px]">
+              {activeRestTimer.label}
+            </span>
+          </button>
         )}
 
         {/* Bottom Tab Navigation Bar */}
