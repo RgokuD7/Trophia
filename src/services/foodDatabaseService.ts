@@ -109,6 +109,18 @@ function parseOffProduct(p: any, barcode?: string): FoodItem {
   let portionValue = 100;
   let portionUnit: "g" | "ml" | "unit" = "g";
 
+  // Check p.serving_quantity first
+  if (p.serving_quantity && Number(p.serving_quantity) > 0 && Number(p.serving_quantity) !== 100) {
+    const sq = Number(p.serving_quantity);
+    portionGrams = sq;
+    unitWeight = sq;
+    portionValue = sq;
+    if (p.serving_quantity_unit && p.serving_quantity_unit.toLowerCase() === "ml") {
+      portionUnit = "ml";
+    }
+  }
+
+  // Parse serving_size string (it often contains "18g", "1 cucharada (18 g)", "30 ml", etc.)
   const servingMatch = servingSize.match(/(\d+(?:\.\d+)?)\s*(g|ml)/i);
   if (servingMatch) {
     const parsedG = parseFloat(servingMatch[1]);
@@ -118,14 +130,22 @@ function parseOffProduct(p: any, barcode?: string): FoodItem {
       portionValue = parsedG;
       portionUnit = servingMatch[2].toLowerCase() === "ml" ? "ml" : "g";
     }
-  } else {
-    // Check smart defaults for sauces, condiments and common staples
+  }
+
+  // Extract friendly label like cucharada, rebanada, taza, envase, etc.
+  const labelMatch = servingSize.match(/(cucharadita|cucharada|rebanada|unidad|galleta|vaso|taza|envase|pote|barra|lata|botella|porci[oó]n)/i);
+  if (labelMatch) {
+    unitLabel = labelMatch[1].toLowerCase();
+  }
+
+  // Smart defaults fallback for sauces, condiments and common staples if still 100g
+  if (portionGrams === 100) {
     const info = getDefaultServingInfo(p.product_name || "", servingSize);
     if (info.unitWeight && info.unitWeight !== 100) {
       unitWeight = info.unitWeight;
       portionGrams = info.unitWeight;
-      portionValue = info.defaultUnit === "unit" ? 1 : info.unitWeight;
-      portionUnit = info.defaultUnit;
+      portionValue = info.unitWeight;
+      portionUnit = info.defaultUnit === "unit" ? "g" : info.defaultUnit;
       unitLabel = info.unitLabel;
       if (!servingSize || servingSize === "100g") {
         servingSize = `${info.unitWeight}g (${info.unitLabel})`;
@@ -133,26 +153,44 @@ function parseOffProduct(p: any, barcode?: string): FoodItem {
     }
   }
 
+  const scale = portionGrams / 100;
+  const portionCal = parseNutrientValue(nut["energy-kcal_serving"]) > 0 
+    ? Math.round(parseNutrientValue(nut["energy-kcal_serving"]))
+    : Math.round(calories * scale);
+  const portionProt = parseNutrientValue(nut.proteins_serving) > 0
+    ? Number(parseNutrientValue(nut.proteins_serving).toFixed(1))
+    : Number((protein * scale).toFixed(1));
+  const portionCarb = parseNutrientValue(nut.carbohydrates_serving) > 0
+    ? Number(parseNutrientValue(nut.carbohydrates_serving).toFixed(1))
+    : Number((carbs * scale).toFixed(1));
+  const portionFat = parseNutrientValue(nut.fat_serving) > 0
+    ? Number(parseNutrientValue(nut.fat_serving).toFixed(1))
+    : Number((fat * scale).toFixed(1));
+
   return {
     name: p.product_name,
     brand: p.brands || undefined,
     image: p.image_front_url || undefined,
     barcode: barcode || p.code || p._id || undefined,
-    calories: Math.round(calories),
-    protein: Number(protein.toFixed(1)),
-    carbs: Number(carbs.toFixed(1)),
-    fat: Number(fat.toFixed(1)),
-    servingSize: servingSize,
+    calories: portionCal,
+    protein: portionProt,
+    carbs: portionCarb,
+    fat: portionFat,
+    servingSize: servingSize || `${portionGrams}${portionUnit}`,
     source: "off" as const,
     raw100gCalories: Math.round(calories),
     raw100gProtein: Number(protein.toFixed(1)),
     raw100gCarbs: Number(carbs.toFixed(1)),
     raw100gFat: Number(fat.toFixed(1)),
     portionGrams: portionGrams,
-    portionValue: portionValue,
+    portionValue: portionGrams,
     portionUnit: portionUnit,
     unitWeight: unitWeight,
     unitLabel: unitLabel,
+    portionCalories: portionCal,
+    portionProtein: portionProt,
+    portionCarbs: portionCarb,
+    portionFat: portionFat,
     hasNutritionWarning: hasNutritionWarning,
     nutritionWarningReason: nutritionWarningReason || undefined
   };
@@ -245,27 +283,40 @@ export const getProductByBarcode = async (barcode: string): Promise<FoodItem | n
         }
       }
 
-      const isCustomPortion = uWeight !== 100;
+      const raw100gCal = communityProduct.calories;
+      const raw100gProt = communityProduct.protein;
+      const raw100gCarb = communityProduct.carbs;
+      const raw100gFat = communityProduct.fat;
+
+      const scale = uWeight / 100;
+      const portionCal = Math.round(raw100gCal * scale);
+      const portionProt = Number((raw100gProt * scale).toFixed(1));
+      const portionCarb = Number((raw100gCarb * scale).toFixed(1));
+      const portionFat = Number((raw100gFat * scale).toFixed(1));
 
       return {
         name: communityProduct.name,
         brand: communityProduct.brand || "Comunidad Trophia",
-        calories: communityProduct.calories,
-        protein: communityProduct.protein,
-        carbs: communityProduct.carbs,
-        fat: communityProduct.fat,
-        servingSize: communityProduct.servingSize || (isCustomPortion ? `${uWeight}g` : "100g"),
+        calories: portionCal,
+        protein: portionProt,
+        carbs: portionCarb,
+        fat: portionFat,
+        servingSize: communityProduct.servingSize || `${uWeight}g`,
         barcode: cleanCode,
         source: "local" as const,
-        raw100gCalories: communityProduct.calories,
-        raw100gProtein: communityProduct.protein,
-        raw100gCarbs: communityProduct.carbs,
-        raw100gFat: communityProduct.fat,
+        raw100gCalories: raw100gCal,
+        raw100gProtein: raw100gProt,
+        raw100gCarbs: raw100gCarb,
+        raw100gFat: raw100gFat,
         portionGrams: uWeight,
-        portionValue: isCustomPortion ? 1 : 100,
-        portionUnit: isCustomPortion ? "unit" as const : "g" as const,
+        portionValue: uWeight,
+        portionUnit: "g" as const,
         unitWeight: uWeight,
-        unitLabel: uLabel
+        unitLabel: uLabel,
+        portionCalories: portionCal,
+        portionProtein: portionProt,
+        portionCarbs: portionCarb,
+        portionFat: portionFat
       };
     }
   } catch (dbErr) {

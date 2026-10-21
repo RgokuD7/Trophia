@@ -147,7 +147,13 @@ export default function AddMissingBarcodeModal({
         base100gFat = scale > 0 ? Number((fatVal / scale).toFixed(1)) : fatVal;
       }
 
-      // 1. Save to global Firestore collection `barcodes` (normalized per 100g)
+      const portionScale = effectiveWeight / 100;
+      const portCal = Math.round(base100gCal * portionScale);
+      const portProt = Number((base100gProt * portionScale).toFixed(1));
+      const portCarb = Number((base100gCarb * portionScale).toFixed(1));
+      const portFat = Number((base100gFat * portionScale).toFixed(1));
+
+      // 1. Save to global Firestore collection `barcodes` (normalized per 100g + portion macros)
       await saveBarcodeCorrection(barcode, {
         barcode,
         name: name.trim(),
@@ -156,6 +162,10 @@ export default function AddMissingBarcodeModal({
         protein: base100gProt,
         carbs: base100gCarb,
         fat: base100gFat,
+        portionCalories: portCal,
+        portionProtein: portProt,
+        portionCarbs: portCarb,
+        portionFat: portFat,
         servingSize: servingSize.trim() || `${effectiveWeight}g`,
         unitWeight: effectiveWeight,
         unitLabel: unitLabel.trim() || "porción",
@@ -167,10 +177,14 @@ export default function AddMissingBarcodeModal({
       const newFood: FoodItem = {
         name: name.trim(),
         brand: brand.trim() || undefined,
-        calories: base100gCal,
-        protein: base100gProt,
-        carbs: base100gCarb,
-        fat: base100gFat,
+        calories: portCal,
+        protein: portProt,
+        carbs: portCarb,
+        fat: portFat,
+        portionCalories: portCal,
+        portionProtein: portProt,
+        portionCarbs: portCarb,
+        portionFat: portFat,
         servingSize: servingSize.trim() || (isCustomPortion ? `${effectiveWeight}g` : "100g"),
         barcode: barcode,
         source: "local",
@@ -179,8 +193,8 @@ export default function AddMissingBarcodeModal({
         raw100gCarbs: base100gCarb,
         raw100gFat: base100gFat,
         portionGrams: effectiveWeight,
-        portionValue: isCustomPortion ? 1 : 100,
-        portionUnit: isCustomPortion ? "unit" : "g",
+        portionValue: effectiveWeight,
+        portionUnit: "g",
         unitWeight: effectiveWeight,
         unitLabel: unitLabel.trim() || "porción"
       };

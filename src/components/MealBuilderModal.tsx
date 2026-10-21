@@ -340,19 +340,43 @@ export default function MealBuilderModal({
     }
 
     const info = getDefaultServingInfo(targetFood.name, targetFood.servingSize || "100g");
-    const unit = targetFood.portionUnit || info.defaultUnit;
-    let unitWeight = targetFood.unitWeight || info.unitWeight;
-    const unitLabel = targetFood.unitLabel || info.unitLabel;
-
-    if (unitWeight === 100 && info.unitWeight && info.unitWeight !== 100) {
-      unitWeight = info.unitWeight;
+    
+    // Resolve exact portion in grams/ml from metadata, servingSize string, or smart defaults
+    let pGrams = targetFood.portionGrams || (targetFood.portionValue && targetFood.portionValue !== 100 ? targetFood.portionValue : 0);
+    if (!pGrams && targetFood.servingSize) {
+      const match = targetFood.servingSize.match(/(\d+(?:\.\d+)?)\s*(g|ml)/i);
+      if (match) {
+        const val = parseFloat(match[1]);
+        if (val > 0) pGrams = val;
+      }
+    }
+    if (!pGrams && targetFood.unitWeight && targetFood.unitWeight !== 100) {
+      pGrams = targetFood.unitWeight;
+    }
+    if (!pGrams && info.unitWeight && info.unitWeight !== 100) {
+      pGrams = info.unitWeight;
+    }
+    if (!pGrams) {
+      pGrams = 100;
     }
 
+    const unit = targetFood.portionUnit || (pGrams !== 100 ? "g" : info.defaultUnit);
+    const unitWeight = pGrams;
+    const unitLabel = targetFood.unitLabel || info.unitLabel;
+
     let raw100g = {
-      calories: targetFood.raw100gCalories !== undefined ? targetFood.raw100gCalories : targetFood.calories,
-      protein: targetFood.raw100gProtein !== undefined ? targetFood.raw100gProtein : targetFood.protein,
-      carbs: targetFood.raw100gCarbs !== undefined ? targetFood.raw100gCarbs : targetFood.carbs,
-      fat: targetFood.raw100gFat !== undefined ? targetFood.raw100gFat : targetFood.fat,
+      calories: targetFood.raw100gCalories !== undefined 
+        ? targetFood.raw100gCalories 
+        : (pGrams !== 100 ? Math.round((targetFood.calories * 100) / pGrams) : targetFood.calories),
+      protein: targetFood.raw100gProtein !== undefined 
+        ? targetFood.raw100gProtein 
+        : (pGrams !== 100 ? Number(((targetFood.protein * 100) / pGrams).toFixed(1)) : targetFood.protein),
+      carbs: targetFood.raw100gCarbs !== undefined 
+        ? targetFood.raw100gCarbs 
+        : (pGrams !== 100 ? Number(((targetFood.carbs * 100) / pGrams).toFixed(1)) : targetFood.carbs),
+      fat: targetFood.raw100gFat !== undefined 
+        ? targetFood.raw100gFat 
+        : (pGrams !== 100 ? Number(((targetFood.fat * 100) / pGrams).toFixed(1)) : targetFood.fat),
     };
 
     let hasNutritionWarning = targetFood.hasNutritionWarning || false;
@@ -375,9 +399,9 @@ export default function MealBuilderModal({
     if (raw100g.fat > 100 && raw100g.fat <= 1000) raw100g.fat = raw100g.fat / 10;
     if (raw100g.calories > 900 && raw100g.calories <= 9000) raw100g.calories = Math.round(raw100g.calories / 10);
 
-    const initialAmount = (targetFood.portionValue !== undefined && targetFood.portionValue > 0 && targetFood.portionValue !== 100)
-      ? targetFood.portionValue
-      : (unit === "unit" ? (targetFood.name.toLowerCase().includes("pan ") ? 2 : 1) : (unitWeight && unitWeight > 0 ? unitWeight : 100));
+    const initialAmount = (pGrams > 0 && pGrams !== 100)
+      ? pGrams
+      : (unit === "unit" ? (targetFood.name.toLowerCase().includes("pan ") ? 2 : 1) : 100);
 
     const calculated = calculateMacros(initialAmount, unit, unitWeight, raw100g);
 
@@ -1095,7 +1119,15 @@ export default function MealBuilderModal({
                                     protein: c.protein,
                                     carbs: c.carbs,
                                     fat: c.fat,
-                                    servingSize: c.servingSize
+                                    servingSize: c.servingSize,
+                                    raw100gCalories: c.raw100gCalories,
+                                    raw100gProtein: c.raw100gProtein,
+                                    raw100gCarbs: c.raw100gCarbs,
+                                    raw100gFat: c.raw100gFat,
+                                    portionGrams: c.portionGrams,
+                                    unitWeight: c.unitWeight,
+                                    unitLabel: c.unitLabel,
+                                    barcode: c.barcode
                                   })}
                                   className={`w-full text-left p-2 rounded-xl transition flex items-center justify-between gap-2 cursor-pointer border ${
                                     isAdded

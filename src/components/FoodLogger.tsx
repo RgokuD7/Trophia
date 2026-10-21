@@ -246,10 +246,10 @@ export default function FoodLogger({
 
         return {
           name: latestMeal.name,
-          calories: raw100gCalories,
-          protein: raw100gProtein ?? latestMeal.protein,
-          carbs: raw100gCarbs ?? latestMeal.carbs,
-          fat: raw100gFat ?? latestMeal.fat,
+          calories: latestMeal.calories,
+          protein: latestMeal.protein,
+          carbs: latestMeal.carbs,
+          fat: latestMeal.fat,
           servingSize: latestMeal.servingSize || (portionGrams > 0 ? `${portionGrams}g` : "1 porción"),
           source: "history" as const,
           description: count > 1 ? `Consumido ${count} veces` : "Reciente",
@@ -314,40 +314,68 @@ export default function FoodLogger({
     const displayName = food.brand ? `${food.name} (${food.brand.split(',')[0].trim()})` : food.name;
     setCustomName(displayName);
 
-    if (food.portionGrams && food.portionUnit && food.raw100gCalories !== undefined) {
-      // Preserved portion from personal history
-      setPortionUnit(food.portionUnit);
-      setUnitWeight(food.unitWeight || food.portionGrams);
-      setUnitLabel(food.unitLabel || (food.portionUnit === "unit" ? "porción" : food.portionUnit));
-      setPortionValue(food.portionValue || (food.portionUnit === "unit" ? 1 : food.portionGrams));
-      setPortionGrams(food.portionGrams);
-
-      const base100gCal = food.raw100gCalories !== undefined ? food.raw100gCalories : food.calories;
-      const base100gProt = food.raw100gProtein !== undefined ? food.raw100gProtein : food.protein;
-      const base100gCarb = food.raw100gCarbs !== undefined ? food.raw100gCarbs : food.carbs;
-      const base100gFat = food.raw100gFat !== undefined ? food.raw100gFat : food.fat;
-
-      setCustomCalories(food.portionCalories !== undefined ? food.portionCalories : Math.round((base100gCal * food.portionGrams) / 100));
-      setCustomProtein(food.portionProtein !== undefined ? food.portionProtein : Number(((base100gProt * food.portionGrams) / 100).toFixed(1)));
-      setCustomCarbs(food.portionCarbs !== undefined ? food.portionCarbs : Number(((base100gCarb * food.portionGrams) / 100).toFixed(1)));
-      setCustomFat(food.portionFat !== undefined ? food.portionFat : Number(((base100gFat * food.portionGrams) / 100).toFixed(1)));
-    } else {
-      // Standard search / API item flow
-      const info = getDefaultServingInfo(food.name, food.servingSize);
-      setPortionUnit(info.defaultUnit);
-      setUnitWeight(info.unitWeight);
-      setUnitLabel(info.unitLabel);
-      
-      const initialVal = info.defaultUnit === "unit" ? 1 : 100;
-      setPortionValue(initialVal);
-      setPortionGrams(info.defaultUnit === "unit" ? info.unitWeight : 100);
-
-      const scale = info.defaultUnit === "unit" ? info.unitWeight / 100 : 1;
-      setCustomCalories(Math.round(food.calories * scale));
-      setCustomProtein(Number((food.protein * scale).toFixed(1)));
-      setCustomCarbs(Number((food.carbs * scale).toFixed(1)));
-      setCustomFat(Number((food.fat * scale).toFixed(1)));
+    // Resolve portion in grams/ml from metadata, servingSize string, or smart defaults
+    const info = getDefaultServingInfo(food.name, food.servingSize);
+    let pGrams = food.portionGrams || (food.portionValue && food.portionValue !== 100 ? food.portionValue : 0);
+    if (!pGrams && food.servingSize) {
+      const match = food.servingSize.match(/(\d+(?:\.\d+)?)\s*(g|ml)/i);
+      if (match) {
+        const val = parseFloat(match[1]);
+        if (val > 0) pGrams = val;
+      }
     }
+    if (!pGrams && food.unitWeight && food.unitWeight !== 100) {
+      pGrams = food.unitWeight;
+    }
+    if (!pGrams && info.unitWeight && info.unitWeight !== 100) {
+      pGrams = info.unitWeight;
+    }
+    if (!pGrams) {
+      pGrams = 100;
+    }
+
+    const resolvedUnit: "g" | "ml" | "unit" = food.portionUnit || (pGrams !== 100 ? "g" : info.defaultUnit);
+    const resolvedWeight = pGrams;
+    const resolvedLabel = food.unitLabel || info.unitLabel || "porción";
+    const resolvedValue = (pGrams !== 100) ? pGrams : (resolvedUnit === "unit" ? 1 : 100);
+
+    setPortionUnit(resolvedUnit);
+    setUnitWeight(resolvedWeight);
+    setUnitLabel(resolvedLabel);
+    setPortionValue(resolvedValue);
+    setPortionGrams(pGrams);
+
+    const base100gCal = food.raw100gCalories !== undefined 
+      ? food.raw100gCalories 
+      : (pGrams !== 100 ? Math.round((food.calories * 100) / pGrams) : food.calories);
+    const base100gProt = food.raw100gProtein !== undefined 
+      ? food.raw100gProtein 
+      : (pGrams !== 100 ? Number(((food.protein * 100) / pGrams).toFixed(1)) : food.protein);
+    const base100gCarb = food.raw100gCarbs !== undefined 
+      ? food.raw100gCarbs 
+      : (pGrams !== 100 ? Number(((food.carbs * 100) / pGrams).toFixed(1)) : food.carbs);
+    const base100gFat = food.raw100gFat !== undefined 
+      ? food.raw100gFat 
+      : (pGrams !== 100 ? Number(((food.fat * 100) / pGrams).toFixed(1)) : food.fat);
+
+    const scale = pGrams / 100;
+    const finalPortionCal = food.portionCalories !== undefined 
+      ? food.portionCalories 
+      : (pGrams !== 100 ? Math.round(base100gCal * scale) : food.calories);
+    const finalPortionProt = food.portionProtein !== undefined 
+      ? food.portionProtein 
+      : (pGrams !== 100 ? Number((base100gProt * scale).toFixed(1)) : food.protein);
+    const finalPortionCarb = food.portionCarbs !== undefined 
+      ? food.portionCarbs 
+      : (pGrams !== 100 ? Number((base100gCarb * scale).toFixed(1)) : food.carbs);
+    const finalPortionFat = food.portionFat !== undefined 
+      ? food.portionFat 
+      : (pGrams !== 100 ? Number((base100gFat * scale).toFixed(1)) : food.fat);
+
+    setCustomCalories(finalPortionCal);
+    setCustomProtein(finalPortionProt);
+    setCustomCarbs(finalPortionCarb);
+    setCustomFat(finalPortionFat);
 
     // Check Firestore for community correction only if not already loaded from community DB
     if (food.barcode && food.source !== "local") {
@@ -371,19 +399,12 @@ export default function FoodLogger({
     setShowCommunityPrompt(false);
     const uWeight = correction.unitWeight && correction.unitWeight > 0 ? correction.unitWeight : 100;
     const uLabel = correction.unitLabel || "porción";
-    const isCustomPortion = uWeight !== 100;
 
     setUnitWeight(uWeight);
     setUnitLabel(uLabel);
-    if (isCustomPortion) {
-      setPortionUnit("unit");
-      setPortionValue(1);
-      setPortionGrams(uWeight);
-    } else {
-      setPortionUnit("g");
-      setPortionValue(100);
-      setPortionGrams(100);
-    }
+    setPortionUnit("g");
+    setPortionValue(uWeight);
+    setPortionGrams(uWeight);
 
     const scale = uWeight / 100;
     setCustomCalories(Math.round(correction.calories * scale));
@@ -395,20 +416,20 @@ export default function FoodLogger({
       ...prev,
       name: correction.name || prev.name,
       brand: correction.brand || prev.brand,
-      calories: correction.calories,
-      protein: correction.protein,
-      carbs: correction.carbs,
-      fat: correction.fat,
+      calories: Math.round(correction.calories * scale),
+      protein: Number((correction.protein * scale).toFixed(1)),
+      carbs: Number((correction.carbs * scale).toFixed(1)),
+      fat: Number((correction.fat * scale).toFixed(1)),
       raw100gCalories: correction.calories,
       raw100gProtein: correction.protein,
       raw100gCarbs: correction.carbs,
       raw100gFat: correction.fat,
       portionGrams: uWeight,
-      portionValue: isCustomPortion ? 1 : 100,
-      portionUnit: isCustomPortion ? "unit" : "g",
+      portionValue: uWeight,
+      portionUnit: "g",
       unitWeight: uWeight,
       unitLabel: uLabel,
-      servingSize: correction.servingSize || (isCustomPortion ? `${uWeight}g` : "100g"),
+      servingSize: correction.servingSize || `${uWeight}g`,
       hasNutritionWarning: false,
       nutritionWarningReason: undefined
     } : null);
@@ -581,6 +602,12 @@ export default function FoodLogger({
         baseFat = Number((baseFat / scale).toFixed(1));
       }
 
+      const portionScale = pGrams / 100;
+      const portCal = Math.round(baseCal * portionScale);
+      const portProt = Number((baseProt * portionScale).toFixed(1));
+      const portCarb = Number((baseCarb * portionScale).toFixed(1));
+      const portFat = Number((baseFat * portionScale).toFixed(1));
+
       await saveBarcodeCorrection(barcode, {
         barcode,
         name: customName,
@@ -588,6 +615,10 @@ export default function FoodLogger({
         protein: baseProt,
         carbs: baseCarb,
         fat: baseFat,
+        portionCalories: portCal,
+        portionProtein: portProt,
+        portionCarbs: portCarb,
+        portionFat: portFat,
         unitWeight: unitWeight || pGrams || 100,
         unitLabel: unitLabel || "porción",
         servingSize: `${pGrams || unitWeight || 100}g`,
@@ -596,17 +627,33 @@ export default function FoodLogger({
 
       setSelectedFood(prev => prev ? {
         ...prev,
-        calories: baseCal,
-        protein: baseProt,
-        carbs: baseCarb,
-        fat: baseFat,
+        calories: portCal,
+        protein: portProt,
+        carbs: portCarb,
+        fat: portFat,
+        portionCalories: portCal,
+        portionProtein: portProt,
+        portionCarbs: portCarb,
+        portionFat: portFat,
         raw100gCalories: baseCal,
         raw100gProtein: baseProt,
         raw100gCarbs: baseCarb,
         raw100gFat: baseFat,
+        portionGrams: pGrams,
+        portionValue: pGrams,
+        portionUnit: "g",
+        unitWeight: pGrams,
         hasNutritionWarning: false,
         nutritionWarningReason: undefined
       } : null);
+
+      setCustomCalories(portCal);
+      setCustomProtein(portProt);
+      setCustomCarbs(portCarb);
+      setCustomFat(portFat);
+      setPortionValue(pGrams);
+      setPortionUnit("g");
+      setPortionGrams(pGrams);
 
       setBarcodeSaveSuccess(true);
       setIsCorrectingBarcode(false);
@@ -921,7 +968,15 @@ export default function FoodLogger({
             fat: fatVal,
             servingSize: servVal,
             category: "dish",
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            raw100gCalories: raw100gCals,
+            raw100gProtein: raw100gProt,
+            raw100gCarbs: raw100gCarb,
+            raw100gFat: raw100gFt,
+            portionGrams,
+            unitWeight,
+            unitLabel,
+            barcode: selectedFood?.barcode
           });
           if (onCustomFoodAdded) {
             onCustomFoodAdded();
@@ -960,7 +1015,15 @@ export default function FoodLogger({
             fat: fatVal,
             servingSize: servVal,
             category: "dish",
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            raw100gCalories: raw100gCals,
+            raw100gProtein: raw100gProt,
+            raw100gCarbs: raw100gCarb,
+            raw100gFat: raw100gFt,
+            portionGrams,
+            unitWeight,
+            unitLabel,
+            barcode: selectedFood?.barcode
           });
         }
       }
@@ -1500,7 +1563,15 @@ export default function FoodLogger({
                               carbs: food.carbs,
                               fat: food.fat,
                               servingSize: food.servingSize || "100g",
-                              source: "local"
+                              source: "local",
+                              raw100gCalories: food.raw100gCalories,
+                              raw100gProtein: food.raw100gProtein,
+                              raw100gCarbs: food.raw100gCarbs,
+                              raw100gFat: food.raw100gFat,
+                              portionGrams: food.portionGrams,
+                              unitWeight: food.unitWeight,
+                              unitLabel: food.unitLabel,
+                              barcode: food.barcode
                             })}
                             className="w-full p-3.5 text-left hover:bg-gray-100 dark:hover:bg-white/5 transition flex justify-between items-center cursor-pointer"
                           >

@@ -608,8 +608,32 @@ export default function NutritionHub({
     if (!editingCustomFood || !userId || isSavingCustomFood) return;
     setIsSavingCustomFood(true);
     try {
-      await updateCustomFood(userId, editingCustomFood);
-      setCustomFoods(prev => prev.map(f => f.id === editingCustomFood.id ? editingCustomFood : f));
+      let pGrams = editingCustomFood.portionGrams;
+      if (!pGrams && editingCustomFood.servingSize) {
+        const match = editingCustomFood.servingSize.match(/(\d+(?:\.\d+)?)\s*(g|ml)/i);
+        if (match) pGrams = parseFloat(match[1]);
+      }
+      if (!pGrams && editingCustomFood.unitWeight) {
+        pGrams = editingCustomFood.unitWeight;
+      }
+
+      const foodToSave: CustomFood = { ...editingCustomFood };
+      if (pGrams && pGrams > 0) {
+        foodToSave.portionGrams = pGrams;
+        const scale = pGrams / 100;
+        foodToSave.raw100gCalories = Math.round(foodToSave.calories / scale);
+        foodToSave.raw100gProtein = Number((foodToSave.protein / scale).toFixed(1));
+        foodToSave.raw100gCarbs = Number((foodToSave.carbs / scale).toFixed(1));
+        foodToSave.raw100gFat = Number((foodToSave.fat / scale).toFixed(1));
+      } else {
+        foodToSave.raw100gCalories = foodToSave.calories;
+        foodToSave.raw100gProtein = foodToSave.protein;
+        foodToSave.raw100gCarbs = foodToSave.carbs;
+        foodToSave.raw100gFat = foodToSave.fat;
+      }
+
+      await updateCustomFood(userId, foodToSave);
+      setCustomFoods(prev => prev.map(f => f.id === foodToSave.id ? foodToSave : f));
       setEditingCustomFood(null);
     } catch (err) {
       console.error("Error updating custom food:", err);

@@ -307,6 +307,14 @@ export interface CustomFood {
   servingSize: string;
   category?: "dish" | "product" | "recipe";
   createdAt: string;
+  raw100gCalories?: number;
+  raw100gProtein?: number;
+  raw100gCarbs?: number;
+  raw100gFat?: number;
+  portionGrams?: number;
+  unitWeight?: number;
+  unitLabel?: string;
+  barcode?: string;
 }
 
 export interface BarcodeCorrection {
@@ -320,6 +328,10 @@ export interface BarcodeCorrection {
   servingSize?: string;
   unitWeight?: number;
   unitLabel?: string;
+  portionCalories?: number;
+  portionProtein?: number;
+  portionCarbs?: number;
+  portionFat?: number;
   frontImageUrl?: string;
   nutritionTableImageUrl?: string;
   contributedBy?: string;
