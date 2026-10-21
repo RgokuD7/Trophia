@@ -206,15 +206,20 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     setActiveTab("routine");
 
     if (markCompletedDirectly) {
-      const totalCal = newSession.exercises.reduce((sum, ex) => {
-        return sum + (ex.completedSets.length * ex.caloriesBurnedPerSet);
-      }, 0);
+      const totalCal = (newSession.caloriesBurned && newSession.caloriesBurned > 0)
+        ? newSession.caloriesBurned
+        : newSession.exercises.reduce((sum, ex) => {
+            return sum + (ex.completedSets.length * (ex.caloriesBurnedPerSet || 5));
+          }, 0);
       const completedSetsCount = newSession.exercises.reduce((sum, ex) => sum + ex.completedSets.length, 0);
       setCompletedWorkoutSummary({
         name: newSession.name,
         durationMinutes: 45,
         totalCalories: totalCal,
-        completedSetsCount
+        completedSetsCount,
+        recalculated: newSession.recalculatedWithIA,
+        totalVolumeKg: newSession.totalVolumeKg,
+        breakdown: newSession.caloriesBreakdown
       });
     }
   };
@@ -226,9 +231,11 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
       completedSets: ex.completedSets.map(s => ({ ...s, completed: true }))
     }));
 
-    const totalCal = updatedExercises.reduce((sum, ex) => {
-      return sum + (ex.completedSets.length * ex.caloriesBurnedPerSet);
-    }, 0);
+    const totalCal = (activeSession.caloriesBurned && activeSession.caloriesBurned > 0)
+      ? activeSession.caloriesBurned
+      : updatedExercises.reduce((sum, ex) => {
+          return sum + (ex.completedSets.length * (ex.caloriesBurnedPerSet || 5));
+        }, 0);
 
     const completedSetsCount = updatedExercises.reduce((sum, ex) => sum + ex.completedSets.length, 0);
 
@@ -236,6 +243,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
       ...activeSession,
       exercises: updatedExercises,
       completed: true,
+      caloriesBurned: totalCal,
       startTime: activeSession.startTime || `${selectedDay}T10:00:00.000Z`,
       endTime: activeSession.endTime || `${selectedDay}T10:45:00.000Z`,
       durationMinutes: customMinutes
@@ -247,7 +255,10 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
       name: activeSession.name,
       durationMinutes: customMinutes,
       totalCalories: totalCal,
-      completedSetsCount
+      completedSetsCount,
+      recalculated: activeSession.recalculatedWithIA,
+      totalVolumeKg: activeSession.totalVolumeKg,
+      breakdown: activeSession.caloriesBreakdown
     });
   };
 
@@ -975,14 +986,20 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
 
       if (allExercisesDone) {
         // Workout complete! Show celebration & allow AI calorie recalculation
-        const totalCal = updatedExercises.reduce((sum, ex) => sum + (ex.completedSets.filter(c => c.completed).length * ex.caloriesBurnedPerSet), 0);
+        const fallbackCal = updatedExercises.reduce((sum, ex) => sum + (ex.completedSets.filter(c => c.completed).length * (ex.caloriesBurnedPerSet || 5)), 0);
+        const totalCal = (activeSession.caloriesBurned && activeSession.caloriesBurned > 0)
+          ? activeSession.caloriesBurned
+          : fallbackCal;
         const completedSetsCount = updatedExercises.reduce((sum, ex) => sum + ex.completedSets.filter(c => c.completed).length, 0);
         const finalSession: WorkoutSession = {
           ...updatedSession,
           completed: true,
           endTime: new Date().toISOString(),
           durationMinutes: Math.max(1, Math.round(workoutElapsedSeconds / 60)) || 45,
-          caloriesBurned: totalCal
+          caloriesBurned: totalCal,
+          recalculatedWithIA: activeSession.recalculatedWithIA,
+          totalVolumeKg: activeSession.totalVolumeKg,
+          caloriesBreakdown: activeSession.caloriesBreakdown
         };
         onAddWorkout(finalSession);
         setActiveSession(finalSession);
@@ -990,7 +1007,10 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
           name: finalSession.name,
           durationMinutes: finalSession.durationMinutes,
           totalCalories: totalCal,
-          completedSetsCount
+          completedSetsCount,
+          recalculated: activeSession.recalculatedWithIA,
+          totalVolumeKg: activeSession.totalVolumeKg,
+          breakdown: activeSession.caloriesBreakdown
         });
       } else if (allSetsInExerciseDone && !isLastExercise) {
         // Rest before next exercise!
@@ -1027,6 +1047,8 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
 
       const updatedSession: WorkoutSession = {
         ...activeSession,
+        completed: true,
+        durationMinutes: activeSession.durationMinutes || completedWorkoutSummary?.durationMinutes || 45,
         caloriesBurned: result.caloriesBurned,
         totalVolumeKg: result.totalVolumeKg,
         caloriesBreakdown: result.breakdown,
@@ -1377,10 +1399,12 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
       : now.getTime() - (45 * 60000);
     const elapsedMinutes = Math.max(1, Math.round((now.getTime() - startTimeMs) / 60000));
 
-    const totalCal = activeSession.exercises.reduce((sum, ex) => {
-      const completedSets = ex.completedSets.filter(s => s.completed).length;
-      return sum + (completedSets * ex.caloriesBurnedPerSet);
-    }, 0);
+    const totalCal = (activeSession.caloriesBurned && activeSession.caloriesBurned > 0)
+      ? activeSession.caloriesBurned
+      : activeSession.exercises.reduce((sum, ex) => {
+          const completedSets = ex.completedSets.filter(s => s.completed).length;
+          return sum + (completedSets * (ex.caloriesBurnedPerSet || 5));
+        }, 0);
 
     const completedSetsCount = activeSession.exercises.reduce((sum, ex) => {
       return sum + ex.completedSets.filter(s => s.completed).length;
@@ -1389,6 +1413,7 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     const updatedSession: WorkoutSession = {
       ...activeSession,
       completed: true,
+      caloriesBurned: totalCal,
       endTime: now.toISOString(),
       durationMinutes: elapsedMinutes
     };
@@ -1399,7 +1424,10 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
       name: activeSession.name,
       durationMinutes: elapsedMinutes,
       totalCalories: totalCal,
-      completedSetsCount
+      completedSetsCount,
+      recalculated: activeSession.recalculatedWithIA,
+      totalVolumeKg: activeSession.totalVolumeKg,
+      breakdown: activeSession.caloriesBreakdown
     });
   };
 
@@ -1557,9 +1585,12 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
     const completedCount = monthlySessions.filter(w => w.completed).length;
     
     const totalCalories = monthlySessions.reduce((sum, session) => {
+      if (session.caloriesBurned !== undefined && session.caloriesBurned > 0) {
+        return sum + session.caloriesBurned;
+      }
       const sessionCal = session.exercises.reduce((exSum, ex) => {
         const completedSetsCount = ex.completedSets.filter(s => s.completed).length || (session.completed ? ex.sets : 0);
-        return exSum + (completedSetsCount * ex.caloriesBurnedPerSet);
+        return exSum + (completedSetsCount * (ex.caloriesBurnedPerSet || 5));
       }, 0);
       return sum + sessionCal;
     }, 0);
@@ -2136,10 +2167,37 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                   </div>
 
                   {activeSession.completed ? (
-                    <div className="flex items-center gap-2.5 self-start sm:self-auto">
-                      <span className="text-xs font-black text-emerald-500">
-                        🔥 ~{activeSession.exercises.reduce((s, ex) => s + (ex.completedSets.filter(c => c.completed).length * ex.caloriesBurnedPerSet), 0)} kcal
-                      </span>
+                    <div className="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
+                      <button
+                        onClick={() => {
+                          const completedSetsCount = activeSession.exercises.reduce((sum, ex) => sum + ex.completedSets.filter(s => s.completed).length, 0);
+                          setCompletedWorkoutSummary({
+                            name: activeSession.name,
+                            durationMinutes: activeSession.durationMinutes || 45,
+                            totalCalories: (activeSession.caloriesBurned !== undefined && activeSession.caloriesBurned > 0)
+                              ? activeSession.caloriesBurned
+                              : activeSession.exercises.reduce((s, ex) => s + (ex.completedSets.filter(c => c.completed).length * (ex.caloriesBurnedPerSet || 5)), 0),
+                            completedSetsCount,
+                            recalculated: activeSession.recalculatedWithIA,
+                            totalVolumeKg: activeSession.totalVolumeKg,
+                            breakdown: activeSession.caloriesBreakdown
+                          });
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 transition cursor-pointer text-xs font-black shadow-sm"
+                        title="Ver resumen y cálculo calórico con IA"
+                      >
+                        <Flame className="h-3.5 w-3.5 text-orange-500" />
+                        <span>
+                          ~{activeSession.caloriesBurned !== undefined && activeSession.caloriesBurned > 0
+                            ? activeSession.caloriesBurned
+                            : activeSession.exercises.reduce((s, ex) => s + (ex.completedSets.filter(c => c.completed).length * (ex.caloriesBurnedPerSet || 5)), 0)} kcal
+                        </span>
+                        {activeSession.recalculatedWithIA && (
+                          <span className="px-1.5 py-0.5 text-[9px] bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded font-bold">
+                            ✨ IA
+                          </span>
+                        )}
+                      </button>
                       <button
                         onClick={handleStartActiveWorkout}
                         className="text-[10px] font-bold text-gray-500 hover:text-emerald-400 underline cursor-pointer"

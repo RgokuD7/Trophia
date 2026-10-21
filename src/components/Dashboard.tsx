@@ -1,7 +1,7 @@
 import React from "react";
 import { motion } from "motion/react";
 import { 
-  Flame, Utensils, Droplets, ChevronRight, Plus, AlertTriangle, Check, Sparkles, RefreshCw, MapPin, BookOpen, Lock
+  Flame, Utensils, Droplets, ChevronRight, Plus, AlertTriangle, Check, Sparkles, RefreshCw, MapPin, BookOpen, Lock, Dumbbell, CheckCircle2
 } from "lucide-react";
 import { UserProfile, LoggedMeal, WaterLog, MealType, WorkoutSession } from "../types";
 import { generateRecommendationsByIA } from "../services/geminiService";
@@ -118,10 +118,12 @@ export default function Dashboard({
 
   // If there's a workout completed today, let's also sum its calories!
   const workoutCaloriesBurned = todaySession && todaySession.completed
-    ? todaySession.exercises.reduce((sum, ex) => {
-        const completedSetsCount = ex.completedSets.filter(s => s.completed).length;
-        return sum + (completedSetsCount * ex.caloriesBurnedPerSet);
-      }, 0)
+    ? (todaySession.caloriesBurned !== undefined && todaySession.caloriesBurned > 0
+        ? todaySession.caloriesBurned
+        : todaySession.exercises.reduce((sum, ex) => {
+            const completedSetsCount = ex.completedSets.filter(s => s.completed).length;
+            return sum + (completedSetsCount * (ex.caloriesBurnedPerSet || 5));
+          }, 0))
     : 0;
 
   // Calculate calories burned from logged sports today
@@ -534,19 +536,50 @@ export default function Dashboard({
             </div>
           </div>
 
-          {/* Workout summary - Locked */}
-          <div className="bg-white dark:bg-[#161824] p-4 rounded-2xl border border-gray-200 dark:border-gray-800 flex flex-col justify-between gap-3 shadow-md opacity-75">
-            <div>
-              <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase">Entrenamiento</span>
-              <span className="text-xs font-bold text-gray-900 dark:text-white mt-1 block truncate">
-                {profile.level === "beginner" ? "Principiante" : profile.level === "intermediate" ? "Intermedio" : "Avanzado"}
-              </span>
+          {/* Workout summary */}
+          <div className="bg-white dark:bg-[#161824] p-4 rounded-2xl border border-gray-200 dark:border-gray-800 flex flex-col justify-between gap-3 shadow-md">
+            <div className="flex justify-between items-start">
+              <div className="overflow-hidden">
+                <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase">Entrenamiento</span>
+                <span className="text-xs font-bold text-gray-900 dark:text-white mt-0.5 block truncate" title={todaySession ? todaySession.name : undefined}>
+                  {todaySession ? todaySession.name : (profile.level === "beginner" ? "Principiante" : profile.level === "intermediate" ? "Intermedio" : "Avanzado")}
+                </span>
+                {todaySession && todaySession.completed && (
+                  <span className="text-[10px] font-black text-emerald-500 flex items-center gap-1 mt-0.5">
+                    🔥 ~{workoutCaloriesBurned} kcal
+                    {todaySession.recalculatedWithIA && (
+                      <span className="px-1 py-0.2 text-[8px] bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded font-semibold">
+                        IA
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
+              <div className={`p-1.5 rounded-lg shrink-0 ${todaySession && todaySession.completed ? "bg-emerald-500/10 text-emerald-400" : "bg-purple-500/10 text-purple-400"}`}>
+                <Dumbbell className="h-4 w-4" />
+              </div>
             </div>
 
-            <div className="w-full py-1.5 bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-gray-500 rounded-lg text-[9px] font-bold flex items-center justify-center gap-1.5">
-              <Lock className="h-2.5 w-2.5" />
-              <span>Próximamente</span>
-            </div>
+            <button
+              onClick={() => onNavigateToTab("workouts")}
+              className={`w-full py-1.5 rounded-lg text-[9px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                todaySession && todaySession.completed
+                  ? "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20"
+                  : "bg-emerald-500 hover:bg-emerald-600 text-white"
+              }`}
+            >
+              {todaySession && todaySession.completed ? (
+                <>
+                  <CheckCircle2 className="h-3 w-3" />
+                  <span>Completado</span>
+                </>
+              ) : (
+                <>
+                  <span>{todaySession ? "Ir a Entrenar" : "Ver Rutinas"}</span>
+                  <ChevronRight className="h-3 w-3" />
+                </>
+              )}
+            </button>
           </div>
 
         </div>
