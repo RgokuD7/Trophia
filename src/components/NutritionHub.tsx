@@ -1355,58 +1355,696 @@ export default function NutritionHub({
     );
   }
 
+  // ─── Modal render helpers ─────────────────────────
+  const renderCustomFoodModals = () => (
+    <>
+      {/* Confirmation Modal: Delete Custom Food */}
+      <AnimatePresence>
+        {foodToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fadeIn">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#12131d] border border-rose-500/20 rounded-3xl p-5 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">¿Eliminar alimento guardado?</h3>
+                  <p className="text-[11px] text-white/50">Se quitará de tu lista de favoritos.</p>
+                </div>
+              </div>
+              
+              <div className="p-3 bg-white/[0.03] border border-white/5 rounded-2xl">
+                <span className="text-xs font-bold text-white block">{foodToDelete.name}</span>
+                <span className="text-[10px] text-emerald-400 font-mono">
+                  {foodToDelete.calories} kcal · {foodToDelete.servingSize}
+                </span>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setFoodToDelete(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDeleteFood(foodToDelete.id);
+                    setFoodToDelete(null);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-black transition cursor-pointer shadow-lg shadow-rose-500/20"
+                >
+                  Sí, Eliminar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal: Editar Macros de Alimento Personalizado */}
+      <AnimatePresence>
+        {editingCustomFood && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#12131d] border border-white/10 rounded-3xl p-5 shadow-2xl space-y-4 text-left"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Pencil className="h-4 w-4 text-emerald-400" />
+                  <h3 className="text-sm font-black text-white">Editar Alimento Guardado</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingCustomFood(null)}
+                  className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-white/50 hover:text-white cursor-pointer"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveEditedCustomFood} className="space-y-3">
+                <div>
+                  <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">Nombre</label>
+                  <input
+                    type="text"
+                    value={editingCustomFood.name}
+                    onChange={(e) => setEditingCustomFood({ ...editingCustomFood, name: e.target.value })}
+                    required
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/50"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">Calorías (kcal)</label>
+                    <input
+                      type="number"
+                      value={editingCustomFood.calories}
+                      onChange={(e) => setEditingCustomFood({ ...editingCustomFood, calories: Number(e.target.value) || 0 })}
+                      required
+                      min={0}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">Porción (ej: 100g, 1 plato)</label>
+                    <input
+                      type="text"
+                      value={editingCustomFood.servingSize || ""}
+                      onChange={(e) => setEditingCustomFood({ ...editingCustomFood, servingSize: e.target.value })}
+                      placeholder="100g"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/50"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-[10px] font-bold text-blue-400 uppercase block mb-1">Proteína (g)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={editingCustomFood.protein}
+                      onChange={(e) => setEditingCustomFood({ ...editingCustomFood, protein: Number(e.target.value) || 0 })}
+                      required
+                      min={0}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-amber-400 uppercase block mb-1">Carbos (g)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={editingCustomFood.carbs}
+                      onChange={(e) => setEditingCustomFood({ ...editingCustomFood, carbs: Number(e.target.value) || 0 })}
+                      required
+                      min={0}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-rose-400 uppercase block mb-1">Grasa (g)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={editingCustomFood.fat}
+                      onChange={(e) => setEditingCustomFood({ ...editingCustomFood, fat: Number(e.target.value) || 0 })}
+                      required
+                      min={0}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500/50"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingCustomFood(null)}
+                    className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingCustomFood}
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black transition cursor-pointer shadow-lg shadow-emerald-500/20"
+                  >
+                    {isSavingCustomFood ? "Guardando..." : "Guardar Cambios"}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+
+  const renderRecipeModals = () => (
+    <>
+      {/* Modal: Detalle de Receta Completa */}
+      <AnimatePresence>
+        {selectedRecipeForDetail && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-md max-h-[85vh] bg-[#0f101a] border border-white/10 rounded-3xl flex flex-col overflow-hidden shadow-2xl text-left"
+            >
+              {/* Header */}
+              <div className="p-5 border-b border-white/5 flex items-center justify-between shrink-0 bg-white/[0.01]">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-300 shrink-0">
+                    <ChefHat className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-black text-white truncate">
+                      {selectedRecipeForDetail.name}
+                    </h3>
+                    {selectedRecipeForDetail.authorName && (
+                      <span className="text-[9.5px] text-white/40 block">
+                        Por {selectedRecipeForDetail.authorName}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRecipeForDetail(null)}
+                  className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white cursor-pointer shrink-0"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Scroll Content */}
+              <div className="flex-1 overflow-y-auto no-scrollbar p-5 space-y-4">
+                {/* Badges / Macros with vibrant colors */}
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2">
+                    <span className="text-[8.5px] font-bold text-emerald-400 uppercase block">Calorías</span>
+                    <span className="text-xs font-black text-emerald-400 font-mono">{selectedRecipeForDetail.calories} kcal</span>
+                  </div>
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-2">
+                    <span className="text-[8.5px] font-bold text-blue-400 uppercase block">Proteína</span>
+                    <span className="text-xs font-black text-blue-400 font-mono">{selectedRecipeForDetail.protein}g</span>
+                  </div>
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-2">
+                    <span className="text-[8.5px] font-bold text-amber-400 uppercase block">Carbos</span>
+                    <span className="text-xs font-black text-amber-400 font-mono">{selectedRecipeForDetail.carbs}g</span>
+                  </div>
+                  <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-2">
+                    <span className="text-[8.5px] font-bold text-rose-400 uppercase block">Grasa</span>
+                    <span className="text-xs font-black text-rose-400 font-mono">{selectedRecipeForDetail.fat}g</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {selectedRecipeForDetail.prepTimeMinutes && (
+                    <span className="text-[10px] px-2.5 py-1 rounded-full bg-white/5 text-white/60 font-bold border border-white/5">
+                      ⏱️ Tiempo: {selectedRecipeForDetail.prepTimeMinutes} min
+                    </span>
+                  )}
+                  {selectedRecipeForDetail.difficulty && (
+                    <span className="text-[10px] px-2.5 py-1 rounded-full bg-white/5 text-white/60 font-bold border border-white/5">
+                      Dificultad: {selectedRecipeForDetail.difficulty}
+                    </span>
+                  )}
+                  {selectedRecipeForDetail.userId === userId && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleRecipePublic(selectedRecipeForDetail)}
+                      className={`text-[10px] px-2.5 py-1 rounded-full font-bold border transition cursor-pointer flex items-center gap-1 ${
+                        selectedRecipeForDetail.isPublic
+                          ? "bg-purple-500/20 border-purple-500/40 text-purple-300"
+                          : "bg-white/5 border-white/10 text-white/50"
+                      }`}
+                    >
+                      <Globe className="h-3 w-3" />
+                      <span>{selectedRecipeForDetail.isPublic ? "Pública (compartida)" : "Privada (solo tú)"}</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Ingredients */}
+                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 space-y-2">
+                  <h4 className="text-xs font-black text-purple-400 uppercase tracking-wide flex items-center gap-1.5">
+                    <Utensils className="h-3.5 w-3.5" />
+                    Ingredientes ({(selectedRecipeForDetail.ingredients || []).length})
+                  </h4>
+                  <ul className="space-y-1.5 pl-1">
+                    {(selectedRecipeForDetail.ingredients || []).map((ing, i) => (
+                      <li key={i} className="text-xs text-white/80 flex items-start gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0 mt-1.5" />
+                        <span>
+                          <strong>{ing.name}</strong>
+                          {ing.amount && <span className="text-white/50 font-normal"> · {ing.amount}</span>}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Instructions */}
+                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 space-y-2.5">
+                  <h4 className="text-xs font-black text-purple-400 uppercase tracking-wide flex items-center gap-1.5">
+                    <BookOpen className="h-3.5 w-3.5" />
+                    Instrucciones de Preparación
+                  </h4>
+                  <ol className="space-y-2">
+                    {(selectedRecipeForDetail.instructions || []).map((step, i) => (
+                      <li key={i} className="text-xs text-white/80 flex items-start gap-2.5 leading-relaxed">
+                        <span className="w-5 h-5 rounded-full bg-purple-500/20 text-purple-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5 border border-purple-500/30">
+                          {i + 1}
+                        </span>
+                        <span className="flex-1">{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="p-4 border-t border-white/5 bg-[#12131d] space-y-2 shrink-0">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onAddMeal({
+                        name: selectedRecipeForDetail.name,
+                        calories: selectedRecipeForDetail.calories,
+                        protein: selectedRecipeForDetail.protein,
+                        carbs: selectedRecipeForDetail.carbs,
+                        fat: selectedRecipeForDetail.fat,
+                        type: "lunch"
+                      });
+                      alert(`¡"${selectedRecipeForDetail.name}" registrada en tu diario de hoy!`);
+                      setSelectedRecipeForDetail(null);
+                    }}
+                    className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black transition cursor-pointer shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-1.5 active:scale-95"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>Registrar en Diario de Hoy</span>
+                  </button>
+
+                  {selectedRecipeForDetail.userId === userId ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingRecipe({ ...selectedRecipeForDetail });
+                          setSelectedRecipeForDetail(null);
+                        }}
+                        className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 text-white flex items-center justify-center transition cursor-pointer active:scale-95"
+                        title="Editar receta"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRecipeToDelete(selectedRecipeForDetail);
+                          setSelectedRecipeForDetail(null);
+                        }}
+                        className="w-10 h-10 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 flex items-center justify-center transition cursor-pointer active:scale-95"
+                        title="Eliminar receta"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleCopyCommunityRecipe(selectedRecipeForDetail);
+                        setSelectedRecipeForDetail(null);
+                      }}
+                      className="py-3 px-3.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 active:scale-95"
+                      title="Guardar copia en Mis Recetas"
+                    >
+                      <Star className="h-4 w-4" />
+                      <span className="hidden sm:inline">Guardar en</span> Mis Recetas
+                    </button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal: Editar Receta */}
+      <AnimatePresence>
+        {editingRecipe && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md max-h-[85vh] bg-[#12131d] border border-white/10 rounded-3xl flex flex-col overflow-hidden shadow-2xl text-left"
+            >
+              <div className="p-4 border-b border-white/5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <Pencil className="h-4 w-4 text-purple-400" />
+                  <h3 className="text-sm font-black text-white">Editar Receta</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingRecipe(null)}
+                  className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-white/50 hover:text-white cursor-pointer"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto no-scrollbar p-5 space-y-3.5">
+                <div>
+                  <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">Nombre de la Receta</label>
+                  <input
+                    type="text"
+                    value={editingRecipe.name}
+                    onChange={(e) => setEditingRecipe({ ...editingRecipe, name: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500/50"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">Tiempo (minutos)</label>
+                    <input
+                      type="number"
+                      value={editingRecipe.prepTimeMinutes || 20}
+                      onChange={(e) => setEditingRecipe({ ...editingRecipe, prepTimeMinutes: Number(e.target.value) || 0 })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">Dificultad</label>
+                    <select
+                      value={editingRecipe.difficulty || "Fácil"}
+                      onChange={(e) => setEditingRecipe({ ...editingRecipe, difficulty: e.target.value })}
+                      className="w-full bg-[#161824] border border-white/10 rounded-xl px-3 py-2 text-xs text-white"
+                    >
+                      <option value="Fácil">Fácil</option>
+                      <option value="Media">Media</option>
+                      <option value="Difícil">Difícil</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2">
+                  <div>
+                    <label className="text-[9px] font-bold text-emerald-400 uppercase block mb-1">Kcal</label>
+                    <input
+                      type="number"
+                      value={editingRecipe.calories}
+                      onChange={(e) => setEditingRecipe({ ...editingRecipe, calories: Number(e.target.value) || 0 })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2 text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-blue-400 uppercase block mb-1">Prot (g)</label>
+                    <input
+                      type="number"
+                      value={editingRecipe.protein}
+                      onChange={(e) => setEditingRecipe({ ...editingRecipe, protein: Number(e.target.value) || 0 })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2 text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-amber-400 uppercase block mb-1">Carb (g)</label>
+                    <input
+                      type="number"
+                      value={editingRecipe.carbs}
+                      onChange={(e) => setEditingRecipe({ ...editingRecipe, carbs: Number(e.target.value) || 0 })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2 text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-rose-400 uppercase block mb-1">Grasa (g)</label>
+                    <input
+                      type="number"
+                      value={editingRecipe.fat}
+                      onChange={(e) => setEditingRecipe({ ...editingRecipe, fat: Number(e.target.value) || 0 })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2 text-xs text-white font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">
+                    Ingredientes (uno por línea)
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={(editingRecipe.ingredients || []).map(i => i.name).join("\n")}
+                    onChange={(e) => {
+                      const lines = e.target.value.split("\n");
+                      setEditingRecipe({
+                        ...editingRecipe,
+                        ingredients: lines.map(l => ({ name: l, amount: "" }))
+                      });
+                    }}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white leading-relaxed focus:outline-none focus:border-purple-500/50"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">
+                    Instrucciones (un paso por línea)
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={(editingRecipe.instructions || []).join("\n")}
+                    onChange={(e) => {
+                      const lines = e.target.value.split("\n");
+                      setEditingRecipe({
+                        ...editingRecipe,
+                        instructions: lines
+                      });
+                    }}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white leading-relaxed focus:outline-none focus:border-purple-500/50"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="edit_is_public"
+                    checked={editingRecipe.isPublic || false}
+                    onChange={(e) => setEditingRecipe({ ...editingRecipe, isPublic: e.target.checked })}
+                    className="rounded border-white/20 bg-white/5 text-purple-500"
+                  />
+                  <label htmlFor="edit_is_public" className="text-xs text-white/80 font-bold cursor-pointer">
+                    Compartir públicamente en la comunidad de Trophia
+                  </label>
+                </div>
+              </div>
+
+              <div className="p-4 border-t border-white/5 bg-[#121420] flex gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setEditingRecipe(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 text-white/60 text-xs font-bold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveEditedRecipe(editingRecipe)}
+                  className="flex-1 py-2.5 rounded-xl bg-purple-500 hover:bg-purple-600 text-white text-xs font-black shadow-lg shadow-purple-500/20 cursor-pointer"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal: Confirmar Eliminar Receta */}
+      <AnimatePresence>
+        {recipeToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fadeIn">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#12131d] border border-rose-500/20 rounded-3xl p-5 shadow-2xl space-y-4 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">¿Eliminar receta?</h3>
+                  <p className="text-[11px] text-white/50">Esta acción no se puede deshacer.</p>
+                </div>
+              </div>
+              
+              <div className="p-3 bg-white/[0.03] border border-white/5 rounded-2xl">
+                <span className="text-xs font-bold text-white block">{recipeToDelete.name}</span>
+                <span className="text-[10px] text-emerald-400 font-mono">
+                  {recipeToDelete.calories} kcal
+                </span>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setRecipeToDelete(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteRecipe(recipeToDelete.id)}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-black transition cursor-pointer shadow-lg shadow-rose-500/20"
+                >
+                  Sí, Eliminar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+
   // ─── Custom Foods Sub-view ─────────────────────────
   if (activeSection === "custom_foods") {
     return (
-      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex-1 overflow-y-auto px-5 py-6 space-y-4 no-scrollbar">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setActiveSection(null)} className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition cursor-pointer">
-            <ArrowLeft className="h-4 w-4" />
+      <div className="flex flex-col h-full overflow-hidden relative">
+        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex-1 overflow-y-auto px-5 py-6 space-y-4 no-scrollbar pb-32">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setActiveSection(null)} className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition cursor-pointer">
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <div>
+              <h2 className="text-base font-black text-white tracking-tight">Mis Comidas</h2>
+              <p className="text-[10px] text-white/40">Tus platos frecuentes y productos personalizados en la nube</p>
+            </div>
+          </div>
+
+          <button 
+            type="button"
+            onClick={() => onOpenFoodLogger(undefined, true)} 
+            className="w-full p-4 rounded-2xl border border-dashed border-emerald-500/30 hover:border-emerald-500 bg-emerald-500/5 hover:bg-emerald-500/10 transition flex items-center justify-center gap-2 text-emerald-400 hover:text-emerald-300 font-black text-xs cursor-pointer shadow-md active:scale-98"
+          >
+            <Plus className="h-4.5 w-4.5" /> Agregar Nueva Comida / Plato
           </button>
-          <div>
-            <h2 className="text-base font-black text-white tracking-tight">Mis Comidas</h2>
-            <p className="text-[10px] text-white/40">Tus platos frecuentes y productos personalizados en la nube</p>
-          </div>
-        </div>
 
-        <button 
-          onClick={() => onOpenFoodLogger(undefined, true)} 
-          className="w-full p-4 rounded-2xl border border-dashed border-emerald-500/30 hover:border-emerald-500 bg-emerald-500/5 hover:bg-emerald-500/10 transition flex items-center justify-center gap-2 text-emerald-400 hover:text-emerald-300 font-black text-xs cursor-pointer shadow-md"
-        >
-          <Plus className="h-4.5 w-4.5" /> Agregar Nueva Comida / Plato
-        </button>
-
-        {isLoadingFoods ? (
-          <div className="flex items-center justify-center py-12"><div className="w-6 h-6 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" /></div>
-        ) : customFoods.length === 0 ? (
-          <div className="text-center py-12 space-y-2">
-            <Star className="h-10 w-10 text-white/10 mx-auto" />
-            <p className="text-xs text-white/30">Aún no has guardado platos personalizados.</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {customFoods.map((food) => (
-              <motion.div key={food.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="bg-white/[0.03] border border-white/5 rounded-xl p-3 flex items-center justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-white truncate">{food.name}</span>
-                    {food.category && <span className="text-[8px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full uppercase tracking-wider shrink-0">{food.category === "dish" ? "Plato" : food.category === "product" ? "Producto" : "Receta"}</span>}
+          {isLoadingFoods ? (
+            <div className="flex items-center justify-center py-12"><div className="w-6 h-6 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" /></div>
+          ) : customFoods.length === 0 ? (
+            <div className="text-center py-12 space-y-2">
+              <Star className="h-10 w-10 text-white/10 mx-auto" />
+              <p className="text-xs text-white/30">Aún no has guardado platos personalizados.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {customFoods.map((food) => (
+                <motion.div key={food.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="bg-white/[0.03] border border-white/5 rounded-xl p-3 flex items-center justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white truncate">{food.name}</span>
+                      {food.category && <span className="text-[8px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full uppercase tracking-wider shrink-0">{food.category === "dish" ? "Plato" : food.category === "product" ? "Producto" : "Receta"}</span>}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="text-[10px] text-emerald-400 font-black flex items-center gap-0.5">
+                        <Flame className="h-3 w-3" /> {food.calories} kcal
+                      </span>
+                      <span className="text-[9.5px] font-mono flex items-center gap-1.5">
+                        <span className="text-blue-400 font-bold">P: {Number(food.protein).toFixed(1).replace(/\.0$/, "")}g</span>
+                        <span className="text-white/20">·</span>
+                        <span className="text-amber-400 font-bold">C: {Number(food.carbs).toFixed(1).replace(/\.0$/, "")}g</span>
+                        <span className="text-white/20">·</span>
+                        <span className="text-rose-400 font-bold">G: {Number(food.fat).toFixed(1).replace(/\.0$/, "")}g</span>
+                      </span>
+                      {food.servingSize && (
+                        <span className="text-[9px] text-white/40 bg-white/5 px-1.5 py-0.5 rounded">
+                          {food.servingSize}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5"><Flame className="h-3 w-3" /> {food.calories} kcal</span>
-                    <span className="text-[9px] text-white/30">P:{Number(food.protein).toFixed(1).replace(/\.0$/, "")}g · C:{Number(food.carbs).toFixed(1).replace(/\.0$/, "")}g · G:{Number(food.fat).toFixed(1).replace(/\.0$/, "")}g</span>
+                  <div className="flex gap-1.5 shrink-0">
+                    <button 
+                      type="button"
+                      onClick={(e) => { 
+                        e.stopPropagation();
+                        onAddMeal({ name: food.name, calories: food.calories, protein: food.protein, carbs: food.carbs, fat: food.fat, type: "lunch" }); 
+                        alert(`¡"${food.name}" registrado en tu diario de hoy!`);
+                      }} 
+                      className="relative z-20 w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 hover:bg-emerald-500/20 transition cursor-pointer active:scale-95" 
+                      title="Registrar en diario"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingCustomFood({ ...food });
+                      }} 
+                      className="relative z-20 w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition cursor-pointer active:scale-95" 
+                      title="Editar alimento"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFoodToDelete(food);
+                      }} 
+                      className="relative z-20 w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 hover:bg-rose-500/20 transition cursor-pointer active:scale-95" 
+                      title="Eliminar alimento guardado"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                </div>
-                <div className="flex gap-1.5 shrink-0">
-                  <button onClick={() => { onAddMeal({ name: food.name, calories: food.calories, protein: food.protein, carbs: food.carbs, fat: food.fat, type: "lunch" }); }} className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 hover:bg-emerald-500/20 transition cursor-pointer" title="Registrar en diario"><Plus className="h-3.5 w-3.5" /></button>
-                  <button onClick={() => setEditingCustomFood({ ...food })} className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition cursor-pointer" title="Editar alimento"><Pencil className="h-3.5 w-3.5" /></button>
-                  <button onClick={() => setFoodToDelete(food)} className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 hover:bg-rose-500/20 transition cursor-pointer" title="Eliminar alimento guardado"><Trash2 className="h-3.5 w-3.5" /></button>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        )}
-      </motion.div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+        {renderCustomFoodModals()}
+      </div>
     );
   }
 
@@ -1422,203 +2060,247 @@ export default function NutritionHub({
     });
 
     return (
-      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex-1 overflow-y-auto px-5 py-6 space-y-4 no-scrollbar">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setActiveSection(null)} className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition cursor-pointer">
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-            <div>
-              <h2 className="text-base font-black text-white tracking-tight flex items-center gap-1.5">
-                Mis Recetas & Comunidad
-                <ChefHat className="h-4 w-4 text-purple-400" />
-              </h2>
-              <p className="text-[10px] text-white/40">Recetas completas con ingredientes y pasos paso a paso</p>
+      <div className="flex flex-col h-full overflow-hidden relative">
+        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex-1 overflow-y-auto px-5 py-6 space-y-4 no-scrollbar pb-32">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setActiveSection(null)} className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition cursor-pointer">
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+              <div>
+                <h2 className="text-base font-black text-white tracking-tight flex items-center gap-1.5">
+                  Mis Recetas & Comunidad
+                  <ChefHat className="h-4 w-4 text-purple-400" />
+                </h2>
+                <p className="text-[10px] text-white/40">Recetas completas con ingredientes y pasos paso a paso</p>
+              </div>
             </div>
-          </div>
-          <button
-            onClick={onOpenRecipeAssistant}
-            className="py-2 px-3 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 font-black text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
-          >
-            <Sparkles className="h-3.5 w-3.5 text-purple-400" />
-            <span>Crear con IA</span>
-          </button>
-        </div>
-
-        {/* Tab switch: Mis Recetas vs Comunidad */}
-        <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5">
-          <button
-            type="button"
-            onClick={() => setRecipesTab("mine")}
-            className={`flex-1 py-2 text-xs font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 ${
-              recipesTab === "mine"
-                ? "bg-purple-500 text-white shadow-md shadow-purple-500/25"
-                : "text-white/50 hover:text-white"
-            }`}
-          >
-            <BookOpen className="h-3.5 w-3.5" />
-            <span>Mis Recetas ({userRecipes.length})</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setRecipesTab("community")}
-            className={`flex-1 py-2 text-xs font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 ${
-              recipesTab === "community"
-                ? "bg-purple-500 text-white shadow-md shadow-purple-500/25"
-                : "text-white/50 hover:text-white"
-            }`}
-          >
-            <Globe className="h-3.5 w-3.5" />
-            <span>Comunidad ({publicRecipes.length})</span>
-          </button>
-        </div>
-
-        {/* Search Input */}
-        <div className="relative">
-          <input
-            type="text"
-            value={recipeFilter}
-            onChange={(e) => setRecipeFilter(e.target.value)}
-            placeholder="Buscar por nombre o ingrediente..."
-            className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-purple-500/40"
-          />
-          {recipeFilter && (
             <button
-              onClick={() => setRecipeFilter("")}
-              className="absolute right-3 top-2.5 text-white/40 hover:text-white cursor-pointer"
+              onClick={onOpenRecipeAssistant}
+              className="py-2 px-3 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 font-black text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
             >
-              <X className="h-4 w-4" />
+              <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+              <span>Crear con IA</span>
             </button>
-          )}
-        </div>
-
-        {/* Recipes List */}
-        {isLoadingRecipes ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : filteredRecipes.length === 0 ? (
-          <div className="text-center py-12 space-y-3 bg-white/[0.02] border border-white/5 rounded-3xl p-6">
-            <ChefHat className="h-10 w-10 text-white/10 mx-auto" />
-            <p className="text-xs text-white/40">
-              {recipesTab === "mine"
-                ? "Aún no tienes recetas guardadas. ¡Crea una con el Asistente IA o pídele una al Nutri-Coach!"
-                : "No hay recetas públicas en la comunidad todavía."}
-            </p>
-            {recipesTab === "mine" && (
+
+          {/* Tab switch: Mis Recetas vs Comunidad */}
+          <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5">
+            <button
+              type="button"
+              onClick={() => setRecipesTab("mine")}
+              className={`flex-1 py-2 text-xs font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                recipesTab === "mine"
+                  ? "bg-purple-500 text-white shadow-md shadow-purple-500/25"
+                  : "text-white/50 hover:text-white"
+              }`}
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              <span>Mis Recetas ({userRecipes.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setRecipesTab("community")}
+              className={`flex-1 py-2 text-xs font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                recipesTab === "community"
+                  ? "bg-purple-500 text-white shadow-md shadow-purple-500/25"
+                  : "text-white/50 hover:text-white"
+              }`}
+            >
+              <Globe className="h-3.5 w-3.5" />
+              <span>Comunidad ({publicRecipes.length})</span>
+            </button>
+          </div>
+
+          {/* Search Input */}
+          <div className="relative">
+            <input
+              type="text"
+              value={recipeFilter}
+              onChange={(e) => setRecipeFilter(e.target.value)}
+              placeholder="Buscar por nombre o ingrediente..."
+              className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-purple-500/40"
+            />
+            {recipeFilter && (
               <button
-                onClick={onOpenRecipeAssistant}
-                className="py-2.5 px-4 rounded-xl bg-purple-500 hover:bg-purple-600 text-white text-xs font-black mx-auto cursor-pointer transition shadow-md shadow-purple-500/20"
+                onClick={() => setRecipeFilter("")}
+                className="absolute right-3 top-2.5 text-white/40 hover:text-white cursor-pointer"
               >
-                Crear mi primera receta con IA
+                <X className="h-4 w-4" />
               </button>
             )}
           </div>
-        ) : (
-          <div className="space-y-3">
-            {filteredRecipes.map((recipe) => (
-              <motion.div
-                key={recipe.id}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white/[0.03] border border-white/5 hover:border-purple-500/30 rounded-2xl p-4 transition-all space-y-2.5 group"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setSelectedRecipeForDetail(recipe)}>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-sm font-black text-white hover:text-purple-300 transition truncate">
-                        {recipe.name}
-                      </h3>
-                      {recipe.prepTimeMinutes && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/50 font-bold">
-                          ⏱️ {recipe.prepTimeMinutes}m
+
+          {/* Recipes List */}
+          {isLoadingRecipes ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : filteredRecipes.length === 0 ? (
+            <div className="text-center py-12 space-y-3 bg-white/[0.02] border border-white/5 rounded-3xl p-6">
+              <ChefHat className="h-10 w-10 text-white/10 mx-auto" />
+              <p className="text-xs text-white/40">
+                {recipesTab === "mine"
+                  ? "Aún no tienes recetas guardadas. ¡Crea una con el Asistente IA o pídele una al Nutri-Coach!"
+                  : "No hay recetas públicas en la comunidad todavía."}
+              </p>
+              {recipesTab === "mine" && (
+                <button
+                  onClick={onOpenRecipeAssistant}
+                  className="py-2.5 px-4 rounded-xl bg-purple-500 hover:bg-purple-600 text-white text-xs font-black mx-auto cursor-pointer transition shadow-md shadow-purple-500/20"
+                >
+                  Crear mi primera receta con IA
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredRecipes.map((recipe) => (
+                <motion.div
+                  key={recipe.id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-white/[0.03] border border-white/5 hover:border-purple-500/30 rounded-2xl p-4 transition-all space-y-2.5 group"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setSelectedRecipeForDetail(recipe)}>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-sm font-black text-white hover:text-purple-300 transition truncate">
+                          {recipe.name}
+                        </h3>
+                        {recipe.prepTimeMinutes && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/50 font-bold">
+                            ⏱️ {recipe.prepTimeMinutes}m
+                          </span>
+                        )}
+                        {recipe.difficulty && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/50 font-bold">
+                            {recipe.difficulty}
+                          </span>
+                        )}
+                      </div>
+
+                      {recipesTab === "community" && recipe.authorName && (
+                        <span className="text-[9.5px] text-purple-400 font-bold block mt-0.5">
+                          Por: {recipe.authorName}
                         </span>
                       )}
-                      {recipe.difficulty && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/50 font-bold">
-                          {recipe.difficulty}
+
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        <span className="text-xs font-black text-emerald-400 flex items-center gap-1">
+                          <Flame className="h-3 w-3" />
+                          {recipe.calories} kcal
                         </span>
+                        <span className="text-[10px] font-mono flex items-center gap-1.5">
+                          <span className="text-blue-400 font-bold">P: {recipe.protein}g</span>
+                          <span className="text-white/20">·</span>
+                          <span className="text-amber-400 font-bold">C: {recipe.carbs}g</span>
+                          <span className="text-white/20">·</span>
+                          <span className="text-rose-400 font-bold">G: {recipe.fat}g</span>
+                        </span>
+                      </div>
+
+                      {recipe.ingredients && recipe.ingredients.length > 0 && (
+                        <p className="text-[10px] text-white/45 mt-1 truncate">
+                          <strong className="text-white/60">Ingredientes:</strong> {recipe.ingredients.map(i => i.name).filter(Boolean).join(", ")}
+                        </p>
                       )}
                     </div>
 
-                    {recipesTab === "community" && recipe.authorName && (
-                      <span className="text-[9.5px] text-purple-400 font-bold block mt-0.5">
-                        Por: {recipe.authorName}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Public / Private toggle (Only for own recipes) */}
+                      {recipesTab === "mine" && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleRecipePublic(recipe);
+                          }}
+                          title={recipe.isPublic ? "Pública (Haz clic para hacer privada)" : "Privada (Haz clic para compartir con la comunidad)"}
+                          className={`relative z-20 px-2 py-1 rounded-lg text-[9px] font-bold border transition cursor-pointer flex items-center gap-1 active:scale-95 ${
+                            recipe.isPublic
+                              ? "bg-purple-500/15 border-purple-500/30 text-purple-300 hover:bg-purple-500/25"
+                              : "bg-white/5 border-white/10 text-white/40 hover:text-white"
+                          }`}
+                        >
+                          <Globe className="h-3 w-3" />
+                          <span>{recipe.isPublic ? "Pública" : "Privada"}</span>
+                        </button>
+                      )}
 
-                    <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                      <span className="text-xs font-black text-emerald-400 flex items-center gap-1">
-                        <Flame className="h-3 w-3" />
-                        {recipe.calories} kcal
-                      </span>
-                      <span className="text-[10px] text-white/40 font-mono">
-                        P: {recipe.protein}g · C: {recipe.carbs}g · G: {recipe.fat}g
-                      </span>
-                    </div>
-
-                    {recipe.ingredients && recipe.ingredients.length > 0 && (
-                      <p className="text-[10px] text-white/45 mt-1 truncate">
-                        <strong className="text-white/60">Ingredientes:</strong> {recipe.ingredients.map(i => i.name).filter(Boolean).join(", ")}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {/* Public / Private toggle (Only for own recipes) */}
-                    {recipesTab === "mine" && (
+                      {/* View Detail button */}
                       <button
                         type="button"
-                        onClick={() => handleToggleRecipePublic(recipe)}
-                        title={recipe.isPublic ? "Pública (Haz clic para hacer privada)" : "Privada (Haz clic para compartir con la comunidad)"}
-                        className={`px-2 py-1 rounded-lg text-[9px] font-bold border transition cursor-pointer flex items-center gap-1 ${
-                          recipe.isPublic
-                            ? "bg-purple-500/15 border-purple-500/30 text-purple-300 hover:bg-purple-500/25"
-                            : "bg-white/5 border-white/10 text-white/40 hover:text-white"
-                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedRecipeForDetail(recipe);
+                        }}
+                        className="relative z-20 w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white flex items-center justify-center transition cursor-pointer active:scale-95"
+                        title="Ver receta completa"
                       >
-                        <Globe className="h-3 w-3" />
-                        <span>{recipe.isPublic ? "Pública" : "Privada"}</span>
+                        <Eye className="h-3.5 w-3.5" />
                       </button>
-                    )}
 
-                    {/* View Detail button */}
-                    <button
-                      type="button"
-                      onClick={() => setSelectedRecipeForDetail(recipe)}
-                      className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white flex items-center justify-center transition cursor-pointer"
-                      title="Ver receta completa"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                    </button>
+                      {/* Edit button (Only for own recipes) */}
+                      {(recipesTab === "mine" || recipe.userId === userId) && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingRecipe({ ...recipe });
+                          }}
+                          className="relative z-20 w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white flex items-center justify-center transition cursor-pointer active:scale-95"
+                          title="Editar receta"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
 
-                    {/* Quick log to diary */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onAddMeal({
-                          name: recipe.name,
-                          calories: recipe.calories,
-                          protein: recipe.protein,
-                          carbs: recipe.carbs,
-                          fat: recipe.fat,
-                          type: "lunch"
-                        });
-                        alert(`¡"${recipe.name}" registrada en tu diario de hoy!`);
-                      }}
-                      className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 flex items-center justify-center transition cursor-pointer"
-                      title="Registrar en diario de hoy"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
+                      {/* Delete button (Only for own recipes) */}
+                      {(recipesTab === "mine" || recipe.userId === userId) && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRecipeToDelete(recipe);
+                          }}
+                          className="relative z-20 w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 flex items-center justify-center transition cursor-pointer active:scale-95"
+                          title="Eliminar receta"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+
+                      {/* Quick log to diary */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAddMeal({
+                            name: recipe.name,
+                            calories: recipe.calories,
+                            protein: recipe.protein,
+                            carbs: recipe.carbs,
+                            fat: recipe.fat,
+                            type: "lunch"
+                          });
+                          alert(`¡"${recipe.name}" registrada en tu diario de hoy!`);
+                        }}
+                        className="relative z-20 w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 flex items-center justify-center transition cursor-pointer active:scale-95"
+                        title="Registrar en diario de hoy"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        )}
-      </motion.div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+        {renderRecipeModals()}
+      </div>
     );
   }
 
@@ -2862,586 +3544,8 @@ export default function NutritionHub({
         )}
       </AnimatePresence>
 
-      {/* Confirmation Modal: Delete Custom Food */}
-      <AnimatePresence>
-        {foodToDelete && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fadeIn">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-[#12131d] border border-rose-500/20 rounded-3xl p-5 shadow-2xl space-y-4"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
-                  <Trash2 className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-white">¿Eliminar alimento guardado?</h3>
-                  <p className="text-[11px] text-white/50">Se quitará de tu lista de favoritos.</p>
-                </div>
-              </div>
-              
-              <div className="p-3 bg-white/[0.03] border border-white/5 rounded-2xl">
-                <span className="text-xs font-bold text-white block">{foodToDelete.name}</span>
-                <span className="text-[10px] text-emerald-400 font-mono">
-                  {foodToDelete.calories} kcal · {foodToDelete.servingSize}
-                </span>
-              </div>
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setFoodToDelete(null)}
-                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleDeleteFood(foodToDelete.id);
-                    setFoodToDelete(null);
-                  }}
-                  className="flex-1 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-black transition cursor-pointer shadow-lg shadow-rose-500/20"
-                >
-                  Sí, Eliminar
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal: Editar Macros de Alimento Personalizado */}
-      <AnimatePresence>
-        {editingCustomFood && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-[#12131d] border border-white/10 rounded-3xl p-5 shadow-2xl space-y-4 text-left"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Pencil className="h-4 w-4 text-emerald-400" />
-                  <h3 className="text-sm font-black text-white">Editar Alimento Guardado</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setEditingCustomFood(null)}
-                  className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-white/50 hover:text-white cursor-pointer"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-
-              <form onSubmit={handleSaveEditedCustomFood} className="space-y-3">
-                <div>
-                  <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">Nombre</label>
-                  <input
-                    type="text"
-                    value={editingCustomFood.name}
-                    onChange={(e) => setEditingCustomFood({ ...editingCustomFood, name: e.target.value })}
-                    required
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/50"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">Calorías (kcal)</label>
-                    <input
-                      type="number"
-                      value={editingCustomFood.calories}
-                      onChange={(e) => setEditingCustomFood({ ...editingCustomFood, calories: Number(e.target.value) || 0 })}
-                      required
-                      min={0}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">Porción (ej: 100g, 1 plato)</label>
-                    <input
-                      type="text"
-                      value={editingCustomFood.servingSize || ""}
-                      onChange={(e) => setEditingCustomFood({ ...editingCustomFood, servingSize: e.target.value })}
-                      placeholder="100g"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/50"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="text-[10px] font-bold text-blue-400 uppercase block mb-1">Proteína (g)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={editingCustomFood.protein}
-                      onChange={(e) => setEditingCustomFood({ ...editingCustomFood, protein: Number(e.target.value) || 0 })}
-                      required
-                      min={0}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-amber-400 uppercase block mb-1">Carbos (g)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={editingCustomFood.carbs}
-                      onChange={(e) => setEditingCustomFood({ ...editingCustomFood, carbs: Number(e.target.value) || 0 })}
-                      required
-                      min={0}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-rose-400 uppercase block mb-1">Grasa (g)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={editingCustomFood.fat}
-                      onChange={(e) => setEditingCustomFood({ ...editingCustomFood, fat: Number(e.target.value) || 0 })}
-                      required
-                      min={0}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500/50"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditingCustomFood(null)}
-                    className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSavingCustomFood}
-                    className="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black transition cursor-pointer shadow-lg shadow-emerald-500/20"
-                  >
-                    {isSavingCustomFood ? "Guardando..." : "Guardar Cambios"}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal: Detalle de Receta Completa */}
-      <AnimatePresence>
-        {selectedRecipeForDetail && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="w-full max-w-md max-h-[85vh] bg-[#0f101a] border border-white/10 rounded-3xl flex flex-col overflow-hidden shadow-2xl text-left"
-            >
-              {/* Header */}
-              <div className="p-5 border-b border-white/5 flex items-center justify-between shrink-0 bg-white/[0.01]">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-300 shrink-0">
-                    <ChefHat className="h-4.5 w-4.5" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-black text-white truncate">
-                      {selectedRecipeForDetail.name}
-                    </h3>
-                    {selectedRecipeForDetail.authorName && (
-                      <span className="text-[9.5px] text-white/40 block">
-                        Por {selectedRecipeForDetail.authorName}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedRecipeForDetail(null)}
-                  className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white cursor-pointer shrink-0"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-
-              {/* Scroll Content */}
-              <div className="flex-1 overflow-y-auto no-scrollbar p-5 space-y-4">
-                {/* Badges / Macros */}
-                <div className="grid grid-cols-4 gap-2 text-center">
-                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2">
-                    <span className="text-[8.5px] font-bold text-emerald-400 uppercase block">Calorías</span>
-                    <span className="text-xs font-black text-white font-mono">{selectedRecipeForDetail.calories} kcal</span>
-                  </div>
-                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-2">
-                    <span className="text-[8.5px] font-bold text-blue-400 uppercase block">Proteína</span>
-                    <span className="text-xs font-black text-white font-mono">{selectedRecipeForDetail.protein}g</span>
-                  </div>
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-2">
-                    <span className="text-[8.5px] font-bold text-amber-400 uppercase block">Carbos</span>
-                    <span className="text-xs font-black text-white font-mono">{selectedRecipeForDetail.carbs}g</span>
-                  </div>
-                  <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-2">
-                    <span className="text-[8.5px] font-bold text-rose-400 uppercase block">Grasa</span>
-                    <span className="text-xs font-black text-white font-mono">{selectedRecipeForDetail.fat}g</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  {selectedRecipeForDetail.prepTimeMinutes && (
-                    <span className="text-[10px] px-2.5 py-1 rounded-full bg-white/5 text-white/60 font-bold border border-white/5">
-                      ⏱️ Tiempo: {selectedRecipeForDetail.prepTimeMinutes} min
-                    </span>
-                  )}
-                  {selectedRecipeForDetail.difficulty && (
-                    <span className="text-[10px] px-2.5 py-1 rounded-full bg-white/5 text-white/60 font-bold border border-white/5">
-                      Dificultad: {selectedRecipeForDetail.difficulty}
-                    </span>
-                  )}
-                  {selectedRecipeForDetail.userId === userId && (
-                    <button
-                      type="button"
-                      onClick={() => handleToggleRecipePublic(selectedRecipeForDetail)}
-                      className={`text-[10px] px-2.5 py-1 rounded-full font-bold border transition cursor-pointer flex items-center gap-1 ${
-                        selectedRecipeForDetail.isPublic
-                          ? "bg-purple-500/20 border-purple-500/40 text-purple-300"
-                          : "bg-white/5 border-white/10 text-white/50"
-                      }`}
-                    >
-                      <Globe className="h-3 w-3" />
-                      <span>{selectedRecipeForDetail.isPublic ? "Pública (compartida)" : "Privada (solo tú)"}</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* Ingredients */}
-                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 space-y-2">
-                  <h4 className="text-xs font-black text-purple-400 uppercase tracking-wide flex items-center gap-1.5">
-                    <Utensils className="h-3.5 w-3.5" />
-                    Ingredientes ({(selectedRecipeForDetail.ingredients || []).length})
-                  </h4>
-                  <ul className="space-y-1.5 pl-1">
-                    {(selectedRecipeForDetail.ingredients || []).map((ing, i) => (
-                      <li key={i} className="text-xs text-white/80 flex items-start gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0 mt-1.5" />
-                        <span>
-                          <strong>{ing.name}</strong>
-                          {ing.amount && <span className="text-white/50 font-normal"> · {ing.amount}</span>}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Instructions */}
-                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 space-y-2.5">
-                  <h4 className="text-xs font-black text-purple-400 uppercase tracking-wide flex items-center gap-1.5">
-                    <BookOpen className="h-3.5 w-3.5" />
-                    Instrucciones de Preparación
-                  </h4>
-                  <ol className="space-y-2">
-                    {(selectedRecipeForDetail.instructions || []).map((step, i) => (
-                      <li key={i} className="text-xs text-white/80 flex items-start gap-2.5 leading-relaxed">
-                        <span className="w-5 h-5 rounded-full bg-purple-500/20 text-purple-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5 border border-purple-500/30">
-                          {i + 1}
-                        </span>
-                        <span className="flex-1">{step}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              </div>
-
-              {/* Footer Actions */}
-              <div className="p-4 border-t border-white/5 bg-[#12131d] space-y-2 shrink-0">
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onAddMeal({
-                        name: selectedRecipeForDetail.name,
-                        calories: selectedRecipeForDetail.calories,
-                        protein: selectedRecipeForDetail.protein,
-                        carbs: selectedRecipeForDetail.carbs,
-                        fat: selectedRecipeForDetail.fat,
-                        type: "lunch"
-                      });
-                      alert(`¡"${selectedRecipeForDetail.name}" registrada en tu diario de hoy!`);
-                      setSelectedRecipeForDetail(null);
-                    }}
-                    className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black transition cursor-pointer shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-1.5"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>Registrar en Diario de Hoy</span>
-                  </button>
-
-                  {selectedRecipeForDetail.userId === userId ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingRecipe({ ...selectedRecipeForDetail });
-                          setSelectedRecipeForDetail(null);
-                        }}
-                        className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 text-white flex items-center justify-center transition cursor-pointer"
-                        title="Editar receta"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRecipeToDelete(selectedRecipeForDetail);
-                          setSelectedRecipeForDetail(null);
-                        }}
-                        className="w-10 h-10 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 flex items-center justify-center transition cursor-pointer"
-                        title="Eliminar receta"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleCopyCommunityRecipe(selectedRecipeForDetail);
-                        setSelectedRecipeForDetail(null);
-                      }}
-                      className="py-3 px-3.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
-                      title="Guardar copia en Mis Recetas"
-                    >
-                      <Star className="h-4 w-4" />
-                      <span className="hidden sm:inline">Guardar en</span> Mis Recetas
-                    </button>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal: Editar Receta */}
-      <AnimatePresence>
-        {editingRecipe && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md max-h-[85vh] bg-[#12131d] border border-white/10 rounded-3xl flex flex-col overflow-hidden shadow-2xl text-left"
-            >
-              <div className="p-4 border-b border-white/5 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-2">
-                  <Pencil className="h-4 w-4 text-purple-400" />
-                  <h3 className="text-sm font-black text-white">Editar Receta</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setEditingRecipe(null)}
-                  className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-white/50 hover:text-white cursor-pointer"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto no-scrollbar p-5 space-y-3.5">
-                <div>
-                  <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">Nombre de la Receta</label>
-                  <input
-                    type="text"
-                    value={editingRecipe.name}
-                    onChange={(e) => setEditingRecipe({ ...editingRecipe, name: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500/50"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">Tiempo (minutos)</label>
-                    <input
-                      type="number"
-                      value={editingRecipe.prepTimeMinutes || 20}
-                      onChange={(e) => setEditingRecipe({ ...editingRecipe, prepTimeMinutes: Number(e.target.value) || 0 })}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">Dificultad</label>
-                    <select
-                      value={editingRecipe.difficulty || "Fácil"}
-                      onChange={(e) => setEditingRecipe({ ...editingRecipe, difficulty: e.target.value })}
-                      className="w-full bg-[#161824] border border-white/10 rounded-xl px-3 py-2 text-xs text-white"
-                    >
-                      <option value="Fácil">Fácil</option>
-                      <option value="Media">Media</option>
-                      <option value="Difícil">Difícil</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-4 gap-2">
-                  <div>
-                    <label className="text-[9px] font-bold text-emerald-400 uppercase block mb-1">Kcal</label>
-                    <input
-                      type="number"
-                      value={editingRecipe.calories}
-                      onChange={(e) => setEditingRecipe({ ...editingRecipe, calories: Number(e.target.value) || 0 })}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2 text-xs text-white font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-blue-400 uppercase block mb-1">Prot (g)</label>
-                    <input
-                      type="number"
-                      value={editingRecipe.protein}
-                      onChange={(e) => setEditingRecipe({ ...editingRecipe, protein: Number(e.target.value) || 0 })}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2 text-xs text-white font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-amber-400 uppercase block mb-1">Carb (g)</label>
-                    <input
-                      type="number"
-                      value={editingRecipe.carbs}
-                      onChange={(e) => setEditingRecipe({ ...editingRecipe, carbs: Number(e.target.value) || 0 })}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2 text-xs text-white font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-rose-400 uppercase block mb-1">Grasa (g)</label>
-                    <input
-                      type="number"
-                      value={editingRecipe.fat}
-                      onChange={(e) => setEditingRecipe({ ...editingRecipe, fat: Number(e.target.value) || 0 })}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2 text-xs text-white font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">
-                    Ingredientes (uno por línea)
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={(editingRecipe.ingredients || []).map(i => i.name).join("\n")}
-                    onChange={(e) => {
-                      const lines = e.target.value.split("\n");
-                      setEditingRecipe({
-                        ...editingRecipe,
-                        ingredients: lines.map(l => ({ name: l, amount: "" }))
-                      });
-                    }}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white leading-relaxed focus:outline-none focus:border-purple-500/50"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">
-                    Instrucciones (un paso por línea)
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={(editingRecipe.instructions || []).join("\n")}
-                    onChange={(e) => {
-                      const lines = e.target.value.split("\n");
-                      setEditingRecipe({
-                        ...editingRecipe,
-                        instructions: lines
-                      });
-                    }}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white leading-relaxed focus:outline-none focus:border-purple-500/50"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2 pt-1">
-                  <input
-                    type="checkbox"
-                    id="edit_is_public"
-                    checked={editingRecipe.isPublic || false}
-                    onChange={(e) => setEditingRecipe({ ...editingRecipe, isPublic: e.target.checked })}
-                    className="rounded border-white/20 bg-white/5 text-purple-500"
-                  />
-                  <label htmlFor="edit_is_public" className="text-xs text-white/80 font-bold cursor-pointer">
-                    Compartir públicamente en la comunidad de Trophia
-                  </label>
-                </div>
-              </div>
-
-              <div className="p-4 border-t border-white/5 bg-[#121420] flex gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setEditingRecipe(null)}
-                  className="flex-1 py-2.5 rounded-xl bg-white/5 text-white/60 text-xs font-bold cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSaveEditedRecipe(editingRecipe)}
-                  className="flex-1 py-2.5 rounded-xl bg-purple-500 hover:bg-purple-600 text-white text-xs font-black shadow-lg shadow-purple-500/20 cursor-pointer"
-                >
-                  Guardar Cambios
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal: Confirmar Eliminar Receta */}
-      <AnimatePresence>
-        {recipeToDelete && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fadeIn">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-[#12131d] border border-rose-500/20 rounded-3xl p-5 shadow-2xl space-y-4 text-left"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
-                  <Trash2 className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-white">¿Eliminar receta?</h3>
-                  <p className="text-[11px] text-white/50">Esta acción no se puede deshacer.</p>
-                </div>
-              </div>
-              
-              <div className="p-3 bg-white/[0.03] border border-white/5 rounded-2xl">
-                <span className="text-xs font-bold text-white block">{recipeToDelete.name}</span>
-                <span className="text-[10px] text-emerald-400 font-mono">
-                  {recipeToDelete.calories} kcal
-                </span>
-              </div>
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setRecipeToDelete(null)}
-                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteRecipe(recipeToDelete.id)}
-                  className="flex-1 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-black transition cursor-pointer shadow-lg shadow-rose-500/20"
-                >
-                  Sí, Eliminar
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {renderCustomFoodModals()}
+      {renderRecipeModals()}
 
       <MealBuilderModal
         isOpen={isMealBuilderOpen}

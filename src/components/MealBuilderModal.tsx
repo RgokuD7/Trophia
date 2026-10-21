@@ -341,8 +341,12 @@ export default function MealBuilderModal({
 
     const info = getDefaultServingInfo(targetFood.name, targetFood.servingSize || "100g");
     const unit = targetFood.portionUnit || info.defaultUnit;
-    const unitWeight = targetFood.unitWeight || info.unitWeight;
+    let unitWeight = targetFood.unitWeight || info.unitWeight;
     const unitLabel = targetFood.unitLabel || info.unitLabel;
+
+    if (unitWeight === 100 && info.unitWeight && info.unitWeight !== 100) {
+      unitWeight = info.unitWeight;
+    }
 
     let raw100g = {
       calories: targetFood.raw100gCalories !== undefined ? targetFood.raw100gCalories : targetFood.calories,
@@ -371,9 +375,9 @@ export default function MealBuilderModal({
     if (raw100g.fat > 100 && raw100g.fat <= 1000) raw100g.fat = raw100g.fat / 10;
     if (raw100g.calories > 900 && raw100g.calories <= 9000) raw100g.calories = Math.round(raw100g.calories / 10);
 
-    const initialAmount = targetFood.portionValue !== undefined
+    const initialAmount = (targetFood.portionValue !== undefined && targetFood.portionValue > 0 && targetFood.portionValue !== 100)
       ? targetFood.portionValue
-      : (unit === "unit" ? (targetFood.name.toLowerCase().includes("pan ") ? 2 : 1) : (unitWeight || 100));
+      : (unit === "unit" ? (targetFood.name.toLowerCase().includes("pan ") ? 2 : 1) : (unitWeight && unitWeight > 0 ? unitWeight : 100));
 
     const calculated = calculateMacros(initialAmount, unit, unitWeight, raw100g);
 

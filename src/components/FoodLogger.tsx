@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Search, Camera, Plus, History, Trash, AlertCircle, Check, X, RefreshCw, Star, Barcode, Sparkles, HelpCircle, Package, AlertTriangle, Pencil } from "lucide-react";
 import { LoggedMeal, FoodItem, MealType, BarcodeCorrection, CustomFood, PantryItem } from "../types";
-import { GLOBAL_FOODS_DB, getLocalDateString, formatFriendlyDate, createTimestampForDate } from "../utils/fitnessUtils";
+import { GLOBAL_FOODS_DB, getLocalDateString, formatFriendlyDate, createTimestampForDate, getDefaultServingInfo } from "../utils/fitnessUtils";
 import { analyzeFoodByIA, estimateMacrosFromDescription, getVisualServingSizesByIA, analyzeNutritionLabelByIA } from "../services/geminiService";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
@@ -26,127 +26,7 @@ interface FoodLoggerProps {
   pantryItems?: PantryItem[];
 }
 
-export function getDefaultServingInfo(name: string, servingSizeStr: string): {
-  defaultUnit: "g" | "ml" | "unit";
-  unitWeight: number;
-  unitLabel: string;
-} {
-  const lowercaseName = name.toLowerCase();
-  const lowercaseServing = (servingSizeStr || "").toLowerCase();
-
-  let unitLabel = "unidad";
-  let unitWeight = 100;
-  let defaultUnit: "g" | "ml" | "unit" = "g";
-
-  if (lowercaseName.includes("leche") || lowercaseName.includes("bebida") || lowercaseName.includes("jugo") || lowercaseName.includes("aceite") || lowercaseName.includes("agua") || lowercaseServing.includes("ml")) {
-    defaultUnit = "ml";
-    unitLabel = "ml";
-  }
-
-  if (lowercaseName.includes("huevo")) {
-    defaultUnit = "unit";
-    unitLabel = "unidad";
-    unitWeight = 50;
-  } else if (lowercaseName.includes("pan ") || lowercaseName.includes("pan integral") || lowercaseName.includes("tostada") || lowercaseName.includes("rebanada") || lowercaseName.includes("marraqueta") || lowercaseName.includes("hallulla")) {
-    defaultUnit = "unit";
-    unitLabel = "rebanada";
-    unitWeight = 25;
-  } else if (lowercaseName.includes("plátano") || lowercaseName.includes("banana")) {
-    defaultUnit = "unit";
-    unitLabel = "unidad";
-    unitWeight = 120;
-  } else if (lowercaseName.includes("manzana")) {
-    defaultUnit = "unit";
-    unitLabel = "unidad";
-    unitWeight = 150;
-  } else if (lowercaseName.includes("naranja")) {
-    defaultUnit = "unit";
-    unitLabel = "unidad";
-    unitWeight = 130;
-  } else if (lowercaseName.includes("yogur") || lowercaseName.includes("pot")) {
-    defaultUnit = "unit";
-    unitLabel = "pote";
-    unitWeight = 125;
-  } else if (lowercaseName.includes("galleta")) {
-    defaultUnit = "unit";
-    unitLabel = "unidad";
-    unitWeight = 10;
-  } else if (lowercaseName.includes("tortilla")) {
-    defaultUnit = "unit";
-    unitLabel = "unidad";
-    unitWeight = 30;
-  }
-
-  if (servingSizeStr) {
-    const parenMatch = servingSizeStr.match(/\((\d+(?:\.\d+)?)\s*(?:g|ml)\)/i);
-    const directMatch = servingSizeStr.match(/^(\d+(?:\.\d+)?)\s*(?:g|ml)/i);
-    const spaceMatch = servingSizeStr.match(/(\d+(?:\.\d+)?)\s*(?:g|ml)/i);
-    
-    let totalWeight = 0;
-    if (parenMatch) {
-      totalWeight = parseFloat(parenMatch[1]);
-    } else if (directMatch) {
-      totalWeight = parseFloat(directMatch[1]);
-    } else if (spaceMatch) {
-      totalWeight = parseFloat(spaceMatch[1]);
-    }
-
-    if (totalWeight > 0) {
-      const countMatch = servingSizeStr.match(/(\d+)\s*(?:slice|rebanada|cookie|galleta|unit|pieza|huevo|pan|vaso|taza|botella|lata|envase|pote|porcion|porción)/i);
-      const count = countMatch ? parseInt(countMatch[1]) : 1;
-      unitWeight = Math.round(totalWeight / count);
-      
-      const lowerServing = servingSizeStr.toLowerCase();
-      if (lowerServing.includes("slice") || lowerServing.includes("rebanada")) {
-        unitLabel = "rebanada";
-        defaultUnit = "unit";
-      } else if (lowerServing.includes("cookie") || lowerServing.includes("galleta")) {
-        unitLabel = "galleta";
-        defaultUnit = "unit";
-      } else if (lowerServing.includes("vaso")) {
-        unitLabel = "vaso";
-        defaultUnit = "unit";
-      } else if (lowerServing.includes("cup") || lowerServing.includes("taza")) {
-        unitLabel = "taza";
-        defaultUnit = "unit";
-      } else if (lowerServing.includes("bottle") || lowerServing.includes("botella")) {
-        unitLabel = "botella";
-        defaultUnit = "unit";
-      } else if (lowerServing.includes("can") || lowerServing.includes("lata")) {
-        unitLabel = "lata";
-        defaultUnit = "unit";
-      } else if (lowerServing.includes("pot") || lowerServing.includes("pote") || lowerServing.includes("envase")) {
-        unitLabel = "pote";
-        defaultUnit = "unit";
-      } else if (lowerServing.includes("bar") || lowerServing.includes("barra")) {
-        unitLabel = "barra";
-        defaultUnit = "unit";
-      } else if (lowerServing.includes("pack") || lowerServing.includes("paquete")) {
-        unitLabel = "paquete";
-        defaultUnit = "unit";
-      } else {
-        unitLabel = "porción";
-        if (unitWeight !== 100) {
-          defaultUnit = "unit";
-        }
-      }
-    } else {
-      const lowerServing = servingSizeStr.toLowerCase();
-      if (lowerServing.includes("porción") || lowerServing.includes("porcion")) {
-        defaultUnit = "unit";
-        unitLabel = "porción";
-      } else if (lowerServing.includes("unidad")) {
-        defaultUnit = "unit";
-        unitLabel = "unidad";
-      } else if (lowerServing.includes("plato") || lowerServing.includes("sandwich") || lowerServing.includes("sándwich")) {
-        defaultUnit = "unit";
-        unitLabel = "plato";
-      }
-    }
-  }
-
-  return { defaultUnit, unitWeight, unitLabel };
-}
+export { getDefaultServingInfo } from "../utils/fitnessUtils";
 
 export const formatMacro = (val: number | string | undefined): string => {
   if (val === undefined || val === "") return "0";
@@ -239,6 +119,7 @@ export default function FoodLogger({
 
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
   const [isManualEditingMacros, setIsManualEditingMacros] = useState(false);
+  const [macroEditBasis, setMacroEditBasis] = useState<"100g" | "portion">("100g");
   const [pantryStockQuantity, setPantryStockQuantity] = useState("Moderada");
 
   const nutritionWarning = React.useMemo(() => {
@@ -536,8 +417,12 @@ export default function FoodLogger({
   const handleManualMacroChange = (field: "calories" | "protein" | "carbs" | "fat", value: number | "") => {
     const validNum = value === "" ? 0 : Number(value);
     const pGrams = portionGrams > 0 ? portionGrams : (unitWeight || 100);
-    const scale = pGrams / 100;
-    const base100g = scale > 0 ? validNum / scale : validNum;
+
+    let base100g = validNum;
+    if (macroEditBasis === "portion") {
+      const scale = pGrams / 100;
+      base100g = scale > 0 ? validNum / scale : validNum;
+    }
 
     if (field === "calories") {
       setCustomCalories(value);
@@ -680,12 +565,21 @@ export default function FoodLogger({
 
     try {
       const barcode = selectedFood.barcode;
-      const scale = portionUnit === "unit" ? unitWeight / 100 : portionValue / 100;
-      
-      const baseCal = Math.round(Number(customCalories) / scale);
-      const baseProt = Number((Number(customProtein) / scale).toFixed(1));
-      const baseCarb = Number((Number(customCarbs) / scale).toFixed(1));
-      const baseFat = Number((Number(customFat) / scale).toFixed(1));
+      const pGrams = portionGrams > 0 ? portionGrams : (unitWeight || 100);
+
+      let baseCal = Number(customCalories) || 0;
+      let baseProt = Number(customProtein) || 0;
+      let baseCarb = Number(customCarbs) || 0;
+      let baseFat = Number(customFat) || 0;
+
+      // Only scale if the user explicitly chose to enter values per portion rather than per 100g
+      if (macroEditBasis === "portion") {
+        const scale = pGrams / 100;
+        baseCal = Math.round(baseCal / scale);
+        baseProt = Number((baseProt / scale).toFixed(1));
+        baseCarb = Number((baseCarb / scale).toFixed(1));
+        baseFat = Number((baseFat / scale).toFixed(1));
+      }
 
       await saveBarcodeCorrection(barcode, {
         barcode,
@@ -694,9 +588,9 @@ export default function FoodLogger({
         protein: baseProt,
         carbs: baseCarb,
         fat: baseFat,
-        unitWeight: unitWeight || 100,
+        unitWeight: unitWeight || pGrams || 100,
         unitLabel: unitLabel || "porción",
-        servingSize: `${portionGrams || unitWeight || 100}g`,
+        servingSize: `${pGrams || unitWeight || 100}g`,
         contributedBy: userId
       });
 
@@ -984,10 +878,20 @@ export default function FoodLogger({
 
     setIsSavingCustom(true);
     try {
-      const calVal = Number(customCalories) || 0;
-      const protVal = Number(customProtein) || 0;
-      const carbVal = Number(customCarbs) || 0;
-      const fatVal = Number(customFat) || 0;
+      let calVal = Number(customCalories) || 0;
+      let protVal = Number(customProtein) || 0;
+      let carbVal = Number(customCarbs) || 0;
+      let fatVal = Number(customFat) || 0;
+
+      // If user was manually editing macros in 100g mode, scale to current portion for diary logging
+      if (isManualEditingMacros && macroEditBasis === "100g" && portionGrams > 0 && portionGrams !== 100 && mode !== "pantry") {
+        const scale = portionGrams / 100;
+        calVal = Math.round(calVal * scale);
+        protVal = Number((protVal * scale).toFixed(1));
+        carbVal = Number((carbVal * scale).toFixed(1));
+        fatVal = Number((fatVal * scale).toFixed(1));
+      }
+
       const servVal = mode === "pantry"
         ? (pantryStockQuantity.trim() || "Moderada")
         : (portionUnit === "unit"
@@ -2125,7 +2029,32 @@ export default function FoodLogger({
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         type="button"
-                        onClick={() => setIsManualEditingMacros(!isManualEditingMacros)}
+                        onClick={() => {
+                          const next = !isManualEditingMacros;
+                          setIsManualEditingMacros(next);
+                          if (next) {
+                            setMacroEditBasis("100g");
+                            const bCal = selectedFood.raw100gCalories !== undefined ? selectedFood.raw100gCalories : selectedFood.calories;
+                            const bProt = selectedFood.raw100gProtein !== undefined ? selectedFood.raw100gProtein : selectedFood.protein;
+                            const bCarb = selectedFood.raw100gCarbs !== undefined ? selectedFood.raw100gCarbs : selectedFood.carbs;
+                            const bFat = selectedFood.raw100gFat !== undefined ? selectedFood.raw100gFat : selectedFood.fat;
+                            setCustomCalories(bCal);
+                            setCustomProtein(bProt);
+                            setCustomCarbs(bCarb);
+                            setCustomFat(bFat);
+                          } else {
+                            const bCal = selectedFood.raw100gCalories !== undefined ? selectedFood.raw100gCalories : selectedFood.calories;
+                            const bProt = selectedFood.raw100gProtein !== undefined ? selectedFood.raw100gProtein : selectedFood.protein;
+                            const bCarb = selectedFood.raw100gCarbs !== undefined ? selectedFood.raw100gCarbs : selectedFood.carbs;
+                            const bFat = selectedFood.raw100gFat !== undefined ? selectedFood.raw100gFat : selectedFood.fat;
+                            const pG = portionGrams > 0 ? portionGrams : (unitWeight || 100);
+                            const scale = pG / 100;
+                            setCustomCalories(Math.round(bCal * scale));
+                            setCustomProtein(Number((bProt * scale).toFixed(1)));
+                            setCustomCarbs(Number((bCarb * scale).toFixed(1)));
+                            setCustomFat(Number((bFat * scale).toFixed(1)));
+                          }
+                        }}
                         className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-xl border transition cursor-pointer ${
                           isManualEditingMacros
                             ? "bg-amber-500 text-black border-amber-500 shadow-sm"
@@ -2148,10 +2077,83 @@ export default function FoodLogger({
                     </div>
                   </div>
 
+                  {/* Basis Selector when manual editing is active */}
+                  {isManualEditingMacros && (
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-2.5 space-y-2 animate-fadeIn">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                          <Pencil className="h-3 w-3" />
+                          Modo de Edición de Macros
+                        </span>
+                        <span className="text-[9px] text-white/50">¿Qué valores ingresas?</span>
+                      </div>
+
+                      <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (macroEditBasis !== "100g") {
+                              setMacroEditBasis("100g");
+                              const bCal = selectedFood.raw100gCalories !== undefined ? selectedFood.raw100gCalories : selectedFood.calories;
+                              const bProt = selectedFood.raw100gProtein !== undefined ? selectedFood.raw100gProtein : selectedFood.protein;
+                              const bCarb = selectedFood.raw100gCarbs !== undefined ? selectedFood.raw100gCarbs : selectedFood.carbs;
+                              const bFat = selectedFood.raw100gFat !== undefined ? selectedFood.raw100gFat : selectedFood.fat;
+                              setCustomCalories(bCal);
+                              setCustomProtein(bProt);
+                              setCustomCarbs(bCarb);
+                              setCustomFat(bFat);
+                            }
+                          }}
+                          className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                            macroEditBasis === "100g"
+                              ? "bg-amber-500 text-black font-black shadow-sm"
+                              : "text-white/50 hover:text-white"
+                          }`}
+                        >
+                          <span>📊 Por 100g / 100ml</span>
+                          <span className="text-[8px] opacity-75">(Tabla del envase)</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (macroEditBasis !== "portion") {
+                              setMacroEditBasis("portion");
+                              const bCal = selectedFood.raw100gCalories !== undefined ? selectedFood.raw100gCalories : selectedFood.calories;
+                              const bProt = selectedFood.raw100gProtein !== undefined ? selectedFood.raw100gProtein : selectedFood.protein;
+                              const bCarb = selectedFood.raw100gCarbs !== undefined ? selectedFood.raw100gCarbs : selectedFood.carbs;
+                              const bFat = selectedFood.raw100gFat !== undefined ? selectedFood.raw100gFat : selectedFood.fat;
+                              const pG = portionGrams > 0 ? portionGrams : (unitWeight || 100);
+                              const scale = pG / 100;
+                              setCustomCalories(Math.round(bCal * scale));
+                              setCustomProtein(Number((bProt * scale).toFixed(1)));
+                              setCustomCarbs(Number((bCarb * scale).toFixed(1)));
+                              setCustomFat(Number((bFat * scale).toFixed(1)));
+                            }
+                          }}
+                          className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                            macroEditBasis === "portion"
+                              ? "bg-amber-500 text-black font-black shadow-sm"
+                              : "text-white/50 hover:text-white"
+                          }`}
+                        >
+                          <span>🍽️ Por Porción</span>
+                          <span className="text-[8px] opacity-75">({portionGrams || unitWeight || 100}g)</span>
+                        </button>
+                      </div>
+
+                      <p className="text-[9px] text-amber-300/80 leading-normal">
+                        {macroEditBasis === "100g"
+                          ? `💡 Escribe los valores de la columna "Por 100g" de la etiqueta física. Calcularemos automáticamente tu porción de ${portionGrams || unitWeight || 100}g (~${Math.round((Number(customCalories) || 0) * (portionGrams || unitWeight || 100) / 100)} kcal).`
+                          : `💡 Escribe los valores exactos que corresponden a 1 porción de ${portionGrams || unitWeight || 100}g.`}
+                      </p>
+                    </div>
+                  )}
+
                   {showBarcodeHelp && isCorrectingBarcode && (
                     <div className="bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20 text-[9px] text-gray-700 dark:text-white/60 leading-normal space-y-1 animate-fadeIn">
                       <p className="font-black text-amber-500 dark:text-amber-400 uppercase tracking-wider">💡 ¿Cómo buscar los macros?</p>
-                      <p>Busca la tabla nutricional en el envase físico. Modifica los campos inferiores ingresando los macros **según tu porción actual**. El sistema calculará automáticamente la proporción de 100g para guardarlo en la comunidad.</p>
+                      <p>Busca la tabla nutricional en el envase físico. Elige si estás copiando los datos por 100g o por porción arriba. Trophia se encargará de guardarlo exacto para toda la comunidad.</p>
                     </div>
                   )}
 
@@ -2202,7 +2204,9 @@ export default function FoodLogger({
 
                     <div className="grid grid-cols-4 gap-2">
                       <div>
-                        <label className="block text-[9px] text-gray-500 dark:text-white/40 text-center mb-1">Calorías</label>
+                        <label className="block text-[9px] text-gray-500 dark:text-white/40 text-center mb-1 font-bold">
+                          {isManualEditingMacros && macroEditBasis === "100g" ? "Calorías (100g)" : "Calorías"}
+                        </label>
                         <Input
                           type="number"
                           value={customCalories}
@@ -2221,7 +2225,9 @@ export default function FoodLogger({
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] text-gray-500 dark:text-white/40 text-center mb-1">Proteínas</label>
+                        <label className="block text-[9px] text-blue-500 dark:text-blue-400 text-center mb-1 font-bold">
+                          {isManualEditingMacros && macroEditBasis === "100g" ? "Proteína (100g)" : "Proteínas"}
+                        </label>
                         <Input
                           type="number"
                           value={customProtein}
@@ -2234,13 +2240,15 @@ export default function FoodLogger({
                             }
                           }}
                           placeholder="g"
-                          className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-50"
+                          className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-blue-600 dark:text-blue-400 font-mono font-bold px-1 focus:border-emerald-500/40 disabled:opacity-50"
                           size="sm"
                           disabled={selectedFood.name !== "" && !isManualEditingMacros && !isCorrectingBarcode}
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] text-gray-500 dark:text-white/40 text-center mb-1">Carbos</label>
+                        <label className="block text-[9px] text-amber-500 dark:text-amber-400 text-center mb-1 font-bold">
+                          {isManualEditingMacros && macroEditBasis === "100g" ? "Carbos (100g)" : "Carbos"}
+                        </label>
                         <Input
                           type="number"
                           value={customCarbs}
@@ -2253,13 +2261,15 @@ export default function FoodLogger({
                             }
                           }}
                           placeholder="g"
-                          className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-50"
+                          className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-amber-600 dark:text-amber-400 font-mono font-bold px-1 focus:border-emerald-500/40 disabled:opacity-50"
                           size="sm"
                           disabled={selectedFood.name !== "" && !isManualEditingMacros && !isCorrectingBarcode}
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] text-gray-500 dark:text-white/40 text-center mb-1">Grasas</label>
+                        <label className="block text-[9px] text-rose-500 dark:text-rose-400 text-center mb-1 font-bold">
+                          {isManualEditingMacros && macroEditBasis === "100g" ? "Grasa (100g)" : "Grasas"}
+                        </label>
                         <Input
                           type="number"
                           value={customFat}
@@ -2272,12 +2282,28 @@ export default function FoodLogger({
                             }
                           }}
                           placeholder="g"
-                          className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-gray-900 dark:text-white font-mono px-1 focus:border-emerald-500/40 disabled:opacity-50"
+                          className="bg-white dark:bg-[#0c0d15] border-gray-200 dark:border-white/10 rounded-xl text-center text-rose-600 dark:text-rose-400 font-mono font-bold px-1 focus:border-emerald-500/40 disabled:opacity-50"
                           size="sm"
                           disabled={selectedFood.name !== "" && !isManualEditingMacros && !isCorrectingBarcode}
                         />
                       </div>
                     </div>
+
+                    {/* Live equivalent conversion pill when editing manually */}
+                    {isManualEditingMacros && (
+                      <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-300 flex items-center justify-between">
+                        <span>
+                          {macroEditBasis === "100g"
+                            ? `Equivalente en tu porción (${portionGrams || unitWeight || 100}g):`
+                            : "Equivalente normalizado por 100g:"}
+                        </span>
+                        <span className="font-mono font-black text-amber-400">
+                          {macroEditBasis === "100g"
+                            ? `~${Math.round((Number(customCalories) || 0) * (portionGrams || unitWeight || 100) / 100)} kcal`
+                            : `~${Math.round((Number(customCalories) || 0) * 100 / Math.max(1, portionGrams || unitWeight || 100))} kcal`}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Option to also save to My Meals as a template */}
                     {!isCustomFoodOnlyMode && userId && (selectedFood.name === "" || isManualEditingMacros) && (

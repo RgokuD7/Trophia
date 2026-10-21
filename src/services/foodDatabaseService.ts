@@ -1,5 +1,5 @@
 import { FoodItem } from "../types";
-import { GLOBAL_FOODS_DB } from "../utils/fitnessUtils";
+import { GLOBAL_FOODS_DB, getDefaultServingInfo } from "../utils/fitnessUtils";
 import { STAPLE_FOODS_DB } from "../data/stapleFoods";
 import { getBarcodeCorrection } from "./dbService";
 
@@ -118,6 +118,19 @@ function parseOffProduct(p: any, barcode?: string): FoodItem {
       portionValue = parsedG;
       portionUnit = servingMatch[2].toLowerCase() === "ml" ? "ml" : "g";
     }
+  } else {
+    // Check smart defaults for sauces, condiments and common staples
+    const info = getDefaultServingInfo(p.product_name || "", servingSize);
+    if (info.unitWeight && info.unitWeight !== 100) {
+      unitWeight = info.unitWeight;
+      portionGrams = info.unitWeight;
+      portionValue = info.defaultUnit === "unit" ? 1 : info.unitWeight;
+      portionUnit = info.defaultUnit;
+      unitLabel = info.unitLabel;
+      if (!servingSize || servingSize === "100g") {
+        servingSize = `${info.unitWeight}g (${info.unitLabel})`;
+      }
+    }
   }
 
   return {
@@ -220,8 +233,18 @@ export const getProductByBarcode = async (barcode: string): Promise<FoodItem | n
   try {
     const communityProduct = await getBarcodeCorrection(cleanCode);
     if (communityProduct && communityProduct.name) {
-      const uWeight = communityProduct.unitWeight && communityProduct.unitWeight > 0 ? communityProduct.unitWeight : 100;
-      const uLabel = communityProduct.unitLabel || "porción";
+      let uWeight = communityProduct.unitWeight && communityProduct.unitWeight > 0 ? communityProduct.unitWeight : 100;
+      let uLabel = communityProduct.unitLabel || "porción";
+
+      // If stored with 100g unitWeight but is a known sauce/condiment (e.g. ketchup, mayo, mostaza)
+      if (uWeight === 100) {
+        const info = getDefaultServingInfo(communityProduct.name, communityProduct.servingSize || "");
+        if (info.unitWeight && info.unitWeight !== 100) {
+          uWeight = info.unitWeight;
+          uLabel = info.unitLabel;
+        }
+      }
+
       const isCustomPortion = uWeight !== 100;
 
       return {
@@ -239,8 +262,8 @@ export const getProductByBarcode = async (barcode: string): Promise<FoodItem | n
         raw100gCarbs: communityProduct.carbs,
         raw100gFat: communityProduct.fat,
         portionGrams: uWeight,
-        portionValue: uWeight,
-        portionUnit: "g" as const,
+        portionValue: isCustomPortion ? 1 : 100,
+        portionUnit: isCustomPortion ? "unit" as const : "g" as const,
         unitWeight: uWeight,
         unitLabel: uLabel
       };

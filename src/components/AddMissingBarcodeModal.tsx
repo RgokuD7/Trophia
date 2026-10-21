@@ -18,6 +18,7 @@ import { Input } from "./ui/Input";
 import { FoodItem } from "../types";
 import { saveBarcodeCorrection } from "../services/dbService";
 import { analyzeCommunityProductPhotosByIA } from "../services/geminiService";
+import { getDefaultServingInfo } from "../utils/fitnessUtils";
 
 interface AddMissingBarcodeModalProps {
   isOpen: boolean;
@@ -57,6 +58,7 @@ export default function AddMissingBarcodeModal({
   const [fat, setFat] = useState<number | "">("");
   const [unitWeight, setUnitWeight] = useState<number>(100);
   const [unitLabel, setUnitLabel] = useState("porción");
+  const [macroBasis, setMacroBasis] = useState<"100g" | "portion">("100g");
 
   const frontInputRef = useRef<HTMLInputElement>(null);
   const nutritionInputRef = useRef<HTMLInputElement>(null);
@@ -130,41 +132,56 @@ export default function AddMissingBarcodeModal({
       const protVal = Number(protein) || 0;
       const carbVal = Number(carbs) || 0;
       const fatVal = Number(fat) || 0;
+      const effectiveWeight = unitWeight > 0 ? unitWeight : 100;
 
-      // 1. Save to global Firestore collection `barcodes`
+      let base100gCal = calVal;
+      let base100gProt = protVal;
+      let base100gCarb = carbVal;
+      let base100gFat = fatVal;
+
+      if (macroBasis === "portion") {
+        const scale = effectiveWeight / 100;
+        base100gCal = scale > 0 ? Math.round(calVal / scale) : calVal;
+        base100gProt = scale > 0 ? Number((protVal / scale).toFixed(1)) : protVal;
+        base100gCarb = scale > 0 ? Number((carbVal / scale).toFixed(1)) : carbVal;
+        base100gFat = scale > 0 ? Number((fatVal / scale).toFixed(1)) : fatVal;
+      }
+
+      // 1. Save to global Firestore collection `barcodes` (normalized per 100g)
       await saveBarcodeCorrection(barcode, {
         barcode,
         name: name.trim(),
         brand: brand.trim() || undefined,
-        calories: calVal,
-        protein: protVal,
-        carbs: carbVal,
-        fat: fatVal,
-        servingSize: servingSize.trim() || "100g",
-        unitWeight: unitWeight > 0 ? unitWeight : 100,
+        calories: base100gCal,
+        protein: base100gProt,
+        carbs: base100gCarb,
+        fat: base100gFat,
+        servingSize: servingSize.trim() || `${effectiveWeight}g`,
+        unitWeight: effectiveWeight,
         unitLabel: unitLabel.trim() || "porción",
         contributedBy: userName || "Comunidad Trophia"
       });
 
       // 2. Build FoodItem
+      const isCustomPortion = effectiveWeight !== 100;
       const newFood: FoodItem = {
         name: name.trim(),
         brand: brand.trim() || undefined,
-        calories: calVal,
-        protein: protVal,
-        carbs: carbVal,
-        fat: fatVal,
-        servingSize: servingSize.trim() || "100g",
+        calories: base100gCal,
+        protein: base100gProt,
+        carbs: base100gCarb,
+        fat: base100gFat,
+        servingSize: servingSize.trim() || (isCustomPortion ? `${effectiveWeight}g` : "100g"),
         barcode: barcode,
         source: "local",
-        raw100gCalories: calVal,
-        raw100gProtein: protVal,
-        raw100gCarbs: carbVal,
-        raw100gFat: fatVal,
-        portionGrams: unitWeight > 0 ? unitWeight : 100,
-        portionValue: unitWeight > 0 ? 1 : 100,
-        portionUnit: unitWeight > 0 && unitWeight !== 100 ? "unit" : "g",
-        unitWeight: unitWeight > 0 ? unitWeight : 100,
+        raw100gCalories: base100gCal,
+        raw100gProtein: base100gProt,
+        raw100gCarbs: base100gCarb,
+        raw100gFat: base100gFat,
+        portionGrams: effectiveWeight,
+        portionValue: isCustomPortion ? 1 : 100,
+        portionUnit: isCustomPortion ? "unit" : "g",
+        unitWeight: effectiveWeight,
         unitLabel: unitLabel.trim() || "porción"
       };
 
@@ -397,7 +414,18 @@ export default function AddMissingBarcodeModal({
                   <Input
                     type="text"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => {
+                      const newName = e.target.value;
+                      setName(newName);
+                      if (unitWeight === 100) {
+                        const info = getDefaultServingInfo(newName, servingSize);
+                        if (info.unitWeight && info.unitWeight !== 100) {
+                          setUnitWeight(info.unitWeight);
+                          setUnitLabel(info.unitLabel);
+                          setServingSize(`1 ${info.unitLabel} (${info.unitWeight}g)`);
+                        }
+                      }
+                    }}
                     placeholder="Ej: Leche Entera, Ketchup Heinz..."
                     className="bg-black/40 border-white/10"
                   />
@@ -457,13 +485,42 @@ export default function AddMissingBarcodeModal({
                   </div>
                 </div>
 
-                <div className="pt-1">
-                  <span className="block text-[10px] font-bold text-white/40 uppercase mb-2">
-                    Macronutrientes por cada 100g / 100ml
-                  </span>
-                  <div className="grid grid-cols-4 gap-1.5">
+                <div className="pt-1 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="block text-[10px] font-bold text-white/50 uppercase">
+                      Base de los datos nutricionales
+                    </span>
+                    <span className="text-[9px] text-white/30">¿Cómo aparecen en el envase?</span>
+                  </div>
+
+                  <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setMacroBasis("100g")}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                        macroBasis === "100g"
+                          ? "bg-emerald-500 text-black font-black shadow-sm"
+                          : "text-white/50 hover:text-white"
+                      }`}
+                    >
+                      <span>📊 Por cada 100g / 100ml</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMacroBasis("portion")}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                        macroBasis === "portion"
+                          ? "bg-emerald-500 text-black font-black shadow-sm"
+                          : "text-white/50 hover:text-white"
+                      }`}
+                    >
+                      <span>🍽️ Por porción ({unitWeight > 0 ? unitWeight : 100}g)</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-1.5 pt-1">
                     <div className="bg-black/40 border border-white/10 p-2 rounded-xl text-center">
-                      <span className="text-[8.5px] font-bold text-orange-400 block uppercase">Calorías</span>
+                      <span className="text-[8.5px] font-bold text-emerald-400 block uppercase">Calorías</span>
                       <input
                         type="number"
                         value={calories}
@@ -474,7 +531,7 @@ export default function AddMissingBarcodeModal({
                       <span className="text-[8px] text-white/30">kcal</span>
                     </div>
                     <div className="bg-black/40 border border-white/10 p-2 rounded-xl text-center">
-                      <span className="text-[8.5px] font-bold text-emerald-400 block uppercase">Proteínas</span>
+                      <span className="text-[8.5px] font-bold text-blue-400 block uppercase">Proteínas</span>
                       <input
                         type="number"
                         step="0.1"
@@ -486,7 +543,7 @@ export default function AddMissingBarcodeModal({
                       <span className="text-[8px] text-white/30">g</span>
                     </div>
                     <div className="bg-black/40 border border-white/10 p-2 rounded-xl text-center">
-                      <span className="text-[8.5px] font-bold text-sky-400 block uppercase">Carbos</span>
+                      <span className="text-[8.5px] font-bold text-amber-400 block uppercase">Carbos</span>
                       <input
                         type="number"
                         step="0.1"
@@ -498,7 +555,7 @@ export default function AddMissingBarcodeModal({
                       <span className="text-[8px] text-white/30">g</span>
                     </div>
                     <div className="bg-black/40 border border-white/10 p-2 rounded-xl text-center">
-                      <span className="text-[8.5px] font-bold text-amber-400 block uppercase">Grasas</span>
+                      <span className="text-[8.5px] font-bold text-rose-400 block uppercase">Grasas</span>
                       <input
                         type="number"
                         step="0.1"
@@ -509,6 +566,20 @@ export default function AddMissingBarcodeModal({
                       />
                       <span className="text-[8px] text-white/30">g</span>
                     </div>
+                  </div>
+
+                  {/* Live preview */}
+                  <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/10 text-[9.5px] text-white/60 flex items-center justify-between">
+                    <span>
+                      {macroBasis === "100g"
+                        ? `Equivalente en tu porción (${unitWeight > 0 ? unitWeight : 100}g):`
+                        : "Base normalizada por 100g:"}
+                    </span>
+                    <span className="font-mono font-black text-emerald-400">
+                      {macroBasis === "100g"
+                        ? `~${Math.round((Number(calories) || 0) * (unitWeight > 0 ? unitWeight : 100) / 100)} kcal`
+                        : `~${Math.round((Number(calories) || 0) * 100 / Math.max(1, unitWeight > 0 ? unitWeight : 100))} kcal`}
+                    </span>
                   </div>
                 </div>
               </div>

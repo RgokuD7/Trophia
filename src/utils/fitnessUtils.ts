@@ -486,4 +486,199 @@ export function formatFriendlyDate(dateStr: string): string {
   return dateStr;
 }
 
+/**
+ * Determines default portion unit, weight in grams, and unit label based on food name and serving size string.
+ * Supports Chilean / Latin American staples, common fruits, breads, and condiments/sauces.
+ */
+export function getDefaultServingInfo(name: string, servingSizeStr: string): {
+  defaultUnit: "g" | "ml" | "unit";
+  unitWeight: number;
+  unitLabel: string;
+} {
+  const lowercaseName = (name || "").toLowerCase();
+  const lowercaseServing = (servingSizeStr || "").toLowerCase();
+
+  let unitLabel = "unidad";
+  let unitWeight = 100;
+  let defaultUnit: "g" | "ml" | "unit" = "g";
+
+  if (lowercaseName.includes("leche") || lowercaseName.includes("bebida") || lowercaseName.includes("jugo") || lowercaseName.includes("agua") || lowercaseServing.includes("ml")) {
+    defaultUnit = "ml";
+    unitLabel = "ml";
+    unitWeight = 200;
+  }
+
+  // Sauces & Condiments (Standard realistic single-serving portions)
+  if (lowercaseName.includes("ketchup") || lowercaseName.includes("kétchup") || lowercaseName.includes("catsup")) {
+    defaultUnit = "g";
+    unitLabel = "cucharada";
+    unitWeight = 18;
+  } else if (lowercaseName.includes("mostaza")) {
+    defaultUnit = "g";
+    unitLabel = "cucharadita";
+    unitWeight = 12;
+  } else if (lowercaseName.includes("mayonesa") || lowercaseName.includes("mayo")) {
+    defaultUnit = "g";
+    unitLabel = "cucharada";
+    unitWeight = 15;
+  } else if (lowercaseName.includes("salsa de tomate") || lowercaseName.includes("pasta de tomate") || lowercaseName.includes("tuco")) {
+    defaultUnit = "g";
+    unitLabel = "cucharada";
+    unitWeight = 30;
+  } else if (lowercaseName.includes("salsa bbq") || lowercaseName.includes("barbacoa")) {
+    defaultUnit = "g";
+    unitLabel = "cucharada";
+    unitWeight = 20;
+  } else if (lowercaseName.includes("mermelada") || lowercaseName.includes("jalea")) {
+    defaultUnit = "g";
+    unitLabel = "cucharada";
+    unitWeight = 20;
+  } else if (lowercaseName.includes("manjar") || lowercaseName.includes("dulce de leche")) {
+    defaultUnit = "g";
+    unitLabel = "cucharada";
+    unitWeight = 20;
+  } else if (lowercaseName.includes("mantequilla de maní") || lowercaseName.includes("crema de maní") || lowercaseName.includes("peanut butter")) {
+    defaultUnit = "g";
+    unitLabel = "cucharada";
+    unitWeight = 15;
+  } else if (lowercaseName.includes("mantequilla") || lowercaseName.includes("margarina")) {
+    defaultUnit = "g";
+    unitLabel = "porción";
+    unitWeight = 10;
+  } else if (lowercaseName.includes("aceite")) {
+    defaultUnit = "ml";
+    unitLabel = "cucharada";
+    unitWeight = 10;
+  } else if (lowercaseName.includes("miel")) {
+    defaultUnit = "g";
+    unitLabel = "cucharada";
+    unitWeight = 20;
+  } else if (lowercaseName.includes("queso rallado") || lowercaseName.includes("parmesano")) {
+    defaultUnit = "g";
+    unitLabel = "cucharada";
+    unitWeight = 10;
+  } else if (lowercaseName.includes("queso laminado") || lowercaseName.includes("queso cheddar") || lowercaseName.includes("queso gouda") || lowercaseName.includes("queso chanco") || lowercaseName.includes("lámina de queso") || lowercaseName.includes("lamina de queso")) {
+    defaultUnit = "unit";
+    unitLabel = "lámina";
+    unitWeight = 30;
+  } else if (lowercaseName.includes("jamón") || lowercaseName.includes("jamon") || lowercaseName.includes("pechuga de pavo") || lowercaseName.includes("cecina")) {
+    defaultUnit = "unit";
+    unitLabel = "rebanada";
+    unitWeight = 25;
+  } else if (lowercaseName.includes("huevo")) {
+    defaultUnit = "unit";
+    unitLabel = "unidad";
+    unitWeight = 50;
+  } else if (lowercaseName.includes("pan ") || lowercaseName.includes("pan integral") || lowercaseName.includes("tostada") || lowercaseName.includes("rebanada") || lowercaseName.includes("marraqueta") || lowercaseName.includes("hallulla")) {
+    defaultUnit = "unit";
+    unitLabel = "rebanada";
+    unitWeight = 25;
+  } else if (lowercaseName.includes("plátano") || lowercaseName.includes("banana")) {
+    defaultUnit = "unit";
+    unitLabel = "unidad";
+    unitWeight = 120;
+  } else if (lowercaseName.includes("manzana")) {
+    defaultUnit = "unit";
+    unitLabel = "unidad";
+    unitWeight = 150;
+  } else if (lowercaseName.includes("naranja")) {
+    defaultUnit = "unit";
+    unitLabel = "unidad";
+    unitWeight = 130;
+  } else if (lowercaseName.includes("yogur") || lowercaseName.includes("pot")) {
+    defaultUnit = "unit";
+    unitLabel = "pote";
+    unitWeight = 125;
+  } else if (lowercaseName.includes("galleta")) {
+    defaultUnit = "unit";
+    unitLabel = "unidad";
+    unitWeight = 10;
+  } else if (lowercaseName.includes("tortilla")) {
+    defaultUnit = "unit";
+    unitLabel = "unidad";
+    unitWeight = 30;
+  }
+
+  // Parse explicit grams/ml in servingSize string if provided
+  if (servingSizeStr) {
+    const parenMatch = servingSizeStr.match(/\((\d+(?:\.\d+)?)\s*(?:g|ml)\)/i);
+    const directMatch = servingSizeStr.match(/^(\d+(?:\.\d+)?)\s*(?:g|ml)/i);
+    const spaceMatch = servingSizeStr.match(/(\d+(?:\.\d+)?)\s*(?:g|ml)/i);
+    
+    let totalWeight = 0;
+    if (parenMatch) {
+      totalWeight = parseFloat(parenMatch[1]);
+    } else if (directMatch) {
+      totalWeight = parseFloat(directMatch[1]);
+    } else if (spaceMatch) {
+      totalWeight = parseFloat(spaceMatch[1]);
+    }
+
+    if (totalWeight > 0) {
+      const countMatch = servingSizeStr.match(/(\d+)\s*(?:slice|rebanada|cucharada|cucharadita|cookie|galleta|unit|pieza|huevo|pan|vaso|taza|botella|lata|envase|pote|porcion|porción|lámina|lamina)/i);
+      const count = countMatch ? parseInt(countMatch[1]) : 1;
+      unitWeight = Math.round(totalWeight / count);
+      
+      const lowerServing = servingSizeStr.toLowerCase();
+      if (lowerServing.includes("cucharadita")) {
+        unitLabel = "cucharadita";
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("cucharada")) {
+        unitLabel = "cucharada";
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("slice") || lowerServing.includes("rebanada")) {
+        unitLabel = "rebanada";
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("cookie") || lowerServing.includes("galleta")) {
+        unitLabel = "galleta";
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("vaso")) {
+        unitLabel = "vaso";
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("cup") || lowerServing.includes("taza")) {
+        unitLabel = "taza";
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("bottle") || lowerServing.includes("botella")) {
+        unitLabel = "botella";
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("can") || lowerServing.includes("lata")) {
+        unitLabel = "lata";
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("pot") || lowerServing.includes("pote") || lowerServing.includes("envase")) {
+        unitLabel = "pote";
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("bar") || lowerServing.includes("barra")) {
+        unitLabel = "barra";
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("pack") || lowerServing.includes("paquete")) {
+        unitLabel = "paquete";
+        defaultUnit = "unit";
+      } else if (lowerServing.includes("lámina") || lowerServing.includes("lamina")) {
+        unitLabel = "lámina";
+        defaultUnit = "unit";
+      } else {
+        unitLabel = "porción";
+        if (unitWeight !== 100) {
+          defaultUnit = "unit";
+        }
+      }
+    } else {
+      const lowerServing = servingSizeStr.toLowerCase();
+      if (lowerServing.includes("porción") || lowerServing.includes("porcion")) {
+        defaultUnit = "unit";
+        unitLabel = "porción";
+      } else if (lowerServing.includes("unidad")) {
+        defaultUnit = "unit";
+        unitLabel = "unidad";
+      } else if (lowerServing.includes("plato") || lowerServing.includes("sandwich") || lowerServing.includes("sándwich")) {
+        defaultUnit = "unit";
+        unitLabel = "plato";
+      }
+    }
+  }
+
+  return { defaultUnit, unitWeight, unitLabel };
+}
+
+
 
