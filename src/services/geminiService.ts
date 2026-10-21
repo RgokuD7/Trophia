@@ -1574,13 +1574,28 @@ Responde estrictamente en formato JSON con la siguiente estructura de objeto:
   };
 }
 
+export interface NutriCoachResponse {
+  answer: string;
+  suggestedAction?: {
+    type: "meal" | "recipe";
+    name: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    mealType?: "breakfast" | "lunch" | "snack" | "dinner";
+    ingredients?: string[];
+    instructions?: string[];
+  } | null;
+}
+
 // 13. Consultation with Trophia IA Coach (Fitness, Exercises & Nutrition)
 export async function askNutriCoachIA(
   apiKey: string,
   question: string,
   context?: string,
   chatHistory?: { sender: "user" | "coach"; text: string }[]
-): Promise<{ answer: string }> {
+): Promise<NutriCoachResponse> {
   let conversationContext = "";
   if (chatHistory && chatHistory.length > 0) {
     const recent = chatHistory.slice(-6);
@@ -1602,6 +1617,18 @@ Instrucciones de comportamiento y formato:
 4. Si te pregunta sobre su rutina o ejercicios: Responde basándote en su rutina de hoy y los ejercicios que tiene hechos o pendientes. Si está a mitad de su entrenamiento o pregunta por técnica, peso, sobrecarga progresiva o cómo reemplazar un ejercicio, guíalo con precisión anatómica y biomecánica considerando el equipamiento que tiene.
 5. Mantén la respuesta ágil, clara y visualmente agradable para pantalla móvil.
 6. Ten en cuenta las preguntas o respuestas previas del historial para mantener coherencia en la conversación (por ejemplo, si el usuario hace una pregunta de seguimiento).
+7. ACCIÓN ESTRUCTURADA DE COMIDA / RECETA (MUY IMPORTANTE):
+Si tu respuesta propone una comida, colación, batido, merienda, pre-entreno, post-entreno o receta específica con sus macros o cantidades, DEBES incluir en el JSON el campo "suggestedAction" con:
+- "type": "meal" (para comidas o snacks listos) o "recipe" (para recetas con preparación)
+- "name": nombre claro y conciso del plato (ej: "Batido de Plátano y Proteína" o "Avena con Yogur y Canela")
+- "calories": calorías estimadas (número entero realista)
+- "protein": gramos de proteína (número)
+- "carbs": gramos de carbohidratos (número)
+- "fat": gramos de grasas (número)
+- "mealType": "breakfast" | "lunch" | "snack" | "dinner" (según corresponda; "snack" por defecto para pre o post-entreno)
+- "ingredients": lista de ingredientes con cantidades (ej: ["1 plátano mediano (~100g)", "30g proteína whey", "200ml agua o leche"])
+- "instructions": lista de pasos claros de preparación (ej: ["Colocar el plátano y la proteína en la licuadora", "Licuar a potencia media durante 30 segundos", "Beber 20 minutos antes de entrenar"])
+Si tu respuesta NO propone ninguna comida o receta concreta (por ejemplo, consultas de rutinas, motivación, dudas conceptuales), asigna "suggestedAction": null.
 
 ${context ? `INFORMACIÓN DEL USUARIO Y ESTADO EN TIEMPO REAL:\n${context}` : ""}
 ${conversationContext}
@@ -1609,7 +1636,18 @@ Pregunta o mensaje actual del usuario: "${question}"
 
 Debes responder estrictamente en formato JSON con la siguiente estructura:
 {
-  "answer": "Tu respuesta detallada, precisa y personalizada en español con formato markdown legible"
+  "answer": "Tu respuesta detallada, precisa y personalizada en español con formato markdown legible",
+  "suggestedAction": {
+    "type": "meal",
+    "name": "Nombre corto del plato o comida",
+    "calories": 250,
+    "protein": 20,
+    "carbs": 30,
+    "fat": 4,
+    "mealType": "snack",
+    "ingredients": ["1 plátano mediano", "30g proteína"],
+    "instructions": ["Licuar todo", "Servir frío"]
+  }
 }`;
 
   return await callGeminiAPI(apiKey, prompt, undefined, { model: "gemini-3.8-flash", tier: "pro" });

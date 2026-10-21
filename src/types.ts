@@ -355,10 +355,42 @@ export interface HouseholdGroup {
   updatedAt: string;
 }
 
+export interface SavedRecipe {
+  id: string;
+  userId: string;
+  authorName?: string;
+  name: string;
+  description?: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  prepTimeMinutes?: number;
+  difficulty?: "Fácil" | "Media" | "Difícil" | string;
+  ingredients: { name: string; amount: string; calories?: number }[];
+  instructions: string[];
+  tips?: string[];
+  isPublic?: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface CoachChatMessage {
   id: string;
   sender: "user" | "coach";
   text: string;
   timestamp: string;
+  suggestedAction?: {
+    type: "meal" | "recipe";
+    name: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    mealType?: MealType;
+    ingredients?: string[];
+    instructions?: string[];
+  };
+  actionApplied?: "logged_meal" | "saved_recipe" | "both";
 }
 

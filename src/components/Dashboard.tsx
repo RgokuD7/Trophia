@@ -163,9 +163,12 @@ export default function Dashboard({
   const upperOptBound = Math.round(adjustedCalTarget * 1.05);
   const inOptimalRange = totalCalories >= lowerOptBound && totalCalories <= upperOptBound && totalCalories > 0;
 
-  // Undereating warning when it is late (after 20:00) and calories are below the target range
-  const isLate = new Date().getHours() >= 20;
-  const isUndereatingLate = isLate && totalCalories < lowerOptBound;
+  // Close to target / controlled deficit (e.g., between 80% and 90% of adjusted target, or within 150 kcal of target range)
+  const isCloseToTarget = totalCalories >= Math.round(adjustedCalTarget * 0.80) && totalCalories < lowerOptBound;
+
+  // Severe undereating warning: ONLY when it is late at night (past 21:00) and calories are severely below minimum (< 60% of target)
+  const isLate = new Date().getHours() >= 21;
+  const isSevereUndereatingLate = isLate && totalCalories < Math.round(adjustedCalTarget * 0.60) && totalCalories > 0;
 
   // Dynamic scale for the calorie progress bar to handle overflow gracefully
   const barMax = totalCalories > adjustedCalTarget * 1.1 
@@ -275,13 +278,17 @@ export default function Dashboard({
 
             {/* Badges / Ranges feedback */}
             <div>
-              {isUndereatingLate ? (
+              {isSevereUndereatingLate ? (
                 <span className="text-[9px] font-black text-rose-500 dark:text-rose-450 bg-rose-550/15 dark:bg-rose-500/10 px-2.5 py-1 rounded-full border border-rose-500/20 animate-pulse">
                   ⚠️ DÉFICIT EXCESIVO
                 </span>
               ) : inOptimalRange ? (
                 <span className="text-[9px] font-black text-emerald-500 dark:text-emerald-450 bg-emerald-550/10 dark:bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 shadow-sm animate-pulse">
                   🎯 RANGO ÓPTIMO
+                </span>
+              ) : isCloseToTarget ? (
+                <span className="text-[9px] font-black text-amber-500 dark:text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/25 shadow-sm">
+                  🟡 CERCA DE TU META ({remainingCalories} kcal)
                 </span>
               ) : calExceeded ? (
                 <span className="text-[9px] font-black text-rose-500 dark:text-rose-455 bg-rose-550/10 dark:bg-rose-500/10 px-2.5 py-1 rounded-full border border-rose-500/20">
@@ -314,13 +321,15 @@ export default function Dashboard({
               {/* 3. Base Progress Bar (Up to Meta or current progress) */}
               <div 
                 className={`h-full transition-all duration-500 ${
-                  isUndereatingLate
+                  isSevereUndereatingLate
                     ? "bg-gradient-to-r from-rose-500 to-rose-400"
                     : inOptimalRange 
                       ? "bg-gradient-to-r from-emerald-500 to-emerald-400" 
-                      : calExceeded
-                        ? "bg-gradient-to-r from-emerald-500 to-emerald-450" 
-                        : "bg-gradient-to-r from-blue-500 to-blue-400"
+                      : isCloseToTarget
+                        ? "bg-gradient-to-r from-amber-500 to-amber-400"
+                        : calExceeded
+                          ? "bg-gradient-to-r from-emerald-500 to-emerald-450" 
+                          : "bg-gradient-to-r from-blue-500 to-blue-400"
                 }`}
                 style={{ width: `${Math.min(targetPercent, progressPercent)}%` }}
               />
@@ -359,12 +368,20 @@ export default function Dashboard({
           </div>
 
           {/* Context Feedback */}
-          {isUndereatingLate ? (
+          {isSevereUndereatingLate ? (
             <div className="flex items-start gap-2 text-[10.5px] text-rose-450 dark:text-rose-400 bg-rose-500/10 p-3 rounded-2xl border border-rose-500/15 leading-relaxed text-left">
               <AlertTriangle className="h-4 w-4 flex-shrink-0 text-rose-400 mt-0.5 animate-bounce" />
               <div>
-                <span className="font-extrabold block">Alerta de Ingesta Insuficiente</span>
-                <p className="text-[10px] text-rose-400/80">Es tarde y tu ingesta calórica está muy por debajo de tu rango mínimo recomendado. Comer muy por debajo de tu rango óptimo ralentiza el metabolismo y destruye masa muscular. Intenta hacer una colación o cena nutritiva antes de dormir.</p>
+                <span className="font-extrabold block">Alerta de Ingesta Muy Baja</span>
+                <p className="text-[10px] text-rose-400/80">Es tarde y tu ingesta calórica está muy por debajo de tus requerimientos mínimos. Procura ingerir una colación o cena nutritiva antes de dormir para no frenar tu recuperación muscular.</p>
+              </div>
+            </div>
+          ) : isCloseToTarget ? (
+            <div className="flex items-start gap-2 text-[10.5px] text-amber-500 dark:text-amber-400 bg-amber-500/10 p-3 rounded-2xl border border-amber-500/15 leading-relaxed text-left">
+              <Sparkles className="h-4 w-4 flex-shrink-0 text-amber-400 mt-0.5" />
+              <div>
+                <span className="font-extrabold block">¡Muy cerca de tu meta calórica!</span>
+                <p className="text-[10px] text-amber-500/90 dark:text-amber-400/90">Estás a solo {remainingCalories} kcal de completar tu objetivo diario. Tienes un déficit y balance nutricional bajo control.</p>
               </div>
             </div>
           ) : calExceeded ? (

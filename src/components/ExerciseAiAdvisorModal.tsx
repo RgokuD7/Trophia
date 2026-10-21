@@ -12,6 +12,7 @@ import {
   ExerciseConsultationSuggestedExercise 
 } from "../services/geminiService";
 import { isDumbbellExercise, isSingleDumbbellExercise } from "../services/exerciseLibrary";
+import MarkdownMessage from "./MarkdownMessage";
 
 export interface ExerciseAiAdvisorModalProps {
   isOpen: boolean;
@@ -292,9 +293,13 @@ export default function ExerciseAiAdvisorModal({
                 }`}
               >
                 {/* Formatted Text */}
-                <div className="space-y-1.5 whitespace-pre-wrap">
-                  {msg.text}
-                </div>
+                {msg.sender === "coach" ? (
+                  <MarkdownMessage content={msg.text} className="text-gray-900 dark:text-gray-100" />
+                ) : (
+                  <div className="space-y-1.5 whitespace-pre-wrap">
+                    {msg.text}
+                  </div>
+                )}
 
                 {/* Suggested Exercise Card if Coach offered one */}
                 {msg.suggestedExercise && (

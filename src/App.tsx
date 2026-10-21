@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { 
-  Utensils, Droplets, Dumbbell, Settings, Lock, CookingPot, MessageSquare, Sparkles, X, Send, Trash2
+  Utensils, Droplets, Dumbbell, Settings, Lock, CookingPot, MessageSquare, Sparkles, X, Send, Trash2, BookOpen, CheckCircle2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { askNutriCoachIA } from "./services/geminiService";
@@ -37,7 +37,8 @@ import {
   updateHouseholdPantry,
   getCoachChatHistory,
   saveCoachChatHistory,
-  clearCoachChatHistory
+  clearCoachChatHistory,
+  saveUserRecipe
 } from "./services/dbService";
 
 import { getLocalDateString, isSameDay } from "./utils/fitnessUtils";
@@ -247,6 +248,7 @@ ${exercisesList}`;
         id: `coach_${Date.now()}`,
         sender: "coach",
         text: response.answer,
+        suggestedAction: response.suggestedAction || undefined,
         timestamp: new Date().toISOString()
       };
       const updatedWithCoach = [...updatedWithUser, coachMsg];
@@ -266,6 +268,87 @@ ${exercisesList}`;
       setCoachChatHistory(prev => [...prev, errorMsg]);
     } finally {
       setIsCoachTyping(false);
+    }
+  };
+
+  const handleLogCoachMeal = async (msgId: string, action: NonNullable<CoachChatMessage["suggestedAction"]>) => {
+    if (!user) return;
+    try {
+      const newMeal: Omit<LoggedMeal, "id" | "timestamp"> = {
+        name: action.name,
+        calories: Number(action.calories) || 0,
+        protein: Number(action.protein) || 0,
+        carbs: Number(action.carbs) || 0,
+        fat: Number(action.fat) || 0,
+        type: action.mealType || "snack"
+      };
+      await handleAddMeal(newMeal);
+
+      const updated = coachChatHistory.map(m => {
+        if (m.id === msgId) {
+          const prevApplied = m.actionApplied;
+          return {
+            ...m,
+            actionApplied: prevApplied === "saved_recipe" ? "both" : ("logged_meal" as const)
+          };
+        }
+        return m;
+      });
+      setCoachChatHistory(updated);
+      if (user) {
+        localStorage.setItem(`trophia_coach_chat_${user.uid}`, JSON.stringify(updated));
+        saveCoachChatHistory(user.uid, updated);
+      }
+    } catch (e) {
+      console.error("Error logging coach meal:", e);
+      alert("Error al registrar comida.");
+    }
+  };
+
+  const handleSaveCoachRecipe = async (msgId: string, action: NonNullable<CoachChatMessage["suggestedAction"]>) => {
+    if (!user) return;
+    try {
+      const ingredients = (action.ingredients || []).map(ing => ({
+        name: ing,
+        amount: ""
+      }));
+      await saveUserRecipe(user.uid, {
+        userId: user.uid,
+        authorName: profile?.name || "Usuario",
+        name: action.name,
+        calories: Number(action.calories) || 0,
+        protein: Number(action.protein) || 0,
+        carbs: Number(action.carbs) || 0,
+        fat: Number(action.fat) || 0,
+        ingredients,
+        instructions: action.instructions && action.instructions.length > 0
+          ? action.instructions
+          : ["Preparar según las indicaciones del Coach"],
+        prepTimeMinutes: 15,
+        difficulty: "Fácil",
+        isPublic: false,
+        createdAt: new Date().toISOString()
+      });
+
+      const updated = coachChatHistory.map(m => {
+        if (m.id === msgId) {
+          const prevApplied = m.actionApplied;
+          return {
+            ...m,
+            actionApplied: prevApplied === "logged_meal" ? "both" : ("saved_recipe" as const)
+          };
+        }
+        return m;
+      });
+      setCoachChatHistory(updated);
+      if (user) {
+        localStorage.setItem(`trophia_coach_chat_${user.uid}`, JSON.stringify(updated));
+        saveCoachChatHistory(user.uid, updated);
+      }
+      window.dispatchEvent(new CustomEvent("trophia_refresh_recipes"));
+    } catch (e) {
+      console.error("Error saving coach recipe:", e);
+      alert("Error al guardar receta en Mis Recetas.");
     }
   };
 
@@ -723,6 +806,7 @@ ${exercisesList}`;
         {isRecipeAssistantOpen && profile && (
           <RecipeAssistantModal
             profile={profile}
+            userId={user?.uid}
             onAddMeal={handleAddMeal}
             onClose={() => setIsRecipeAssistantOpen(false)}
           />
@@ -786,8 +870,8 @@ ${exercisesList}`;
                 <div className="flex-1 overflow-y-auto no-scrollbar p-5 space-y-4">
                   {coachChatHistory.map((msg, index) => (
                     <div
-                      key={index}
-                      className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
+                      key={msg.id || index}
+                      className={`flex flex-col ${msg.sender === "user" ? "items-end" : "items-start"}`}
                     >
                       <div
                         className={`max-w-[88%] rounded-2xl px-4 py-3 leading-relaxed shadow-sm ${
@@ -802,6 +886,55 @@ ${exercisesList}`;
                           <MarkdownMessage content={msg.text} />
                         )}
                       </div>
+
+                      {/* Coach Actionable Meal / Recipe Card */}
+                      {msg.sender === "coach" && msg.suggestedAction && (
+                        <div className="mt-2 max-w-[88%] bg-emerald-500/10 border border-emerald-500/25 rounded-2xl p-3 shadow-md space-y-2.5 text-left">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-black uppercase text-emerald-400 flex items-center gap-1 truncate">
+                              🍽️ {msg.suggestedAction.name}
+                            </span>
+                            <span className="text-[10px] font-black font-mono text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded-full shrink-0">
+                              ~{msg.suggestedAction.calories} kcal
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 text-[9px] text-white/60 font-medium">
+                            <span>P: <strong className="text-white">{msg.suggestedAction.protein}g</strong></span>
+                            <span>C: <strong className="text-white">{msg.suggestedAction.carbs}g</strong></span>
+                            <span>G: <strong className="text-white">{msg.suggestedAction.fat}g</strong></span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-emerald-500/20">
+                            <button
+                              type="button"
+                              onClick={() => handleLogCoachMeal(msg.id, msg.suggestedAction!)}
+                              disabled={msg.actionApplied === "logged_meal" || msg.actionApplied === "both"}
+                              className={`py-2 px-2 rounded-xl text-[10px] font-black flex items-center justify-center gap-1 transition cursor-pointer ${
+                                msg.actionApplied === "logged_meal" || msg.actionApplied === "both"
+                                  ? "bg-emerald-500/20 text-emerald-400 cursor-default"
+                                  : "bg-emerald-500 hover:bg-emerald-400 text-black shadow-md shadow-emerald-500/20 active:scale-95"
+                              }`}
+                            >
+                              <CheckCircle2 className="h-3 w-3" />
+                              <span>{msg.actionApplied === "logged_meal" || msg.actionApplied === "both" ? "¡Registrado!" : "Registrar en Diario"}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleSaveCoachRecipe(msg.id, msg.suggestedAction!)}
+                              disabled={msg.actionApplied === "saved_recipe" || msg.actionApplied === "both"}
+                              className={`py-2 px-2 rounded-xl text-[10px] font-black flex items-center justify-center gap-1 transition cursor-pointer ${
+                                msg.actionApplied === "saved_recipe" || msg.actionApplied === "both"
+                                  ? "bg-purple-500/20 text-purple-300 cursor-default"
+                                  : "bg-white/10 hover:bg-white/15 text-white border border-white/10 active:scale-95"
+                              }`}
+                            >
+                              <BookOpen className="h-3 w-3 text-purple-400" />
+                              <span>{msg.actionApplied === "saved_recipe" || msg.actionApplied === "both" ? "¡Guardada!" : "Guardar Receta"}</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                   

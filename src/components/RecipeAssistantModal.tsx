@@ -1,13 +1,15 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Sparkles, RefreshCw, Check, MessageSquare, ChevronRight } from "lucide-react";
+import { X, Sparkles, RefreshCw, Check, MessageSquare, ChevronRight, BookOpen } from "lucide-react";
 import { UserProfile, LoggedMeal, MealType } from "../types";
 import { generateRecipeFromIngredientsByIA, adjustLoggedMealByChatByIA, suggestFoodSubstitutesByIA } from "../services/geminiService";
+import { saveUserRecipe } from "../services/dbService";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 
 interface RecipeAssistantModalProps {
   profile: UserProfile;
+  userId?: string;
   onAddMeal: (meal: Omit<LoggedMeal, "id" | "timestamp">) => void;
   onClose: () => void;
 }
@@ -44,10 +46,14 @@ interface GeneratedRecipe {
   tip: string;
 }
 
-export default function RecipeAssistantModal({ profile, onAddMeal, onClose }: RecipeAssistantModalProps) {
+export default function RecipeAssistantModal({ profile, userId, onAddMeal, onClose }: RecipeAssistantModalProps) {
   const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [recipe, setRecipe] = useState<GeneratedRecipe | null>(null);
+  
+  // Save to My Recipes state
+  const [isSavingToRecipes, setIsSavingToRecipes] = useState(false);
+  const [savedToRecipesSuccess, setSavedToRecipesSuccess] = useState(false);
   
   // Chat-adjust state
   const [chatMessage, setChatMessage] = useState("");
@@ -161,6 +167,41 @@ export default function RecipeAssistantModal({ profile, onAddMeal, onClose }: Re
     });
     
     onClose();
+  };
+
+  const handleSaveToMyRecipes = async () => {
+    if (!recipe || !userId) return;
+    setIsSavingToRecipes(true);
+    try {
+      const ingredients = (recipe.ingredientsList || []).map(item => ({
+        name: item,
+        amount: ""
+      }));
+      await saveUserRecipe(userId, {
+        userId,
+        authorName: profile.name || "Usuario",
+        name: recipe.name,
+        calories: recipe.calories,
+        protein: recipe.protein,
+        carbs: recipe.carbs,
+        fat: recipe.fat,
+        prepTimeMinutes: 20,
+        difficulty: "Fácil",
+        ingredients,
+        instructions: recipe.instructions || [],
+        tips: recipe.tip ? [recipe.tip] : undefined,
+        isPublic: false,
+        createdAt: new Date().toISOString()
+      });
+      setSavedToRecipesSuccess(true);
+      window.dispatchEvent(new CustomEvent("trophia_refresh_recipes"));
+      setTimeout(() => setSavedToRecipesSuccess(false), 3000);
+    } catch (e) {
+      console.error("Error saving recipe to user recipes:", e);
+      alert("No se pudo guardar la receta en Mis Recetas.");
+    } finally {
+      setIsSavingToRecipes(false);
+    }
   };
 
   return (
@@ -430,16 +471,27 @@ export default function RecipeAssistantModal({ profile, onAddMeal, onClose }: Re
                 </form>
               </div>
 
-              {/* Final Confirm Button */}
-              <div className="pt-3 border-t border-gray-250 dark:border-gray-805">
-                <Button
-                  onClick={handleSaveRecipe}
-                  variant="primary"
-                  className="w-full cursor-pointer py-3.5"
-                  leftIcon={Check}
-                >
-                  Registrar Receta en mi Diario
-                </Button>
+              {/* Final Confirm Buttons */}
+              <div className="pt-3 border-t border-gray-250 dark:border-gray-805 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    onClick={handleSaveRecipe}
+                    variant="primary"
+                    className="w-full cursor-pointer py-3.5 text-xs font-black shadow-md shadow-emerald-500/20"
+                    leftIcon={Check}
+                  >
+                    Registrar en Diario
+                  </Button>
+                  <Button
+                    onClick={handleSaveToMyRecipes}
+                    disabled={isSavingToRecipes || savedToRecipesSuccess || !userId}
+                    variant="secondary"
+                    className="w-full cursor-pointer py-3.5 text-xs font-black"
+                    leftIcon={BookOpen}
+                  >
+                    {savedToRecipesSuccess ? "¡Guardada en Recetas!" : isSavingToRecipes ? "Guardando..." : "Guardar en Mis Recetas"}
+                  </Button>
+                </div>
               </div>
 
             </div>

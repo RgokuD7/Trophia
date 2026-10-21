@@ -15,7 +15,7 @@ import {
   onSnapshot
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { UserProfile, LoggedMeal, WaterLog, WorkoutSession, CustomFood, CustomExercise, BarcodeCorrection, HouseholdGroup, PantryItem, CoachChatMessage } from "../types";
+import { UserProfile, LoggedMeal, WaterLog, WorkoutSession, CustomFood, CustomExercise, BarcodeCorrection, HouseholdGroup, PantryItem, CoachChatMessage, SavedRecipe } from "../types";
 
 // User Profile Operations
 export const getUserProfile = async (userId: string): Promise<UserProfile | null> => {
@@ -312,6 +312,17 @@ export const deleteUserAllData = async (userId: string): Promise<void> => {
       await customExercisesBatch.commit();
     }
 
+    // Delete saved recipes
+    const recipesRef = collection(db, "users", userId, "recipes");
+    const recipesSnap = await getDocs(recipesRef);
+    if (!recipesSnap.empty) {
+      const recipesBatch = writeBatch(db);
+      recipesSnap.docs.forEach((doc) => {
+        recipesBatch.delete(doc.ref);
+      });
+      await recipesBatch.commit();
+    }
+
     // 4. Delete push subscriptions if any
     const pushRef = collection(db, "users", userId, "push_subscriptions");
     const pushSnap = await getDocs(pushRef);
@@ -373,6 +384,117 @@ export const deleteCustomFood = async (userId: string, foodId: string): Promise<
     await deleteDoc(foodDocRef);
   } catch (error) {
     console.error("Error deleting custom food:", error);
+    throw error;
+  }
+};
+
+export const updateCustomFood = async (userId: string, food: CustomFood): Promise<void> => {
+  try {
+    const foodDocRef = doc(db, "users", userId, "customFoods", food.id);
+    const cleanedFood = removeUndefinedRecursive(food);
+    await setDoc(foodDocRef, cleanedFood, { merge: true });
+  } catch (error) {
+    console.error("Error updating custom food:", error);
+    throw error;
+  }
+};
+
+// ==========================================
+// Saved Recipes Operations (Personal & Public Community)
+// ==========================================
+
+export const getUserRecipes = async (userId: string): Promise<SavedRecipe[]> => {
+  try {
+    const recipesRef = collection(db, "users", userId, "recipes");
+    const q = query(recipesRef, orderBy("createdAt", "desc"));
+    const querySnapshot = await getDocs(q);
+    const recipes: SavedRecipe[] = [];
+    querySnapshot.forEach((doc) => {
+      recipes.push({ id: doc.id, ...doc.data() } as SavedRecipe);
+    });
+    return recipes;
+  } catch (error) {
+    console.error("Error getting user recipes:", error);
+    return [];
+  }
+};
+
+export const getPublicRecipes = async (): Promise<SavedRecipe[]> => {
+  try {
+    const publicRef = collection(db, "public_recipes");
+    const q = query(publicRef, orderBy("createdAt", "desc"));
+    const querySnapshot = await getDocs(q);
+    const recipes: SavedRecipe[] = [];
+    querySnapshot.forEach((doc) => {
+      recipes.push({ id: doc.id, ...doc.data() } as SavedRecipe);
+    });
+    return recipes;
+  } catch (error) {
+    console.error("Error getting public recipes:", error);
+    return [];
+  }
+};
+
+export const saveUserRecipe = async (
+  userId: string,
+  recipe: Omit<SavedRecipe, "id"> | SavedRecipe
+): Promise<SavedRecipe> => {
+  try {
+    const recipesRef = collection(db, "users", userId, "recipes");
+    const recipeId = (recipe as SavedRecipe).id || doc(recipesRef).id;
+    const finalRecipe: SavedRecipe = {
+      ...recipe,
+      id: recipeId,
+      userId,
+      createdAt: (recipe as SavedRecipe).createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const cleaned = removeUndefinedRecursive(finalRecipe);
+
+    // Save in user's personal collection
+    await setDoc(doc(db, "users", userId, "recipes", recipeId), cleaned, { merge: true });
+
+    // If marked public, sync to public_recipes collection
+    if (finalRecipe.isPublic) {
+      await setDoc(doc(db, "public_recipes", recipeId), cleaned, { merge: true });
+    } else {
+      // If was previously public and now private, remove from public collection
+      try {
+        await deleteDoc(doc(db, "public_recipes", recipeId));
+      } catch (_) {}
+    }
+
+    return finalRecipe;
+  } catch (error) {
+    console.error("Error saving recipe:", error);
+    throw error;
+  }
+};
+
+export const deleteUserRecipe = async (userId: string, recipeId: string): Promise<void> => {
+  try {
+    // Delete from user collection
+    await deleteDoc(doc(db, "users", userId, "recipes", recipeId));
+    // Also delete from public_recipes if it existed
+    try {
+      await deleteDoc(doc(db, "public_recipes", recipeId));
+    } catch (_) {}
+  } catch (error) {
+    console.error("Error deleting recipe:", error);
+    throw error;
+  }
+};
+
+export const toggleRecipePublic = async (userId: string, recipe: SavedRecipe, isPublic: boolean): Promise<void> => {
+  try {
+    const updated: SavedRecipe = {
+      ...recipe,
+      isPublic,
+      updatedAt: new Date().toISOString()
+    };
+    await saveUserRecipe(userId, updated);
+  } catch (error) {
+    console.error("Error toggling recipe public status:", error);
     throw error;
   }
 };
