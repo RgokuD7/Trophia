@@ -2494,8 +2494,23 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                                   <div className="flex items-center gap-1 bg-white dark:bg-black/30 border border-gray-200 dark:border-gray-700/60 rounded-lg px-2 py-1 shadow-inner">
                                     <input
                                       type="number"
-                                      value={set.reps}
-                                      onChange={(e) => handleUpdateSetWeightOrReps(ex.id, set.setIndex, set.weight, Math.max(1, Number(e.target.value) || set.reps))}
+                                      value={set.reps === 0 ? "" : set.reps}
+                                      placeholder="1"
+                                      onFocus={(e) => e.target.select()}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        handleUpdateSetWeightOrReps(
+                                          ex.id, 
+                                          set.setIndex, 
+                                          set.weight, 
+                                          val === "" ? ("" as any) : Math.max(0, parseInt(val, 10) || 0)
+                                        );
+                                      }}
+                                      onBlur={() => {
+                                        if (!set.reps || Number(set.reps) <= 0) {
+                                          handleUpdateSetWeightOrReps(ex.id, set.setIndex, set.weight, 1);
+                                        }
+                                      }}
                                       className="w-10 text-center text-xs font-bold bg-transparent text-gray-900 dark:text-white focus:outline-none"
                                     />
                                     <span className="text-[9px] text-gray-400 font-semibold">{isTimeTracking ? "seg" : "reps"}</span>
@@ -2510,8 +2525,24 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                                   }`}>
                                     <input
                                       type="number"
-                                      value={set.weight}
-                                      onChange={(e) => handleUpdateSetWeightOrReps(ex.id, set.setIndex, Math.max(0, Number(e.target.value) || 0), set.reps)}
+                                      step="0.5"
+                                      value={set.weight === 0 ? "" : set.weight}
+                                      placeholder="0"
+                                      onFocus={(e) => e.target.select()}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        handleUpdateSetWeightOrReps(
+                                          ex.id, 
+                                          set.setIndex, 
+                                          val === "" ? ("" as any) : Math.max(0, parseFloat(val) || 0), 
+                                          set.reps
+                                        );
+                                      }}
+                                      onBlur={() => {
+                                        if (set.weight === "" as any) {
+                                          handleUpdateSetWeightOrReps(ex.id, set.setIndex, 0, set.reps);
+                                        }
+                                      }}
                                       className="w-10 text-center text-xs font-bold bg-transparent text-gray-900 dark:text-white focus:outline-none"
                                       title={isDumbbell ? "Peso de cada mancuerna en kg (ej: 10 = 10 kg en cada mano, total 20 kg)" : "Carga en kg"}
                                     />
@@ -2718,22 +2749,38 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                               type="number"
                               min={1}
                               max={10}
-                              value={newExerciseSets}
-                              onChange={(e) => setNewExerciseSets(Math.max(1, Number(e.target.value) || 1))}
+                              value={newExerciseSets === 0 ? "" : newExerciseSets}
+                              placeholder="3"
+                              onFocus={(e) => e.target.select()}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewExerciseSets(val === "" ? ("" as any) : Math.max(1, parseInt(val, 10) || 1));
+                              }}
+                              onBlur={() => {
+                                if (!newExerciseSets || Number(newExerciseSets) < 1) setNewExerciseSets(3);
+                              }}
                               className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-lg px-2 py-1 text-xs text-center text-gray-900 dark:text-white"
                             />
                           </div>
                           <div>
                             <label className="block text-[9px] font-bold text-gray-400 mb-1">
                               {newExerciseTrackingType === "time" 
-                                ? `Seg (${Math.floor(newExerciseReps / 60)}m${newExerciseReps % 60 > 0 ? ` ${newExerciseReps % 60}s` : ""})` 
+                                ? `Seg (${Math.floor(Number(newExerciseReps || 0) / 60)}m${Number(newExerciseReps || 0) % 60 > 0 ? ` ${Number(newExerciseReps || 0) % 60}s` : ""})` 
                                 : "Reps"}
                             </label>
                             <input
                               type="number"
                               min={1}
-                              value={newExerciseReps}
-                              onChange={(e) => setNewExerciseReps(Math.max(1, Number(e.target.value) || 1))}
+                              value={newExerciseReps === 0 ? "" : newExerciseReps}
+                              placeholder={newExerciseTrackingType === "time" ? "60" : "10"}
+                              onFocus={(e) => e.target.select()}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewExerciseReps(val === "" ? ("" as any) : Math.max(1, parseInt(val, 10) || 1));
+                              }}
+                              onBlur={() => {
+                                if (!newExerciseReps || Number(newExerciseReps) < 1) setNewExerciseReps(newExerciseTrackingType === "time" ? 60 : 10);
+                              }}
                               className="w-full bg-gray-50 dark:bg-[#0f101a] border border-gray-200 dark:border-gray-800 rounded-lg px-2 py-1 text-xs text-center text-gray-900 dark:text-white"
                             />
                           </div>
@@ -2746,8 +2793,17 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                             <input
                               type="number"
                               min={0}
-                              value={newExerciseWeight}
-                              onChange={(e) => setNewExerciseWeight(Math.max(0, Number(e.target.value) || 0))}
+                              step="0.5"
+                              value={newExerciseWeight === 0 ? "" : newExerciseWeight}
+                              placeholder="0"
+                              onFocus={(e) => e.target.select()}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewExerciseWeight(val === "" ? ("" as any) : Math.max(0, parseFloat(val) || 0));
+                              }}
+                              onBlur={() => {
+                                if (newExerciseWeight === "" as any) setNewExerciseWeight(0);
+                              }}
                               className={`w-full bg-gray-50 dark:bg-[#0f101a] border rounded-lg px-2 py-1 text-xs text-center text-gray-900 dark:text-white ${
                                 isDumbbellExercise({ name: newExerciseName }) && !isSingleDumbbellExercise({ name: newExerciseName })
                                   ? "border-amber-500/40"
@@ -3470,7 +3526,16 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
                 <input
                   type="number"
                   value={sportDuration}
-                  onChange={(e) => setSportDuration(e.target.value === "" ? "" : Math.max(1, Number(e.target.value)))}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSportDuration(val === "" ? "" : Math.max(0, Number(val)));
+                  }}
+                  onBlur={() => {
+                    if (sportDuration === "" || Number(sportDuration) <= 0) {
+                      setSportDuration(30);
+                    }
+                  }}
                   className="w-full p-2.5 bg-gray-50 dark:bg-black/40 border border-gray-200 dark:border-gray-800 rounded-xl text-xs text-gray-900 dark:text-white font-mono focus:outline-none focus:border-orange-500/50 transition"
                 />
                 {/* Quick duration presets */}

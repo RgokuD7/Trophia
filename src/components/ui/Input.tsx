@@ -88,6 +88,12 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           type={inputType}
           className={combinedClasses}
+          onFocus={(e) => {
+            if (inputType === "number" || props.inputMode === "numeric" || props.inputMode === "decimal") {
+              e.target.select();
+            }
+            props.onFocus?.(e);
+          }}
           {...props}
         />
 

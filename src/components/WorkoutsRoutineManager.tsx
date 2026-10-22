@@ -388,7 +388,7 @@ export default function WorkoutsRoutineManager({
       const sets = [...(target.completedSets || [])];
       if (!sets[setIdx]) return prev;
 
-      const num = field === "reps" ? Math.max(1, Number(val) || 1) : Math.max(0, Number(val) || 0);
+      const num = val === "" ? ("" as any) : (field === "reps" ? Math.max(0, parseInt(val, 10) || 0) : Math.max(0, parseFloat(val) || 0));
       sets[setIdx] = {
         ...sets[setIdx],
         [field]: num
@@ -396,7 +396,7 @@ export default function WorkoutsRoutineManager({
 
       target.completedSets = sets;
       target.sets = sets.length;
-      if (setIdx === 0) {
+      if (setIdx === 0 && num !== ("" as any)) {
         target[field] = num;
       }
       copy[exIdx] = target;
@@ -1343,8 +1343,15 @@ export default function WorkoutsRoutineManager({
                                     <div className="flex items-center gap-1 bg-gray-50 dark:bg-black/30 border border-gray-200 dark:border-gray-700/60 rounded-lg px-2 py-1 shadow-inner">
                                       <input
                                         type="number"
-                                        value={set.reps}
+                                        value={set.reps === 0 ? "" : set.reps}
+                                        placeholder="1"
+                                        onFocus={(e) => e.target.select()}
                                         onChange={(e) => handleUpdateSetInRoutineModal(exIdx, setIdx, "reps", e.target.value)}
+                                        onBlur={() => {
+                                          if (!set.reps || Number(set.reps) <= 0) {
+                                            handleUpdateSetInRoutineModal(exIdx, setIdx, "reps", 10);
+                                          }
+                                        }}
                                         className="w-10 text-center text-xs font-bold bg-transparent text-gray-900 dark:text-white focus:outline-none"
                                       />
                                       <span className="text-[9px] text-gray-400 font-semibold">{isTime ? "seg" : "reps"}</span>
@@ -1356,8 +1363,16 @@ export default function WorkoutsRoutineManager({
                                     }`}>
                                       <input
                                         type="number"
-                                        value={set.weight}
+                                        step="0.5"
+                                        value={set.weight === 0 ? "" : set.weight}
+                                        placeholder="0"
+                                        onFocus={(e) => e.target.select()}
                                         onChange={(e) => handleUpdateSetInRoutineModal(exIdx, setIdx, "weight", e.target.value)}
+                                        onBlur={() => {
+                                          if (set.weight === "" as any) {
+                                            handleUpdateSetInRoutineModal(exIdx, setIdx, "weight", 0);
+                                          }
+                                        }}
                                         className="w-10 text-center text-xs font-bold bg-transparent text-gray-900 dark:text-white focus:outline-none"
                                         title={isDumbbellExercise(ex) && !isSingleDumbbellExercise(ex) ? "Peso de cada mancuerna en kg" : "Carga en kg"}
                                       />

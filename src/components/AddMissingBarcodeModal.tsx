@@ -479,9 +479,16 @@ export default function AddMissingBarcodeModal({
                     </label>
                     <Input
                       type="number"
-                      value={unitWeight}
-                      onChange={(e) => setUnitWeight(Number(e.target.value) || 100)}
+                      value={unitWeight === 0 ? "" : unitWeight}
                       placeholder="100"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setUnitWeight(val === "" ? ("" as any) : Math.max(0, parseInt(val, 10) || 0));
+                      }}
+                      onBlur={() => {
+                        if (!unitWeight || Number(unitWeight) <= 0) setUnitWeight(100);
+                      }}
                       className="bg-black/40 border-white/10"
                     />
                   </div>
@@ -538,6 +545,7 @@ export default function AddMissingBarcodeModal({
                       <input
                         type="number"
                         value={calories}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => setCalories(e.target.value === "" ? "" : Number(e.target.value))}
                         placeholder="0"
                         className="w-full text-center bg-transparent border-0 font-black text-xs text-white focus:outline-none"
@@ -550,6 +558,7 @@ export default function AddMissingBarcodeModal({
                         type="number"
                         step="0.1"
                         value={protein}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => setProtein(e.target.value === "" ? "" : Number(e.target.value))}
                         placeholder="0"
                         className="w-full text-center bg-transparent border-0 font-black text-xs text-white focus:outline-none"
@@ -562,6 +571,7 @@ export default function AddMissingBarcodeModal({
                         type="number"
                         step="0.1"
                         value={carbs}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => setCarbs(e.target.value === "" ? "" : Number(e.target.value))}
                         placeholder="0"
                         className="w-full text-center bg-transparent border-0 font-black text-xs text-white focus:outline-none"
@@ -574,6 +584,7 @@ export default function AddMissingBarcodeModal({
                         type="number"
                         step="0.1"
                         value={fat}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => setFat(e.target.value === "" ? "" : Number(e.target.value))}
                         placeholder="0"
                         className="w-full text-center bg-transparent border-0 font-black text-xs text-white focus:outline-none"

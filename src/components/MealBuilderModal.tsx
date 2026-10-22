@@ -1482,8 +1482,18 @@ export default function MealBuilderModal({
                       type="number"
                       step={editUnit === "unit" ? "1" : "5"}
                       min="0.1"
-                      value={editAmount}
-                      onChange={(e) => setEditAmount(parseFloat(e.target.value) || 1)}
+                      value={editAmount === 0 ? "" : editAmount}
+                      placeholder="1"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditAmount(val === "" ? ("" as any) : parseFloat(val) || 0);
+                      }}
+                      onBlur={() => {
+                        if (!editAmount || Number(editAmount) <= 0) {
+                          setEditAmount(editUnit === "unit" ? 1 : (editingIngredient.portionGrams || 100));
+                        }
+                      }}
                       className="flex-1 px-3 py-2 bg-black/40 border border-white/10 rounded-xl text-sm font-bold font-mono text-white focus:outline-none focus:border-emerald-500"
                     />
                     <span className="text-xs font-bold text-white/70 px-2 py-2 bg-white/5 rounded-xl border border-white/5">

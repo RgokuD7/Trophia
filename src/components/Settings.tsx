@@ -370,8 +370,16 @@ export default function SettingsView({
                       <label className="block text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1">Edad</label>
                       <Input
                         type="number"
-                        value={age}
-                        onChange={(e) => setAge(parseInt(e.target.value) || 0)}
+                        value={age === 0 ? "" : age}
+                        placeholder="25"
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setAge(val === "" ? ("" as any) : parseInt(val, 10) || 0);
+                        }}
+                        onBlur={() => {
+                          if (!age || Number(age) < 10) setAge(profile.age || 25);
+                        }}
                         className="bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 font-bold"
                         size="md"
                       />
@@ -412,8 +420,16 @@ export default function SettingsView({
                       <Input
                         type="number"
                         step="0.1"
-                        value={weight}
-                        onChange={(e) => setWeight(parseFloat(e.target.value) || 0)}
+                        value={weight === 0 ? "" : weight}
+                        placeholder="70"
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setWeight(val === "" ? ("" as any) : parseFloat(val) || 0);
+                        }}
+                        onBlur={() => {
+                          if (!weight || Number(weight) < 20) setWeight(profile.weight || 70);
+                        }}
                         className="bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 font-bold"
                         size="md"
                       />
@@ -422,8 +438,16 @@ export default function SettingsView({
                       <label className="block text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1">Estatura (cm)</label>
                       <Input
                         type="number"
-                        value={height}
-                        onChange={(e) => setHeight(parseInt(e.target.value) || 0)}
+                        value={height === 0 ? "" : height}
+                        placeholder="170"
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setHeight(val === "" ? ("" as any) : parseInt(val, 10) || 0);
+                        }}
+                        onBlur={() => {
+                          if (!height || Number(height) < 50) setHeight(profile.height || 170);
+                        }}
                         className="bg-gray-50 dark:bg-[#0f101a] border-gray-200 dark:border-gray-800 font-bold"
                         size="md"
                       />

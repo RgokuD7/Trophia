@@ -219,10 +219,10 @@ export default function NutritionHub({
   const [editingMeal, setEditingMeal] = useState<LoggedMeal | null>(null);
   const [editName, setEditName] = useState("");
   const [editType, setEditType] = useState<MealType>("lunch");
-  const [editCalories, setEditCalories] = useState<number>(0);
-  const [editProtein, setEditProtein] = useState<number>(0);
-  const [editCarbs, setEditCarbs] = useState<number>(0);
-  const [editFat, setEditFat] = useState<number>(0);
+  const [editCalories, setEditCalories] = useState<number | "">(0);
+  const [editProtein, setEditProtein] = useState<number | "">(0);
+  const [editCarbs, setEditCarbs] = useState<number | "">(0);
+  const [editFat, setEditFat] = useState<number | "">(0);
   const [editServingSize, setEditServingSize] = useState<string>("");
   const [baseMealRef, setBaseMealRef] = useState<{
     calories: number;
@@ -1310,6 +1310,7 @@ export default function NutritionHub({
                       <input
                         type="number"
                         value={editPantryCalories}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => setEditPantryCalories(e.target.value === "" ? "" : Number(e.target.value))}
                         placeholder="0"
                         className="w-full text-center bg-transparent border-0 font-black text-xs text-white focus:outline-none"
@@ -1322,6 +1323,7 @@ export default function NutritionHub({
                         type="number"
                         step="0.1"
                         value={editPantryProtein}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => setEditPantryProtein(e.target.value === "" ? "" : Number(e.target.value))}
                         placeholder="0"
                         className="w-full text-center bg-transparent border-0 font-black text-xs text-white focus:outline-none"
@@ -1334,6 +1336,7 @@ export default function NutritionHub({
                         type="number"
                         step="0.1"
                         value={editPantryCarbs}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => setEditPantryCarbs(e.target.value === "" ? "" : Number(e.target.value))}
                         placeholder="0"
                         className="w-full text-center bg-transparent border-0 font-black text-xs text-white focus:outline-none"
@@ -1346,6 +1349,7 @@ export default function NutritionHub({
                         type="number"
                         step="0.1"
                         value={editPantryFat}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => setEditPantryFat(e.target.value === "" ? "" : Number(e.target.value))}
                         placeholder="0"
                         className="w-full text-center bg-transparent border-0 font-black text-xs text-white focus:outline-none"
@@ -1474,8 +1478,18 @@ export default function NutritionHub({
                     <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">Calorías (kcal)</label>
                     <input
                       type="number"
-                      value={editingCustomFood.calories}
-                      onChange={(e) => setEditingCustomFood({ ...editingCustomFood, calories: Number(e.target.value) || 0 })}
+                      value={editingCustomFood.calories === 0 ? "" : editingCustomFood.calories}
+                      placeholder="0"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditingCustomFood({ ...editingCustomFood, calories: val === "" ? ("" as any) : Math.max(0, Math.round(Number(val))) });
+                      }}
+                      onBlur={() => {
+                        if (editingCustomFood.calories === "" as any) {
+                          setEditingCustomFood({ ...editingCustomFood, calories: 0 });
+                        }
+                      }}
                       required
                       min={0}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/50"
@@ -1499,8 +1513,18 @@ export default function NutritionHub({
                     <input
                       type="number"
                       step="0.1"
-                      value={editingCustomFood.protein}
-                      onChange={(e) => setEditingCustomFood({ ...editingCustomFood, protein: Number(e.target.value) || 0 })}
+                      value={editingCustomFood.protein === 0 ? "" : editingCustomFood.protein}
+                      placeholder="0"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditingCustomFood({ ...editingCustomFood, protein: val === "" ? ("" as any) : Math.max(0, Number(Number(val).toFixed(1))) });
+                      }}
+                      onBlur={() => {
+                        if (editingCustomFood.protein === "" as any) {
+                          setEditingCustomFood({ ...editingCustomFood, protein: 0 });
+                        }
+                      }}
                       required
                       min={0}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500/50"
@@ -1511,8 +1535,18 @@ export default function NutritionHub({
                     <input
                       type="number"
                       step="0.1"
-                      value={editingCustomFood.carbs}
-                      onChange={(e) => setEditingCustomFood({ ...editingCustomFood, carbs: Number(e.target.value) || 0 })}
+                      value={editingCustomFood.carbs === 0 ? "" : editingCustomFood.carbs}
+                      placeholder="0"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditingCustomFood({ ...editingCustomFood, carbs: val === "" ? ("" as any) : Math.max(0, Number(Number(val).toFixed(1))) });
+                      }}
+                      onBlur={() => {
+                        if (editingCustomFood.carbs === "" as any) {
+                          setEditingCustomFood({ ...editingCustomFood, carbs: 0 });
+                        }
+                      }}
                       required
                       min={0}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/50"
@@ -1523,8 +1557,18 @@ export default function NutritionHub({
                     <input
                       type="number"
                       step="0.1"
-                      value={editingCustomFood.fat}
-                      onChange={(e) => setEditingCustomFood({ ...editingCustomFood, fat: Number(e.target.value) || 0 })}
+                      value={editingCustomFood.fat === 0 ? "" : editingCustomFood.fat}
+                      placeholder="0"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditingCustomFood({ ...editingCustomFood, fat: val === "" ? ("" as any) : Math.max(0, Number(Number(val).toFixed(1))) });
+                      }}
+                      onBlur={() => {
+                        if (editingCustomFood.fat === "" as any) {
+                          setEditingCustomFood({ ...editingCustomFood, fat: 0 });
+                        }
+                      }}
                       required
                       min={0}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500/50"
@@ -1790,8 +1834,18 @@ export default function NutritionHub({
                     <label className="text-[10px] font-bold text-white/50 uppercase block mb-1">Tiempo (minutos)</label>
                     <input
                       type="number"
-                      value={editingRecipe.prepTimeMinutes || 20}
-                      onChange={(e) => setEditingRecipe({ ...editingRecipe, prepTimeMinutes: Number(e.target.value) || 0 })}
+                      value={editingRecipe.prepTimeMinutes === 0 ? "" : (editingRecipe.prepTimeMinutes ?? 20)}
+                      placeholder="20"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditingRecipe({ ...editingRecipe, prepTimeMinutes: val === "" ? 0 : Number(val) });
+                      }}
+                      onBlur={() => {
+                        if (!editingRecipe.prepTimeMinutes || editingRecipe.prepTimeMinutes <= 0) {
+                          setEditingRecipe({ ...editingRecipe, prepTimeMinutes: 20 });
+                        }
+                      }}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white"
                     />
                   </div>
@@ -1814,8 +1868,16 @@ export default function NutritionHub({
                     <label className="text-[9px] font-bold text-emerald-400 uppercase block mb-1">Kcal</label>
                     <input
                       type="number"
-                      value={editingRecipe.calories}
-                      onChange={(e) => setEditingRecipe({ ...editingRecipe, calories: Number(e.target.value) || 0 })}
+                      value={editingRecipe.calories === 0 ? "" : editingRecipe.calories}
+                      placeholder="0"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditingRecipe({ ...editingRecipe, calories: val === "" ? ("" as any) : Math.max(0, Math.round(Number(val))) });
+                      }}
+                      onBlur={() => {
+                        if (editingRecipe.calories === "" as any) setEditingRecipe({ ...editingRecipe, calories: 0 });
+                      }}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2 text-xs text-white font-mono"
                     />
                   </div>
@@ -1823,8 +1885,17 @@ export default function NutritionHub({
                     <label className="text-[9px] font-bold text-blue-400 uppercase block mb-1">Prot (g)</label>
                     <input
                       type="number"
-                      value={editingRecipe.protein}
-                      onChange={(e) => setEditingRecipe({ ...editingRecipe, protein: Number(e.target.value) || 0 })}
+                      step="0.1"
+                      value={editingRecipe.protein === 0 ? "" : editingRecipe.protein}
+                      placeholder="0"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditingRecipe({ ...editingRecipe, protein: val === "" ? ("" as any) : Math.max(0, Number(Number(val).toFixed(1))) });
+                      }}
+                      onBlur={() => {
+                        if (editingRecipe.protein === "" as any) setEditingRecipe({ ...editingRecipe, protein: 0 });
+                      }}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2 text-xs text-white font-mono"
                     />
                   </div>
@@ -1832,8 +1903,17 @@ export default function NutritionHub({
                     <label className="text-[9px] font-bold text-amber-400 uppercase block mb-1">Carb (g)</label>
                     <input
                       type="number"
-                      value={editingRecipe.carbs}
-                      onChange={(e) => setEditingRecipe({ ...editingRecipe, carbs: Number(e.target.value) || 0 })}
+                      step="0.1"
+                      value={editingRecipe.carbs === 0 ? "" : editingRecipe.carbs}
+                      placeholder="0"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditingRecipe({ ...editingRecipe, carbs: val === "" ? ("" as any) : Math.max(0, Number(Number(val).toFixed(1))) });
+                      }}
+                      onBlur={() => {
+                        if (editingRecipe.carbs === "" as any) setEditingRecipe({ ...editingRecipe, carbs: 0 });
+                      }}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2 text-xs text-white font-mono"
                     />
                   </div>
@@ -1841,8 +1921,17 @@ export default function NutritionHub({
                     <label className="text-[9px] font-bold text-rose-400 uppercase block mb-1">Grasa (g)</label>
                     <input
                       type="number"
-                      value={editingRecipe.fat}
-                      onChange={(e) => setEditingRecipe({ ...editingRecipe, fat: Number(e.target.value) || 0 })}
+                      step="0.1"
+                      value={editingRecipe.fat === 0 ? "" : editingRecipe.fat}
+                      placeholder="0"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditingRecipe({ ...editingRecipe, fat: val === "" ? ("" as any) : Math.max(0, Number(Number(val).toFixed(1))) });
+                      }}
+                      onBlur={() => {
+                        if (editingRecipe.fat === "" as any) setEditingRecipe({ ...editingRecipe, fat: 0 });
+                      }}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2 text-xs text-white font-mono"
                     />
                   </div>
@@ -3225,7 +3314,15 @@ export default function NutritionHub({
                           type="number"
                           step="any"
                           value={customPortionAmount}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => handleCustomPortionAmountChange(e.target.value)}
+                          onBlur={() => {
+                            if (customPortionAmount === "" || Number(customPortionAmount) <= 0) {
+                              if (baseMealRef) {
+                                handleCustomPortionAmountChange(String(baseMealRef.baseAmount || 100));
+                              }
+                            }
+                          }}
                           placeholder="Cantidad"
                           size="sm"
                           className="bg-white/5 border-white/10 font-mono text-center font-bold text-emerald-400 h-7 text-xs"
@@ -3242,8 +3339,12 @@ export default function NutritionHub({
                   </label>
                   <Input
                     type="number"
-                    value={editCalories || ""}
-                    onChange={(e) => setEditCalories(parseFloat(e.target.value) || 0)}
+                    value={editCalories}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setEditCalories(e.target.value === "" ? "" : Number(e.target.value))}
+                    onBlur={() => {
+                      if (editCalories === "") setEditCalories(0);
+                    }}
                     placeholder="0"
                     size="sm"
                     className="bg-white/5 border-white/10 font-mono font-bold text-emerald-400"
@@ -3259,8 +3360,12 @@ export default function NutritionHub({
                     <Input
                       type="number"
                       step="0.1"
-                      value={editProtein || ""}
-                      onChange={(e) => setEditProtein(parseFloat(e.target.value) || 0)}
+                      value={editProtein}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => setEditProtein(e.target.value === "" ? "" : Number(e.target.value))}
+                      onBlur={() => {
+                        if (editProtein === "") setEditProtein(0);
+                      }}
                       placeholder="0"
                       size="sm"
                       className="bg-white/5 border-white/10 font-mono text-xs text-center"
@@ -3273,8 +3378,12 @@ export default function NutritionHub({
                     <Input
                       type="number"
                       step="0.1"
-                      value={editCarbs || ""}
-                      onChange={(e) => setEditCarbs(parseFloat(e.target.value) || 0)}
+                      value={editCarbs}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => setEditCarbs(e.target.value === "" ? "" : Number(e.target.value))}
+                      onBlur={() => {
+                        if (editCarbs === "") setEditCarbs(0);
+                      }}
                       placeholder="0"
                       size="sm"
                       className="bg-white/5 border-white/10 font-mono text-xs text-center"
@@ -3287,8 +3396,12 @@ export default function NutritionHub({
                     <Input
                       type="number"
                       step="0.1"
-                      value={editFat || ""}
-                      onChange={(e) => setEditFat(parseFloat(e.target.value) || 0)}
+                      value={editFat}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => setEditFat(e.target.value === "" ? "" : Number(e.target.value))}
+                      onBlur={() => {
+                        if (editFat === "") setEditFat(0);
+                      }}
                       placeholder="0"
                       size="sm"
                       className="bg-white/5 border-white/10 font-mono text-xs text-center"

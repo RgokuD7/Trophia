@@ -1558,6 +1558,7 @@ export default function Onboarding({
                           type="number"
                           step="0.1"
                           value={weight}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => setWeight(e.target.value)}
                           className="w-full bg-black/40 border border-emerald-500/40 rounded-xl px-4 py-3 text-white text-base font-black focus:outline-none focus:border-emerald-400"
                           placeholder="Ej: 75.5"

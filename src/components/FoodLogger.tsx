@@ -1985,8 +1985,24 @@ export default function FoodLogger({
                     <div className="flex items-center gap-1.5">
                       <Input
                         type="number"
-                        value={portionValue}
-                        onChange={(e) => updatePortion(Number(e.target.value) || 0)}
+                        step={portionUnit === "unit" ? "0.5" : "5"}
+                        value={portionValue === 0 ? "" : portionValue}
+                        placeholder="1"
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "") {
+                            setPortionValue("" as any);
+                            setPortionGrams(0);
+                          } else {
+                            updatePortion(parseFloat(val) || 0);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (!portionValue || Number(portionValue) <= 0) {
+                            updatePortion(portionUnit === "unit" ? 1 : 100);
+                          }
+                        }}
                         className="w-16 bg-white dark:bg-black/40 border-gray-200 dark:border-white/10 text-center text-gray-900 dark:text-white font-mono rounded-lg h-7 px-1 focus:border-emerald-500/40"
                         size="sm"
                       />

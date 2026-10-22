@@ -13,7 +13,7 @@ interface HydrationProps {
 }
 
 export default function Hydration({ waterLogs, onAddWater, onClearWater, dailyGoalMl = 2500 }: HydrationProps) {
-  const [selectedQuickAdd, setSelectedQuickAdd] = useState<number>(250);
+  const [selectedQuickAdd, setSelectedQuickAdd] = useState<number | "">(250);
   const todayStr = getLocalDateString();
 
   const todayWaterLogs = waterLogs.filter(w => isSameDay(w.timestamp, todayStr));
@@ -123,12 +123,27 @@ export default function Hydration({ waterLogs, onAddWater, onClearWater, dailyGo
             <input
               type="number"
               step="50"
+              min="10"
               value={selectedQuickAdd}
-              onChange={(e) => setSelectedQuickAdd(Math.max(10, Number(e.target.value) || 250))}
-              className="w-20 bg-gray-50 dark:bg-[#161824] border border-gray-250 dark:border-gray-800 rounded-lg text-center font-bold text-xs py-2 text-gray-900 dark:text-white outline-none"
+              placeholder="250"
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "") {
+                  setSelectedQuickAdd("");
+                } else {
+                  setSelectedQuickAdd(Math.max(0, parseInt(val, 10) || 0));
+                }
+              }}
+              onBlur={() => {
+                if (!selectedQuickAdd || Number(selectedQuickAdd) <= 0) {
+                  setSelectedQuickAdd(250);
+                }
+              }}
+              className="w-20 bg-gray-50 dark:bg-[#161824] border border-gray-250 dark:border-gray-800 rounded-lg text-center font-bold text-xs py-2 text-gray-900 dark:text-white outline-none focus:border-blue-500"
             />
             <button
-              onClick={() => onAddWater(selectedQuickAdd)}
+              onClick={() => onAddWater(Number(selectedQuickAdd) || 250)}
               className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition active:scale-95 cursor-pointer"
             >
               <Plus className="h-4 w-4" />
