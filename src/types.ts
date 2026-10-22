@@ -37,6 +37,9 @@ export interface UserProfile {
   theme: "light" | "dark";
   takesCreatine?: boolean;
   lastCreatineIntake?: string; // Format YYYY-MM-DD
+  creatineDailyDose?: number; // In grams (default 5g)
+  creatineHistory?: string[]; // Array of YYYY-MM-DD strings when creatine was consumed
+  creatineStartingMode?: "new" | "already_saturated";
   favoriteExercises?: string[];
   sleepLogs?: { date: string; hours: number; quality: number }[];
   moodLogs?: { date: string; mood: number; energy: number; notes?: string }[];

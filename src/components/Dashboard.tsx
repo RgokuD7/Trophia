@@ -1,11 +1,11 @@
 import React from "react";
 import { motion } from "motion/react";
 import { 
-  Flame, Utensils, Droplets, ChevronRight, Plus, AlertTriangle, Check, Sparkles, RefreshCw, MapPin, BookOpen, Lock, Dumbbell, CheckCircle2
+  Flame, Utensils, Droplets, ChevronRight, Plus, AlertTriangle, Check, Sparkles, RefreshCw, MapPin, BookOpen, Lock, Dumbbell, CheckCircle2, Zap
 } from "lucide-react";
 import { UserProfile, LoggedMeal, WaterLog, MealType, WorkoutSession } from "../types";
 import { generateRecommendationsByIA } from "../services/geminiService";
-import { getSuggestedMealTypeByTime, getPrePostWorkoutAdvice, getLocalDateString, isSameDay } from "../utils/fitnessUtils";
+import { getSuggestedMealTypeByTime, getPrePostWorkoutAdvice, getLocalDateString, isSameDay, calculateCreatineSaturation } from "../utils/fitnessUtils";
 import scientificTips from "../data/scientificTips.json";
 
 interface DashboardProps {
@@ -17,7 +17,7 @@ interface DashboardProps {
   onOpenRecipeAssistant: () => void;
   onAddWaterQuick: (amount: number) => void;
   onDeleteMeal: (id: string) => void;
-  onNavigateToTab: (tab: "workouts" | "hydration" | "settings" | "nutrition") => void;
+  onNavigateToTab: (tab: "workouts" | "hydration" | "settings" | "nutrition", subTab?: string) => void;
   onUpdateProfile: (profile: UserProfile) => void;
   onAddMeal?: (meal: Omit<LoggedMeal, "id" | "timestamp">) => void;
   onOpenCoach?: () => void;
@@ -217,47 +217,99 @@ export default function Dashboard({
 
       <div className="px-6 py-5 space-y-6">
 
-        {/* Daily Creatine Reminder Card */}
-        {profile.takesCreatine && profile.lastCreatineIntake !== new Date().toLocaleDateString("sv-SE") && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/20 p-4 rounded-2xl flex items-center justify-between gap-4 shadow-lg shadow-emerald-500/5"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center text-lg flex-shrink-0">
-                💪
-              </div>
-              <div className="space-y-0.5">
-                <span className="text-xs font-black text-gray-900 dark:text-white block">¿Tomaste tu dosis de Creatina hoy?</span>
-                <p className="text-[10px] text-gray-650 dark:text-white/50 leading-normal">
-                  Satura tus depósitos de fosfocreatina para acelerar la resíntesis de ATP y ganar fuerza.{" "}
-                  <a
-                    href="https://pmc.ncbi.nlm.nih.gov/articles/PMC5469049/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[9px] text-emerald-400 hover:text-emerald-300 font-bold hover:underline inline"
+        {/* Daily Creatine Status Card */}
+        {profile.takesCreatine && (() => {
+          const todayStr = getLocalDateString();
+          const creatineData = calculateCreatineSaturation(
+            profile.creatineHistory || [],
+            profile.creatineStartingMode || "new",
+            todayStr
+          );
+
+          if (!creatineData.takenToday) {
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/20 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-emerald-500/5"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center text-lg flex-shrink-0">
+                    ⚡
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-black text-gray-900 dark:text-white block">
+                      ¿Tomaste tu dosis de Creatina hoy?
+                    </span>
+                    <p className="text-[10px] text-gray-650 dark:text-white/50 leading-normal">
+                      Saturación actual:{" "}
+                      <strong className="text-emerald-400 font-mono">
+                        {creatineData.saturationPercentage}%
+                      </strong>
+                      {" · "}
+                      <button
+                        type="button"
+                        onClick={() => onNavigateToTab("hydration", "creatine")}
+                        className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+                      >
+                        Ver músculo y reservas ↗
+                      </button>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 self-end sm:self-auto">
+                  <button
+                    onClick={() => onNavigateToTab("hydration", "creatine")}
+                    className="text-[10px] text-gray-400 hover:text-white font-bold px-2 py-1.5 transition cursor-pointer"
                   >
-                    Estudio ISSN ↗
-                  </a>
-                </p>
+                    Detalles
+                  </button>
+                  <button
+                    onClick={() => {
+                      const history = profile.creatineHistory || [];
+                      const updatedHistory = history.includes(todayStr)
+                        ? history
+                        : [...history, todayStr].sort();
+                      onUpdateProfile({
+                        ...profile,
+                        lastCreatineIntake: todayStr,
+                        creatineHistory: updatedHistory,
+                      });
+                    }}
+                    className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[11px] px-3.5 py-2 rounded-xl transition flex items-center gap-1 active:scale-[0.98] cursor-pointer"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    <span>Sí, tomada (+5g)</span>
+                  </button>
+                </div>
+              </motion.div>
+            );
+          } else {
+            return (
+              <div className="bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 rounded-2xl flex items-center justify-between gap-3 shadow-sm">
+                <div className="flex items-center gap-2.5">
+                  <Zap className="h-4 w-4 text-emerald-400 fill-emerald-400" />
+                  <div>
+                    <span className="text-xs font-black text-emerald-400 block">
+                      Creatina de hoy registrada (+5g)
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-medium">
+                      Saturación muscular: {creatineData.saturationPercentage}% · {creatineData.streakDays} {creatineData.streakDays === 1 ? "día" : "días"} de racha 🔥
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab("hydration", "creatine")}
+                  className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-0.5 cursor-pointer"
+                >
+                  <span>Ver músculo</span>
+                  <ChevronRight className="h-3 w-3" />
+                </button>
               </div>
-            </div>
-            <button
-              onClick={() => {
-                const todayStr = getLocalDateString();
-                onUpdateProfile({
-                  ...profile,
-                  lastCreatineIntake: todayStr
-                });
-              }}
-              className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[11px] px-3.5 py-2 rounded-xl transition flex items-center gap-1 active:scale-[0.98] cursor-pointer"
-            >
-              <Check className="h-3.5 w-3.5" />
-              <span>Sí, tomada</span>
-            </button>
-          </motion.div>
-        )}
+            );
+          }
+        })()}
 
         {/* 1. Calorie Balance Progress Card (Dynamic Scale Calorie Bar) */}
         <div className="bg-white dark:bg-[#161824] p-5 rounded-3xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-md dark:shadow-xl relative overflow-hidden">

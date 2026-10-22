@@ -24,7 +24,7 @@ import {
 import { 
   getCustomExercises, addCustomExercise, deleteCustomExercise, updateCustomExercise 
 } from "../services/dbService";
-import { SPORTS_METS, getLocalDateString, formatFriendlyDate, isSameDay } from "../utils/fitnessUtils";
+import { SPORTS_METS, getLocalDateString, formatFriendlyDate, isSameDay, calculateCreatineSaturation } from "../utils/fitnessUtils";
 import WorkoutsOnboarding from "./WorkoutsOnboarding";
 import WorkoutsRoutineManager, { DAY_KEYS, DAY_LABEL_MAP } from "./WorkoutsRoutineManager";
 import ExerciseAiAdvisorModal from "./ExerciseAiAdvisorModal";
@@ -122,9 +122,19 @@ interface WorkoutsProps {
   onAddWorkout: (workout: WorkoutSession) => void;
   onClearWorkouts: () => void;
   onUpdateProfile: (profile: UserProfile) => void;
+  onNavigateToHydration?: (subTab?: "water" | "creatine") => void;
 }
 
-export default function Workouts({ apiKey, userProfile, userId, workoutHistory, onAddWorkout, onClearWorkouts, onUpdateProfile }: WorkoutsProps) {
+export default function Workouts({
+  apiKey,
+  userProfile,
+  userId,
+  workoutHistory,
+  onAddWorkout,
+  onClearWorkouts,
+  onUpdateProfile,
+  onNavigateToHydration,
+}: WorkoutsProps) {
   const [activeTab, setActiveTab] = useState<"routine" | "routines" | "recovery">("routine");
   const initialTodayStr = getLocalDateString();
   const [selectedDay, setSelectedDay] = useState<string>(initialTodayStr);
@@ -1630,6 +1640,23 @@ export default function Workouts({ apiKey, userProfile, userId, workoutHistory, 
             <span>Plan de Entrenamiento</span>
           </h2>
           <div className="flex items-center gap-1.5">
+            {userProfile.takesCreatine && onNavigateToHydration && (() => {
+              const creatineData = calculateCreatineSaturation(
+                userProfile.creatineHistory || [],
+                userProfile.creatineStartingMode || "new"
+              );
+              return (
+                <button
+                  type="button"
+                  onClick={() => onNavigateToHydration("creatine")}
+                  className="py-1.5 px-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                  title="Ver nivel de saturación muscular de creatina"
+                >
+                  <Zap className="h-3 w-3 fill-current" />
+                  <span>Creatina: {creatineData.saturationPercentage}%</span>
+                </button>
+              );
+            })()}
             <button
               onClick={() => setIsWorkoutsOnboardingOpen(true)}
               className="py-1.5 px-3 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-xl text-[10px] font-extrabold transition flex items-center gap-1.5 cursor-pointer border border-gray-200 dark:border-white/10"

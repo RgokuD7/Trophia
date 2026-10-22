@@ -47,6 +47,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [activeTab, setActiveTab] = useState<"dashboard" | "nutrition" | "hydration" | "workouts" | "settings">("dashboard");
+  const [hydrationSubTab, setHydrationSubTab] = useState<"water" | "creatine">("water");
   const [loggedMeals, setLoggedMeals] = useState<LoggedMeal[]>([]);
   const [waterLogs, setWaterLogs] = useState<WaterLog[]>([]);
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
@@ -676,9 +677,16 @@ ${exercisesList}`;
                   onOpenRecipeAssistant={() => setIsRecipeAssistantOpen(true)}
                   onAddWaterQuick={handleAddWater}
                   onDeleteMeal={handleDeleteMeal}
-                  onNavigateToTab={(tab) => {
+                  onNavigateToTab={(tab, subTab) => {
                     if (tab === "workouts") setActiveTab("workouts");
-                    if (tab === "hydration") setActiveTab("hydration");
+                    if (tab === "hydration") {
+                      if (subTab === "creatine") {
+                        setHydrationSubTab("creatine");
+                      } else if (subTab === "water") {
+                        setHydrationSubTab("water");
+                      }
+                      setActiveTab("hydration");
+                    }
                     if (tab === "settings") setActiveTab("settings");
                     if (tab === "nutrition") setActiveTab("nutrition");
                   }}
@@ -710,6 +718,9 @@ ${exercisesList}`;
                   onAddWater={handleAddWater}
                   onClearWater={handleClearWater}
                   dailyGoalMl={2500}
+                  profile={profile || undefined}
+                  onUpdateProfile={handleUpdateProfile}
+                  initialTab={hydrationSubTab}
                 />
               )}
 
@@ -722,6 +733,11 @@ ${exercisesList}`;
                   onAddWorkout={handleAddWorkout}
                   onClearWorkouts={handleClearWorkouts}
                   onUpdateProfile={handleUpdateProfile}
+                  onNavigateToHydration={(subTab) => {
+                    if (subTab === "creatine") setHydrationSubTab("creatine");
+                    else setHydrationSubTab("water");
+                    setActiveTab("hydration");
+                  }}
                 />
               )}
 

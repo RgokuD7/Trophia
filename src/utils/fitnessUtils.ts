@@ -680,5 +680,129 @@ export function getDefaultServingInfo(name: string, servingSizeStr: string): {
   return { defaultUnit, unitWeight, unitLabel };
 }
 
+// ---------------------------------------------------------------------------
+// CREATINE MUSCLE SATURATION CALCULATOR
+// ---------------------------------------------------------------------------
+
+export interface CreatineSaturationResult {
+  saturationPercentage: number; // 60 to 100
+  streakDays: number; // Consecutive days taking it
+  takenToday: boolean;
+  takenYesterday: boolean;
+  totalDaysLogged: number;
+  statusLabel: string;
+  statusColor: string;
+  statusDescription: string;
+  dailyWashoutOrGain: number; // e.g. +1.45% or -1.0%
+  daysToFullSaturation: number; // Estimated days remaining to hit 100%
+  daysLoggedPast14Days: { date: string; dayName: string; dayNumber: number; taken: boolean; isToday: boolean }[];
+}
+
+export function calculateCreatineSaturation(
+  history: string[] = [],
+  startingMode: "new" | "already_saturated" = "new",
+  customTodayStr?: string
+): CreatineSaturationResult {
+  const todayStr = customTodayStr || getLocalDateString();
+  const historySet = new Set(history);
+  const takenToday = historySet.has(todayStr);
+
+  const [year, month, day] = todayStr.split("-").map(Number);
+  const todayDate = new Date(year, month - 1, day);
+
+  const yesterdayDate = new Date(todayDate);
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterdayStr = getLocalDateString(yesterdayDate);
+  const takenYesterday = historySet.has(yesterdayStr);
+
+  // Baseline: 60% natural dietary baseline, or 100% if previously saturated
+  let saturation = startingMode === "already_saturated" ? 100 : 60;
+
+  const simulationDays = 35;
+  for (let i = simulationDays; i >= 0; i--) {
+    const d = new Date(todayDate);
+    d.setDate(d.getDate() - i);
+    const dStr = getLocalDateString(d);
+
+    if (historySet.has(dStr)) {
+      saturation = Math.min(100, saturation + 1.45);
+    } else {
+      saturation = Math.max(60, saturation - 1.0);
+    }
+  }
+
+  const finalSaturation = Math.min(100, Math.max(60, Math.round(saturation)));
+
+  // Consecutive streak
+  let streak = 0;
+  const startOffset = takenToday ? 0 : (takenYesterday ? 1 : -1);
+  if (startOffset >= 0) {
+    for (let i = startOffset; i < 365; i++) {
+      const d = new Date(todayDate);
+      d.setDate(d.getDate() - i);
+      const dStr = getLocalDateString(d);
+      if (historySet.has(dStr)) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+  }
+
+  // 14-day history window
+  const daysLoggedPast14Days = [];
+  const daysOfWeek = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sá"];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(todayDate);
+    d.setDate(d.getDate() - i);
+    const dStr = getLocalDateString(d);
+    daysLoggedPast14Days.push({
+      date: dStr,
+      dayName: daysOfWeek[d.getDay()],
+      dayNumber: d.getDate(),
+      taken: historySet.has(dStr),
+      isToday: dStr === todayStr,
+    });
+  }
+
+  let statusLabel = "Nivel Basal";
+  let statusColor = "text-gray-400";
+  let statusDescription = "Tus depósitos están en su nivel natural de la dieta. Empieza a tomarla diariamente para saturar.";
+
+  if (finalSaturation >= 95) {
+    statusLabel = "Saturación Máxima (100%)";
+    statusColor = "text-emerald-400";
+    statusDescription = "Depósitos musculares al máximo. Capacidad óptima de regeneración de ATP y fuerza explosiva.";
+  } else if (finalSaturation >= 85) {
+    statusLabel = "Saturación Alta";
+    statusColor = "text-emerald-400";
+    statusDescription = "Excelente nivel de fosfocreatina. Muy cerca del pico fisiológico celular.";
+  } else if (finalSaturation >= 75) {
+    statusLabel = "En Fase de Carga";
+    statusColor = "text-sky-400";
+    statusDescription = "Depósitos en aumento continuo. Mantén la dosis diaria para alcanzar la plenitud.";
+  } else if (finalSaturation >= 65) {
+    statusLabel = "Carga Inicial / Descenso";
+    statusColor = "text-amber-400";
+    statusDescription = "Saturación parcial. Si dejaste de tomarla un día, aún conservas reservas; retómala hoy para recargar.";
+  }
+
+  const daysToFull = finalSaturation >= 100 ? 0 : Math.ceil((100 - finalSaturation) / 1.45);
+
+  return {
+    saturationPercentage: finalSaturation,
+    streakDays: streak,
+    takenToday,
+    takenYesterday,
+    totalDaysLogged: history.length,
+    statusLabel,
+    statusColor,
+    statusDescription,
+    dailyWashoutOrGain: takenToday ? 1.45 : -1.0,
+    daysToFullSaturation: daysToFull,
+    daysLoggedPast14Days,
+  };
+}
+
 
 
