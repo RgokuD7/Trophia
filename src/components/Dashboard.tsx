@@ -220,10 +220,16 @@ export default function Dashboard({
         {/* Daily Creatine Status Card */}
         {profile.takesCreatine && (() => {
           const todayStr = getLocalDateString();
+          const rawHistory = profile.creatineHistory || [];
+          const history = profile.lastCreatineIntake && !rawHistory.includes(profile.lastCreatineIntake)
+            ? [...rawHistory, profile.lastCreatineIntake].sort()
+            : rawHistory;
+
           const creatineData = calculateCreatineSaturation(
-            profile.creatineHistory || [],
-            profile.creatineStartingMode || "new",
-            todayStr
+            history,
+            profile.creatineStartingMode || "already_saturated",
+            todayStr,
+            profile.lastCreatineIntake
           );
 
           if (!creatineData.takenToday) {

@@ -38,27 +38,54 @@ export default function CreatineTracker({
   const [showSetup, setShowSetup] = useState<boolean>(false);
 
   const todayStr = getLocalDateString();
-  const history = profile?.creatineHistory || [];
-  const startingMode = profile?.creatineStartingMode || "new";
+  const rawHistory = profile?.creatineHistory || [];
+  const history = profile?.lastCreatineIntake && !rawHistory.includes(profile.lastCreatineIntake)
+    ? [...rawHistory, profile.lastCreatineIntake].sort()
+    : rawHistory;
+
+  const startingMode = profile?.creatineStartingMode || (profile?.takesCreatine ? "already_saturated" : "new");
+
+  // Ensure past consistency is restored if user already consumes creatine
+  React.useEffect(() => {
+    if (!profile || !onUpdateProfile) return;
+    if (profile.takesCreatine && startingMode === "already_saturated" && history.length < 14) {
+      const dates: string[] = [];
+      const [year, month, day] = todayStr.split("-").map(Number);
+      const todayDate = new Date(year, month - 1, day);
+      for (let i = 27; i >= 0; i--) {
+        const d = new Date(todayDate);
+        d.setDate(d.getDate() - i);
+        dates.push(getLocalDateString(d));
+      }
+      const merged = Array.from(new Set([...history, ...dates])).sort();
+      onUpdateProfile({
+        ...profile,
+        takesCreatine: true,
+        creatineStartingMode: "already_saturated",
+        creatineHistory: merged,
+        lastCreatineIntake: todayStr,
+      });
+    }
+  }, [profile?.takesCreatine]);
 
   const saturationData = calculateCreatineSaturation(
     history,
     startingMode,
-    todayStr
+    todayStr,
+    profile?.lastCreatineIntake
   );
 
   const handleToggleDate = (dateStr: string) => {
     if (!profile || !onUpdateProfile) return;
 
-    const currentHistory = profile.creatineHistory || [];
     let updatedHistory: string[];
 
-    if (currentHistory.includes(dateStr)) {
+    if (history.includes(dateStr)) {
       // Remove date
-      updatedHistory = currentHistory.filter((d) => d !== dateStr);
+      updatedHistory = history.filter((d) => d !== dateStr);
     } else {
       // Add date
-      updatedHistory = [...currentHistory, dateStr].sort();
+      updatedHistory = [...history, dateStr].sort();
     }
 
     const isTodayLogged = updatedHistory.includes(todayStr);
@@ -69,6 +96,7 @@ export default function CreatineTracker({
       lastCreatineIntake: isTodayLogged ? todayStr : (profile.lastCreatineIntake === todayStr ? undefined : profile.lastCreatineIntake),
       creatineHistory: updatedHistory,
       creatineDailyDose: selectedDose,
+      creatineStartingMode: startingMode,
     });
   };
 

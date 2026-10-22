@@ -34,10 +34,16 @@ export default function Hydration({
   const percentage = Math.min(100, Math.round((totalWater / dailyGoalMl) * 100));
 
   // Compute creatine saturation for quick badge indicator
+  const rawCreatineHistory = profile?.creatineHistory || [];
+  const creatineHistory = profile?.lastCreatineIntake && !rawCreatineHistory.includes(profile.lastCreatineIntake)
+    ? [...rawCreatineHistory, profile.lastCreatineIntake].sort()
+    : rawCreatineHistory;
+
   const creatineData = calculateCreatineSaturation(
-    profile?.creatineHistory || [],
-    profile?.creatineStartingMode || "new",
-    todayStr
+    creatineHistory,
+    profile?.creatineStartingMode || (profile?.takesCreatine ? "already_saturated" : "new"),
+    todayStr,
+    profile?.lastCreatineIntake
   );
 
   return (

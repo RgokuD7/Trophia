@@ -700,11 +700,15 @@ export interface CreatineSaturationResult {
 
 export function calculateCreatineSaturation(
   history: string[] = [],
-  startingMode: "new" | "already_saturated" = "new",
-  customTodayStr?: string
+  startingMode: "new" | "already_saturated" = "already_saturated",
+  customTodayStr?: string,
+  lastCreatineIntake?: string
 ): CreatineSaturationResult {
   const todayStr = customTodayStr || getLocalDateString();
   const historySet = new Set(history);
+  if (lastCreatineIntake) {
+    historySet.add(lastCreatineIntake);
+  }
   const takenToday = historySet.has(todayStr);
 
   const [year, month, day] = todayStr.split("-").map(Number);
@@ -715,7 +719,10 @@ export function calculateCreatineSaturation(
   const yesterdayStr = getLocalDateString(yesterdayDate);
   const takenYesterday = historySet.has(yesterdayStr);
 
-  // Baseline: 60% natural dietary baseline, or 100% if previously saturated
+  // If already saturated, dates prior to the earliest recorded date were saturated (100%), not unsupplemented (60%)
+  const sortedDates = Array.from(historySet).sort();
+  const earliestDateStr = sortedDates.length > 0 ? sortedDates[0] : todayStr;
+
   let saturation = startingMode === "already_saturated" ? 100 : 60;
 
   const simulationDays = 35;
@@ -727,7 +734,11 @@ export function calculateCreatineSaturation(
     if (historySet.has(dStr)) {
       saturation = Math.min(100, saturation + 1.45);
     } else {
-      saturation = Math.max(60, saturation - 1.0);
+      if (startingMode === "already_saturated" && dStr < earliestDateStr) {
+        saturation = 100;
+      } else {
+        saturation = Math.max(60, saturation - 1.0);
+      }
     }
   }
 
@@ -744,7 +755,11 @@ export function calculateCreatineSaturation(
       if (historySet.has(dStr)) {
         streak++;
       } else {
-        break;
+        if (startingMode === "already_saturated" && dStr < earliestDateStr && streak < 28) {
+          streak++;
+        } else {
+          break;
+        }
       }
     }
   }
@@ -756,11 +771,12 @@ export function calculateCreatineSaturation(
     const d = new Date(todayDate);
     d.setDate(d.getDate() - i);
     const dStr = getLocalDateString(d);
+    const isTaken = historySet.has(dStr) || (startingMode === "already_saturated" && dStr < earliestDateStr);
     daysLoggedPast14Days.push({
       date: dStr,
       dayName: daysOfWeek[d.getDay()],
       dayNumber: d.getDate(),
-      taken: historySet.has(dStr),
+      taken: isTaken,
       isToday: dStr === todayStr,
     });
   }
@@ -801,6 +817,61 @@ export function calculateCreatineSaturation(
     dailyWashoutOrGain: takenToday ? 1.45 : -1.0,
     daysToFullSaturation: daysToFull,
     daysLoggedPast14Days,
+  };
+}
+
+export function normalizeCreatineProfile(profile: UserProfile): { profile: UserProfile; modified: boolean } {
+  if (!profile.takesCreatine) {
+    return { profile, modified: false };
+  }
+
+  const todayStr = getLocalDateString();
+  let modified = false;
+  let history = profile.creatineHistory ? [...profile.creatineHistory] : [];
+  let startingMode = profile.creatineStartingMode;
+  let lastIntake = profile.lastCreatineIntake;
+
+  // 1. If lastCreatineIntake exists and is not in history, add it
+  if (lastIntake && !history.includes(lastIntake)) {
+    history.push(lastIntake);
+    modified = true;
+  }
+
+  // 2. Default startingMode to already_saturated for existing users with takesCreatine
+  if (!startingMode) {
+    startingMode = "already_saturated";
+    modified = true;
+  }
+
+  // 3. Backfill last 28 days if history is sparse (< 14 days) and startingMode is already_saturated
+  if (startingMode === "already_saturated" && history.length < 14) {
+    const [year, month, day] = todayStr.split("-").map(Number);
+    const todayDate = new Date(year, month - 1, day);
+    for (let i = 27; i >= 0; i--) {
+      const d = new Date(todayDate);
+      d.setDate(d.getDate() - i);
+      const dStr = getLocalDateString(d);
+      if (!history.includes(dStr)) {
+        history.push(dStr);
+      }
+    }
+    history.sort();
+    lastIntake = todayStr;
+    modified = true;
+  }
+
+  if (!modified) {
+    return { profile, modified: false };
+  }
+
+  return {
+    profile: {
+      ...profile,
+      creatineStartingMode: startingMode,
+      creatineHistory: history,
+      lastCreatineIntake: lastIntake,
+    },
+    modified: true,
   };
 }
 

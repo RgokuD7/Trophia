@@ -16,7 +16,7 @@ import RecipeAssistantModal from "./components/RecipeAssistantModal";
 import NutritionHub from "./components/NutritionHub";
 import Workouts, { getDayKeyFromDateStr } from "./components/Workouts";
 import MarkdownMessage from "./components/MarkdownMessage";
-import { getSuggestedMealTypeByTime, createTimestampForDate } from "./utils/fitnessUtils";
+import { getSuggestedMealTypeByTime, createTimestampForDate, normalizeCreatineProfile } from "./utils/fitnessUtils";
 
 // Import Firebase services
 import { subscribeToAuthChanges, logout } from "./services/authService";
@@ -395,7 +395,8 @@ ${exercisesList}`;
         if (cachedProfileStr) {
           try {
             const cachedProfile = JSON.parse(cachedProfileStr);
-            setProfile(cachedProfile);
+            const { profile: normCached } = normalizeCreatineProfile(cachedProfile);
+            setProfile(normCached);
           } catch (e) {
             console.warn("Could not parse cached profile:", e);
           }
@@ -424,10 +425,14 @@ ${exercisesList}`;
           ]);
 
           if (profileData) {
-            setProfile(profileData);
-            localStorage.setItem(`trophia_profile_${currentUser.uid}`, JSON.stringify(profileData));
+            const { profile: normProfile, modified } = normalizeCreatineProfile(profileData);
+            setProfile(normProfile);
+            localStorage.setItem(`trophia_profile_${currentUser.uid}`, JSON.stringify(normProfile));
             if (profileData.apiKey) {
               localStorage.setItem("trophia_api_key", profileData.apiKey);
+            }
+            if (modified) {
+              saveUserProfile(currentUser.uid, normProfile).catch(console.error);
             }
           } else if (!cachedProfileStr) {
             // First time user, profile will be set after Onboarding

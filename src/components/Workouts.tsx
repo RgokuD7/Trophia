@@ -1641,9 +1641,15 @@ export default function Workouts({
           </h2>
           <div className="flex items-center gap-1.5">
             {userProfile.takesCreatine && onNavigateToHydration && (() => {
+              const rawHistory = userProfile.creatineHistory || [];
+              const history = userProfile.lastCreatineIntake && !rawHistory.includes(userProfile.lastCreatineIntake)
+                ? [...rawHistory, userProfile.lastCreatineIntake].sort()
+                : rawHistory;
               const creatineData = calculateCreatineSaturation(
-                userProfile.creatineHistory || [],
-                userProfile.creatineStartingMode || "new"
+                history,
+                userProfile.creatineStartingMode || "already_saturated",
+                undefined,
+                userProfile.lastCreatineIntake
               );
               return (
                 <button
