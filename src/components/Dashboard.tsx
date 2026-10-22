@@ -227,7 +227,7 @@ export default function Dashboard({
 
           const creatineData = calculateCreatineSaturation(
             history,
-            profile.creatineStartingMode || "already_saturated",
+            profile.creatineStartingMode || "new",
             todayStr,
             profile.lastCreatineIntake
           );

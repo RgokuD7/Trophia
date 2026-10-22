@@ -41,7 +41,7 @@ export default function Hydration({
 
   const creatineData = calculateCreatineSaturation(
     creatineHistory,
-    profile?.creatineStartingMode || (profile?.takesCreatine ? "already_saturated" : "new"),
+    profile?.creatineStartingMode || "new",
     todayStr,
     profile?.lastCreatineIntake
   );

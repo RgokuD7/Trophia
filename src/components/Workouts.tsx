@@ -1647,7 +1647,7 @@ export default function Workouts({
                 : rawHistory;
               const creatineData = calculateCreatineSaturation(
                 history,
-                userProfile.creatineStartingMode || "already_saturated",
+                userProfile.creatineStartingMode || "new",
                 undefined,
                 userProfile.lastCreatineIntake
               );

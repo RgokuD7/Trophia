@@ -43,30 +43,7 @@ export default function CreatineTracker({
     ? [...rawHistory, profile.lastCreatineIntake].sort()
     : rawHistory;
 
-  const startingMode = profile?.creatineStartingMode || (profile?.takesCreatine ? "already_saturated" : "new");
-
-  // Ensure past consistency is restored if user already consumes creatine
-  React.useEffect(() => {
-    if (!profile || !onUpdateProfile) return;
-    if (profile.takesCreatine && startingMode === "already_saturated" && history.length < 14) {
-      const dates: string[] = [];
-      const [year, month, day] = todayStr.split("-").map(Number);
-      const todayDate = new Date(year, month - 1, day);
-      for (let i = 27; i >= 0; i--) {
-        const d = new Date(todayDate);
-        d.setDate(d.getDate() - i);
-        dates.push(getLocalDateString(d));
-      }
-      const merged = Array.from(new Set([...history, ...dates])).sort();
-      onUpdateProfile({
-        ...profile,
-        takesCreatine: true,
-        creatineStartingMode: "already_saturated",
-        creatineHistory: merged,
-        lastCreatineIntake: todayStr,
-      });
-    }
-  }, [profile?.takesCreatine]);
+  const startingMode = profile?.creatineStartingMode || "new";
 
   const saturationData = calculateCreatineSaturation(
     history,
@@ -106,27 +83,40 @@ export default function CreatineTracker({
 
   const handleSetStartingMode = (mode: "new" | "already_saturated") => {
     if (!profile || !onUpdateProfile) return;
-
-    // If already saturated and history is empty, populate the last 28 days
-    let newHistory = profile.creatineHistory || [];
-    if (mode === "already_saturated" && newHistory.length < 15) {
-      const dates: string[] = [];
-      const [year, month, day] = todayStr.split("-").map(Number);
-      const todayDate = new Date(year, month - 1, day);
-      for (let i = 27; i >= 0; i--) {
-        const d = new Date(todayDate);
-        d.setDate(d.getDate() - i);
-        dates.push(getLocalDateString(d));
-      }
-      newHistory = Array.from(new Set([...newHistory, ...dates])).sort();
-    }
-
     onUpdateProfile({
       ...profile,
       takesCreatine: true,
       creatineStartingMode: mode,
-      creatineHistory: newHistory,
-      lastCreatineIntake: mode === "already_saturated" ? todayStr : profile.lastCreatineIntake,
+    });
+    setShowSetup(false);
+  };
+
+  const handleFixToTwoDays = () => {
+    if (!profile || !onUpdateProfile) return;
+    const [year, month, day] = todayStr.split("-").map(Number);
+    const todayDate = new Date(year, month - 1, day);
+    const yesterdayDate = new Date(todayDate);
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterdayStr = getLocalDateString(yesterdayDate);
+    const twoDays = [yesterdayStr, todayStr];
+    onUpdateProfile({
+      ...profile,
+      takesCreatine: true,
+      creatineHistory: twoDays,
+      lastCreatineIntake: todayStr,
+      creatineStartingMode: "new",
+    });
+    setShowSetup(false);
+  };
+
+  const handleResetHistory = () => {
+    if (!profile || !onUpdateProfile) return;
+    onUpdateProfile({
+      ...profile,
+      takesCreatine: true,
+      creatineHistory: [],
+      lastCreatineIntake: undefined,
+      creatineStartingMode: "new",
     });
     setShowSetup(false);
   };
@@ -247,9 +237,43 @@ export default function CreatineTracker({
           </span>
         </div>
 
-        <div className="grid grid-cols-7 gap-1.5 pt-1">
-          {saturationData.daysLoggedPast14Days.slice(7).map((dayItem) => {
-            return (
+        {/* 14 days in 2 clean rows */}
+        <div className="space-y-1.5 pt-1">
+          {/* Week -1 (days 13 to 7 ago) */}
+          <div className="grid grid-cols-7 gap-1.5">
+            {saturationData.daysLoggedPast14Days.slice(0, 7).map((dayItem) => (
+              <button
+                key={dayItem.date}
+                type="button"
+                onClick={() => handleToggleDate(dayItem.date)}
+                className={`py-1.5 px-1 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer border ${
+                  dayItem.taken
+                    ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400 shadow-sm shadow-emerald-500/10"
+                    : "bg-gray-50 dark:bg-white/[0.02] border-gray-200 dark:border-white/5 text-gray-500 hover:border-gray-400"
+                }`}
+              >
+                <span className="text-[8px] uppercase font-bold text-gray-500">
+                  {dayItem.dayName}
+                </span>
+                <span className="text-[11px] font-black font-mono">
+                  {dayItem.dayNumber}
+                </span>
+                <div
+                  className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8.5px] ${
+                    dayItem.taken
+                      ? "bg-emerald-500 text-black font-black"
+                      : "bg-black/20 text-gray-600 border border-white/5"
+                  }`}
+                >
+                  {dayItem.taken ? "✓" : "·"}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* Current week (days 6 ago to today) */}
+          <div className="grid grid-cols-7 gap-1.5">
+            {saturationData.daysLoggedPast14Days.slice(7).map((dayItem) => (
               <button
                 key={dayItem.date}
                 type="button"
@@ -278,8 +302,8 @@ export default function CreatineTracker({
                   {dayItem.taken ? "✓" : "·"}
                 </div>
               </button>
-            );
-          })}
+            ))}
+          </div>
         </div>
 
         {/* Days count summary */}
@@ -396,24 +420,33 @@ export default function CreatineTracker({
               className="pt-2 space-y-2 text-[11px] text-gray-400 border-t border-gray-100 dark:border-gray-800/80"
             >
               <p>
-                Si ya llevas semanas consumiendo 3-5g diarios, tus depósitos ya
-                están al 100%. Puedes sincronizar tu estado de inmediato:
+                Configura tu punto de partida o ajusta tu historial de tomas:
               </p>
-              <div className="flex gap-2 pt-1">
+              <div className="flex flex-col gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={() => handleSetStartingMode("already_saturated")}
-                  className="flex-1 py-2 px-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[10px] rounded-xl transition cursor-pointer"
+                  onClick={handleFixToTwoDays}
+                  className="w-full py-2.5 px-3 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold text-[10px] rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  ⚡ Ya estoy 100% saturado (Sincronizar)
+                  <Zap className="h-3.5 w-3.5" />
+                  <span>Ajustar a mis 2 días reales (ayer y hoy)</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleSetStartingMode("new")}
-                  className="py-2 px-3 bg-gray-100 dark:bg-white/5 hover:bg-white/10 text-gray-700 dark:text-gray-300 font-bold text-[10px] rounded-xl transition cursor-pointer"
-                >
-                  Empezar desde 0
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSetStartingMode("already_saturated")}
+                    className="flex-1 py-2 px-3 bg-white/10 hover:bg-white/15 text-white font-bold text-[10px] rounded-xl transition cursor-pointer"
+                  >
+                    ⚡ Llevo semanas (100% saturado)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResetHistory}
+                    className="flex-1 py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 font-bold text-[10px] rounded-xl transition cursor-pointer"
+                  >
+                    Empezar de 0
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}
