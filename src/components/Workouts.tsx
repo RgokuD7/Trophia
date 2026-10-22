@@ -28,6 +28,7 @@ import { SPORTS_METS, getLocalDateString, formatFriendlyDate, isSameDay, calcula
 import WorkoutsOnboarding from "./WorkoutsOnboarding";
 import WorkoutsRoutineManager, { DAY_KEYS, DAY_LABEL_MAP } from "./WorkoutsRoutineManager";
 import ExerciseAiAdvisorModal from "./ExerciseAiAdvisorModal";
+import MuscleRecoveryVisualizer, { MuscleGroupId } from "./MuscleRecoveryVisualizer";
 
 export interface ExerciseGuideViewData {
   name: string;
@@ -136,6 +137,7 @@ export default function Workouts({
   onNavigateToHydration,
 }: WorkoutsProps) {
   const [activeTab, setActiveTab] = useState<"routine" | "routines" | "recovery">("routine");
+  const [selectedRecoveryMuscle, setSelectedRecoveryMuscle] = useState<MuscleGroupId>("chest");
   const initialTodayStr = getLocalDateString();
   const [selectedDay, setSelectedDay] = useState<string>(initialTodayStr);
   const [activeSession, setActiveSession] = useState<WorkoutSession | null>(() => {
@@ -732,8 +734,15 @@ export default function Workouts({
 
   // Handle active muscle recovery state estimation dynamically based on history
   useEffect(() => {
-    // Basic simulation: each workout session reduces recovery for affected muscles by 40%
-    // and each day passed without workouts recovers them by 25%
+    // Dynamic physiological recovery model (supercompensación en 48-72h):
+    // Workouts create fatigue based on how recently they occurred:
+    // - Today (0 days ago): -55% primary, -25% secondary
+    // - Yesterday (1 day ago): -30% primary, -15% secondary (síntesis activa)
+    // - 2 days ago: -12% primary, -6% secondary (casi recuperado)
+    // - 3+ days ago: 0% fatigue (100% regenerado)
+    const [tY, tM, tD] = initialTodayStr.split("-").map(Number);
+    const todayTs = new Date(tY, tM - 1, tD).getTime();
+
     let calculatedChest = 100;
     let calculatedBack = 100;
     let calculatedLegs = 100;
@@ -742,22 +751,71 @@ export default function Workouts({
     let calculatedCore = 100;
 
     workoutHistory.forEach(session => {
-      if (session.completed) {
-        const nameLower = session.name.toLowerCase();
-        if (nameLower.includes("pecho") || nameLower.includes("push") || nameLower.includes("empuje")) {
-          calculatedChest = Math.max(10, calculatedChest - 45);
-          calculatedShoulders = Math.max(15, calculatedShoulders - 25);
-          calculatedArms = Math.max(20, calculatedArms - 20);
+      const isCompleted = session.completed;
+      const hasCompletedSets = (session.exercises || []).some(ex => (ex.completedSets || []).some(s => s.completed));
+      
+      if (isCompleted || hasCompletedSets) {
+        const [sY, sM, sD] = session.date.split("-").map(Number);
+        const sessionTs = new Date(sY, sM - 1, sD).getTime();
+        const daysAgo = Math.max(0, Math.floor((todayTs - sessionTs) / (1000 * 60 * 60 * 24)));
+
+        if (daysAgo >= 3) return; // Completely recovered after 72h!
+
+        const fatigueFactor = daysAgo === 0 ? 1.0 : daysAgo === 1 ? 0.55 : 0.22;
+
+        const nameLower = (session.name || "").toLowerCase();
+        const allExNames = (session.exercises || []).map(e => (e.name || "").toLowerCase()).join(" ");
+        const textToAnalyze = `${nameLower} ${allExNames}`;
+
+        if (
+          textToAnalyze.includes("pecho") || textToAnalyze.includes("push") || 
+          textToAnalyze.includes("empuje") || textToAnalyze.includes("press") || 
+          textToAnalyze.includes("aperturas") || textToAnalyze.includes("fondos")
+        ) {
+          calculatedChest = Math.max(10, Math.round(calculatedChest - 55 * fatigueFactor));
+          calculatedShoulders = Math.max(15, Math.round(calculatedShoulders - 25 * fatigueFactor));
+          calculatedArms = Math.max(20, Math.round(calculatedArms - 20 * fatigueFactor));
         }
-        if (nameLower.includes("espalda") || nameLower.includes("pull") || nameLower.includes("jalón")) {
-          calculatedBack = Math.max(10, calculatedBack - 45);
-          calculatedArms = Math.max(20, calculatedArms - 30);
+
+        if (
+          textToAnalyze.includes("espalda") || textToAnalyze.includes("pull") || 
+          textToAnalyze.includes("jalón") || textToAnalyze.includes("remo") || 
+          textToAnalyze.includes("dominada") || textToAnalyze.includes("peso muerto")
+        ) {
+          calculatedBack = Math.max(10, Math.round(calculatedBack - 55 * fatigueFactor));
+          calculatedArms = Math.max(20, Math.round(calculatedArms - 28 * fatigueFactor));
         }
-        if (nameLower.includes("pierna") || nameLower.includes("leg") || nameLower.includes("squat")) {
-          calculatedLegs = Math.max(10, calculatedLegs - 50);
+
+        if (
+          textToAnalyze.includes("pierna") || textToAnalyze.includes("leg") || 
+          textToAnalyze.includes("squat") || textToAnalyze.includes("sentadilla") || 
+          textToAnalyze.includes("prensa") || textToAnalyze.includes("zancada")
+        ) {
+          calculatedLegs = Math.max(10, Math.round(calculatedLegs - 60 * fatigueFactor));
         }
-        if (nameLower.includes("core") || nameLower.includes("abdomen") || nameLower.includes("hiit")) {
-          calculatedCore = Math.max(20, calculatedCore - 35);
+
+        if (
+          textToAnalyze.includes("hombro") || textToAnalyze.includes("militar") || 
+          textToAnalyze.includes("elevaciones") || textToAnalyze.includes("deltoid")
+        ) {
+          calculatedShoulders = Math.max(10, Math.round(calculatedShoulders - 50 * fatigueFactor));
+          calculatedArms = Math.max(20, Math.round(calculatedArms - 15 * fatigueFactor));
+        }
+
+        if (
+          textToAnalyze.includes("brazo") || textToAnalyze.includes("bíceps") || 
+          textToAnalyze.includes("biceps") || textToAnalyze.includes("tríceps") || 
+          textToAnalyze.includes("triceps") || textToAnalyze.includes("curl")
+        ) {
+          calculatedArms = Math.max(15, Math.round(calculatedArms - 45 * fatigueFactor));
+        }
+
+        if (
+          textToAnalyze.includes("core") || textToAnalyze.includes("abdomen") || 
+          textToAnalyze.includes("plank") || textToAnalyze.includes("crunch") || 
+          textToAnalyze.includes("hiit")
+        ) {
+          calculatedCore = Math.max(20, Math.round(calculatedCore - 35 * fatigueFactor));
         }
       }
     });
@@ -771,7 +829,7 @@ export default function Workouts({
       core: calculatedCore,
       lastUpdated: new Date().toISOString()
     });
-  }, [workoutHistory]);
+  }, [workoutHistory, initialTodayStr]);
 
   // Timer Tick Logic (timestamp-driven, persists through tab backgrounding & lockscreen)
   useEffect(() => {
@@ -2974,45 +3032,69 @@ export default function Workouts({
       )}
 
       {activeTab === "recovery" && (
-        <div className="px-6 py-5 space-y-5">
-          <p className="text-xs text-gray-500 dark:text-gray-400 leading-normal">
-            Porcentaje de recuperación muscular estimado basado en el historial de ejercicios completados. Deja descansar los músculos si están por debajo de 35% de recuperación.
-          </p>
+        <div className="px-6 py-5 space-y-6">
+          {/* Biomechanical Anatomical 3D Heatmap Visualizer */}
+          <MuscleRecoveryVisualizer
+            recovery={recovery}
+            selectedMuscle={selectedRecoveryMuscle}
+            onSelectMuscle={(m) => setSelectedRecoveryMuscle(m)}
+          />
 
-          <div className="grid grid-cols-2 gap-4">
-            {[
-              { id: "chest", label: "Pecho / Empuje", value: recovery.chest, color: "from-blue-500 to-indigo-500" },
-              { id: "back", label: "Espalda / Tracción", value: recovery.back, color: "from-emerald-500 to-teal-500" },
-              { id: "legs", label: "Piernas (Glúteos/Cuádriceps)", value: recovery.legs, color: "from-orange-500 to-amber-500" },
-              { id: "shoulders", label: "Hombros", value: recovery.shoulders, color: "from-cyan-500 to-blue-500" },
-              { id: "arms", label: "Brazos (Bíceps/Tríceps)", value: recovery.arms, color: "from-purple-500 to-pink-500" },
-              { id: "core", label: "Core / Abdomen", value: recovery.core, color: "from-pink-500 to-rose-500" }
-            ].map((muscle) => (
-              <div 
-                key={muscle.id}
-                className="bg-white dark:bg-[#161824] p-4 rounded-xl border border-gray-200 dark:border-gray-800 space-y-2.5 shadow-md"
-              >
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-bold text-gray-700 dark:text-gray-300 truncate">{muscle.label}</span>
-                  <span className={`font-black ${
-                    muscle.value < 40 ? "text-rose-450 dark:text-rose-400" : muscle.value < 75 ? "text-amber-500 dark:text-amber-400" : "text-emerald-500 dark:text-emerald-400"
-                  }`}>{muscle.value}%</span>
-                </div>
+          {/* Interactive Muscle Cards Grid */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                Desglose Anatómico por Grupo
+              </span>
+              <span className="text-[10px] text-gray-400 font-mono">
+                Toca una tarjeta para enfocar en el cuerpo
+              </span>
+            </div>
 
-                {/* Progress bar */}
-                <div className="h-2 w-full bg-gray-100 dark:bg-gray-900 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${muscle.value}%` }}
-                    className={`h-full bg-gradient-to-r ${muscle.color}`}
-                  />
-                </div>
-                
-                <span className="text-[9px] text-gray-450 dark:text-gray-500 block">
-                  {muscle.value < 40 ? "⚠️ Sobrecargado. Priorizar descanso hoy" : muscle.value < 75 ? "🔋 Recuperación intermedia" : "✅ Listo para entrenar pesado"}
-                </span>
-              </div>
-            ))}
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { id: "chest" as MuscleGroupId, label: "Pecho / Empuje", value: recovery.chest, color: "from-blue-500 to-indigo-500" },
+                { id: "back" as MuscleGroupId, label: "Espalda / Tracción", value: recovery.back, color: "from-emerald-500 to-teal-500" },
+                { id: "legs" as MuscleGroupId, label: "Piernas (Glúteos/Cuádriceps)", value: recovery.legs, color: "from-orange-500 to-amber-500" },
+                { id: "shoulders" as MuscleGroupId, label: "Hombros", value: recovery.shoulders, color: "from-cyan-500 to-blue-500" },
+                { id: "arms" as MuscleGroupId, label: "Brazos (Bíceps/Tríceps)", value: recovery.arms, color: "from-purple-500 to-pink-500" },
+                { id: "core" as MuscleGroupId, label: "Core / Abdomen", value: recovery.core, color: "from-pink-500 to-rose-500" }
+              ].map((muscle) => {
+                const isSelected = selectedRecoveryMuscle === muscle.id;
+                return (
+                  <button 
+                    key={muscle.id}
+                    type="button"
+                    onClick={() => setSelectedRecoveryMuscle(muscle.id)}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden ${
+                      isSelected
+                        ? "bg-white/[0.08] dark:bg-white/[0.06] border-emerald-500/60 ring-2 ring-emerald-500/30 shadow-lg"
+                        : "bg-white dark:bg-[#161824] border-gray-200 dark:border-gray-800 hover:border-gray-400 dark:hover:border-gray-700 shadow-md"
+                    }`}
+                  >
+                    <div className="flex justify-between items-center text-xs mb-1.5">
+                      <span className="font-bold text-gray-900 dark:text-gray-200 truncate">{muscle.label}</span>
+                      <span className={`font-black font-mono ${
+                        muscle.value < 40 ? "text-rose-500 dark:text-rose-400" : muscle.value < 75 ? "text-amber-500 dark:text-amber-400" : "text-emerald-500 dark:text-emerald-400"
+                      }`}>{muscle.value}%</span>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-900 rounded-full overflow-hidden mb-2">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${muscle.value}%` }}
+                        className={`h-full bg-gradient-to-r ${muscle.color}`}
+                      />
+                    </div>
+                    
+                    <span className="text-[8.5px] text-gray-400 dark:text-gray-500 block leading-tight">
+                      {muscle.value < 40 ? "🔥 Sobrecargado" : muscle.value < 75 ? "⚡ En recuperación" : "🔋 Listo para entrenar"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
