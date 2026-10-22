@@ -136,19 +136,44 @@ export default function App() {
         : null
     ].filter(Boolean).join("\n");
 
-    // 2. Nutrition today
+    // 2. Exercise expenditure today (Gym, sports, and active routes)
+    const activeRoutesToday = profile.activeRoutesToday || [];
+    const todayActiveRoutes = activeRoutesToday.filter(r => isSameDay(r.date, todayStr));
+    const routeCaloriesBurned = todayActiveRoutes.reduce((sum, activeRoute) => {
+      const routeObj = (profile.frequentRoutes || []).find(r => r.id === activeRoute.routeId);
+      return sum + (routeObj ? routeObj.caloriesBurned : 0);
+    }, 0);
+
+    const todaySession = workoutHistory.find(w => w.date === todayStr);
+    const workoutCaloriesBurned = todaySession
+      ? (todaySession.completed && todaySession.caloriesBurned !== undefined && todaySession.caloriesBurned > 0
+          ? todaySession.caloriesBurned
+          : (todaySession.exercises || []).reduce((sum, ex) => {
+              const completedSetsCount = (ex.completedSets || []).filter(s => s.completed).length;
+              return sum + (completedSetsCount * (ex.caloriesBurnedPerSet || 5));
+            }, 0))
+      : 0;
+
+    const loggedSportsToday = profile.loggedSportsToday || [];
+    const todaySports = loggedSportsToday.filter(s => isSameDay(s.date, todayStr));
+    const sportsCaloriesBurned = todaySports.reduce((sum, sport) => sum + (sport.caloriesBurned || 0), 0);
+
+    const totalBurnedCalories = routeCaloriesBurned + workoutCaloriesBurned + sportsCaloriesBurned;
+
+    // 3. Nutrition today
     const todayMeals = loggedMeals.filter(m => isSameDay(m.timestamp, todayStr));
     const totalCal = todayMeals.reduce((s, m) => s + m.calories, 0);
     const totalP = todayMeals.reduce((s, m) => s + m.protein, 0);
     const totalC = todayMeals.reduce((s, m) => s + m.carbs, 0);
     const totalF = todayMeals.reduce((s, m) => s + m.fat, 0);
 
-    const targetCal = profile.dailyCalorieTarget || 2000;
+    const baseCalTarget = profile.dailyCalorieTarget || 2000;
+    const adjustedCalTarget = baseCalTarget + totalBurnedCalories;
     const targetP = profile.proteinTarget || 140;
     const targetC = profile.carbsTarget || 230;
     const targetF = profile.fatTarget || 65;
 
-    const remCal = targetCal - totalCal;
+    const remCal = adjustedCalTarget - totalCal;
     const remP = Math.max(0, targetP - totalP);
     const remC = Math.max(0, targetC - totalC);
     const remF = Math.max(0, targetF - totalF);
@@ -157,13 +182,23 @@ export default function App() {
       ? todayMeals.map(m => `  * [${m.type}] ${m.name} (${m.calories} kcal, P:${m.protein}g, C:${m.carbs}g, G:${m.fat}g${m.servingSize ? `, porción: ${m.servingSize}` : ""})`).join("\n")
       : "  * Aún no ha registrado comidas hoy.";
 
-    const nutritionSection = `ESTADO NUTRICIONAL DE HOY (${todayStr}):
-- Calorías: ${totalCal} / ${targetCal} kcal (${remCal >= 0 ? `Quedan ${remCal} kcal` : `Superado por ${Math.abs(remCal)} kcal`})
+    const nutritionSection = `ESTADO NUTRICIONAL Y BALANCE ENERGÉTICO DE HOY (${todayStr}):
+- Meta Calórica Base (en reposo): ${baseCalTarget} kcal
+- Gasto por Ejercicio / Deporte Hoy: +${totalBurnedCalories} kcal ${totalBurnedCalories > 0 ? `(🔥 Rutina: ~${workoutCaloriesBurned} kcal, Deportes/Cardio: ~${sportsCaloriesBurned} kcal, Rutas: ~${routeCaloriesBurned} kcal)` : "(Sin ejercicio registrado hoy aún)"}
+- Presupuesto Calórico TOTAL Disponible Hoy (Rango ampliado por ejercicio): ${adjustedCalTarget} kcal
+- Calorías Consumidas Hoy: ${totalCal} kcal
+- Calorías Restantes Disponibles: ${remCal >= 0 ? `${remCal} kcal disponibles` : `Superado por ${Math.abs(remCal)} kcal`}
 - Proteínas: ${Math.round(totalP)} / ${targetP}g (${remP > 0 ? `Faltan ${Math.round(remP)}g` : "Meta de proteína cumplida"})
 - Carbohidratos: ${Math.round(totalC)} / ${targetC}g (${remC > 0 ? `Faltan ${Math.round(remC)}g` : "Meta de carbos cumplida"})
 - Grasas: ${Math.round(totalF)} / ${targetF}g (${remF > 0 ? `Faltan ${Math.round(remF)}g` : "Meta de grasas cumplida"})
 - Comidas consumidas hoy:
-${mealsListStr}`;
+${mealsListStr}
+
+DIRECTRIZ VITAL PARA EL COACH SOBRE EL RANGO DE CALORÍAS POR EJERCICIO:
+${totalBurnedCalories > 0 
+  ? `El usuario ha realizado actividad física y ha quemado ${totalBurnedCalories} kcal hoy. Por lo tanto, su presupuesto calórico para hoy NO ES de ${baseCalTarget} kcal, sino de ${adjustedCalTarget} kcal (calorías base + calorías quemadas en ejercicio). Al evaluar si puede comer más o recomendar comidas/recetas, utiliza sus ${remCal} kcal restantes disponibles. NUNCA le digas que ha sobrepasado su meta o que está al límite si aún tiene margen dentro de esas ${remCal} kcal ampliadas por su ejercicio.`
+  : `El usuario aún no ha registrado gasto calórico por ejercicio hoy. Su presupuesto es la meta base de ${baseCalTarget} kcal.`
+}`;
 
     // 3. Pantry
     const pantryItems = profile.pantry || [];
@@ -175,7 +210,6 @@ ${mealsListStr}`;
 ${pantryStr}`;
 
     // 4. Workout Today
-    const todaySession = workoutHistory.find(w => w.date === todayStr);
     const scheduledRoutine = profile.weeklyRoutinePlan?.routines?.find(r => r.assignedDay === dayKey);
 
     let workoutSection = "";
@@ -706,6 +740,7 @@ ${exercisesList}`;
                   profile={profile}
                   userId={user.uid}
                   loggedMeals={loggedMeals}
+                  workoutHistory={workoutHistory}
                   onAddMeal={handleAddMeal}
                   onUpdateMeal={handleUpdateMeal}
                   onDeleteMeal={handleDeleteMeal}

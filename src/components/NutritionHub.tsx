@@ -5,7 +5,7 @@ import {
   ChefHat, Flame, Zap, ChevronLeft, ChevronRight, MessageSquare, Lightbulb, Sparkles, AlertCircle, Send, Utensils, Package, Pencil,
   Users, Copy, LogOut, CheckCheck, CheckCircle2, Globe, Eye
 } from "lucide-react";
-import { UserProfile, LoggedMeal, MealType, CustomFood, HouseholdGroup, PantryItem, SavedRecipe } from "../types";
+import { UserProfile, LoggedMeal, MealType, CustomFood, HouseholdGroup, PantryItem, SavedRecipe, WorkoutSession } from "../types";
 import { 
   getCustomFoods, addCustomFood, deleteCustomFood, updateCustomFood,
   getUserRecipes, getPublicRecipes, saveUserRecipe, deleteUserRecipe, toggleRecipePublic,
@@ -21,6 +21,7 @@ interface NutritionHubProps {
   profile: UserProfile;
   userId: string;
   loggedMeals: LoggedMeal[];
+  workoutHistory?: WorkoutSession[];
   onAddMeal: (meal: Omit<LoggedMeal, "id" | "timestamp">) => void;
   onUpdateMeal?: (meal: LoggedMeal) => void;
   onDeleteMeal: (id: string) => void;
@@ -74,6 +75,7 @@ export default function NutritionHub({
   profile,
   userId,
   loggedMeals,
+  workoutHistory = [],
   onAddMeal,
   onUpdateMeal,
   onDeleteMeal,
@@ -430,8 +432,31 @@ export default function NutritionHub({
   const bankAdjustment = (bankPlan?.isActive && isToday && selectedDate !== bankPlan.eventDate) ? bankPlan.dailyAdjustment : 0;
   const isBankEventDay = bankPlan?.isActive && selectedDate === bankPlan.eventDate;
   
+  // Calculate exercise expenditure on selectedDate (gym workout, sports, routes)
+  const selectedWorkout = (workoutHistory || []).find(w => isSameDay(w.date, selectedDate));
+  const workoutCaloriesBurned = selectedWorkout
+    ? (selectedWorkout.completed && selectedWorkout.caloriesBurned !== undefined && selectedWorkout.caloriesBurned > 0
+        ? selectedWorkout.caloriesBurned
+        : (selectedWorkout.exercises || []).reduce((sum, ex) => {
+            const completedSetsCount = (ex.completedSets || []).filter(s => s.completed).length;
+            return sum + (completedSetsCount * (ex.caloriesBurnedPerSet || 5));
+          }, 0))
+    : 0;
+
+  const selectedSports = (profile.loggedSportsToday || []).filter(s => isSameDay(s.date, selectedDate));
+  const sportsCaloriesBurned = selectedSports.reduce((sum, sport) => sum + (sport.caloriesBurned || 0), 0);
+
+  const selectedRoutes = (profile.activeRoutesToday || []).filter(r => isSameDay(r.date, selectedDate));
+  const routeCaloriesBurned = selectedRoutes.reduce((sum, activeRoute) => {
+    const routeObj = (profile.frequentRoutes || []).find(r => r.id === activeRoute.routeId);
+    return sum + (routeObj ? routeObj.caloriesBurned : 0);
+  }, 0);
+
+  const dayBurnedCalories = workoutCaloriesBurned + sportsCaloriesBurned + routeCaloriesBurned;
+
   const baseCal = profile.dailyCalorieTarget || 2000;
-  const adjustedCal = isBankEventDay ? baseCal + (bankPlan?.extraCaloriesTarget || 0) : baseCal - bankAdjustment;
+  const bankAdjustedCal = isBankEventDay ? baseCal + (bankPlan?.extraCaloriesTarget || 0) : baseCal - bankAdjustment;
+  const adjustedCal = bankAdjustedCal + dayBurnedCalories;
   
   const calPercent = adjustedCal > 0 ? Math.min(100, (totalCal / adjustedCal) * 100) : 0;
   const pTarget = profile.proteinTarget || 140;
@@ -2580,6 +2605,20 @@ export default function NutritionHub({
           dayTarget = baseCal - bankPlan.dailyAdjustment;
         }
       }
+      // Add burned calories from workout, sports and routes for this day
+      const dWorkout = (workoutHistory || []).find(w => isSameDay(w.date, ds));
+      const dWorkoutCal = dWorkout
+        ? (dWorkout.completed && dWorkout.caloriesBurned !== undefined && dWorkout.caloriesBurned > 0
+            ? dWorkout.caloriesBurned
+            : (dWorkout.exercises || []).reduce((s, ex) => s + ((ex.completedSets || []).filter(st => st.completed).length * (ex.caloriesBurnedPerSet || 5)), 0))
+        : 0;
+      const dSportsCal = (profile.loggedSportsToday || []).filter(s => isSameDay(s.date, ds)).reduce((sum, s) => sum + (s.caloriesBurned || 0), 0);
+      const dRouteCal = (profile.activeRoutesToday || []).filter(r => isSameDay(r.date, ds)).reduce((sum, activeRoute) => {
+        const routeObj = (profile.frequentRoutes || []).find(r => r.id === activeRoute.routeId);
+        return sum + (routeObj ? routeObj.caloriesBurned : 0);
+      }, 0);
+      dayTarget += (dWorkoutCal + dSportsCal + dRouteCal);
+
       const dayConsumed = loggedMeals.filter(m => isSameDay(m.timestamp, ds)).reduce((s, m) => s + m.calories, 0);
       weeklySavedCal += (dayTarget - dayConsumed);
     }
@@ -2658,6 +2697,19 @@ export default function NutritionHub({
                   dayTarget = baseCal - bankPlan.dailyAdjustment;
                 }
               }
+              const dWorkout = (workoutHistory || []).find(w => isSameDay(w.date, ds));
+              const dWorkoutCal = dWorkout
+                ? (dWorkout.completed && dWorkout.caloriesBurned !== undefined && dWorkout.caloriesBurned > 0
+                    ? dWorkout.caloriesBurned
+                    : (dWorkout.exercises || []).reduce((s, ex) => s + ((ex.completedSets || []).filter(st => st.completed).length * (ex.caloriesBurnedPerSet || 5)), 0))
+                : 0;
+              const dSportsCal = (profile.loggedSportsToday || []).filter(s => isSameDay(s.date, ds)).reduce((sum, s) => sum + (s.caloriesBurned || 0), 0);
+              const dRouteCal = (profile.activeRoutesToday || []).filter(r => isSameDay(r.date, ds)).reduce((sum, activeRoute) => {
+                const routeObj = (profile.frequentRoutes || []).find(r => r.id === activeRoute.routeId);
+                return sum + (routeObj ? routeObj.caloriesBurned : 0);
+              }, 0);
+              dayTarget += (dWorkoutCal + dSportsCal + dRouteCal);
+
               const dayConsumed = loggedMeals.filter(m => isSameDay(m.timestamp, ds)).reduce((s, m) => s + m.calories, 0);
               const status = getDayComplianceStatus(ds, dayConsumed, dayTarget);
 
@@ -2779,6 +2831,12 @@ export default function NutritionHub({
             
             {bankAdjustment > 0 && (
               <p className="text-[8px] text-amber-400/60 font-bold uppercase tracking-wider pt-0.5">⚡ Ajuste Banco: -{bankAdjustment} Kcal hoy</p>
+            )}
+            {dayBurnedCalories > 0 && (
+              <p className="text-[8.5px] text-emerald-400 font-bold uppercase tracking-wider pt-0.5 flex items-center gap-1">
+                <Flame className="h-3 w-3 text-orange-400 shrink-0" />
+                +{dayBurnedCalories} kcal por ejercicio (Meta: {bankAdjustedCal} + {dayBurnedCalories} = {adjustedCal} kcal)
+              </p>
             )}
           </div>
         </div>

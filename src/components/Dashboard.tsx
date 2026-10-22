@@ -116,12 +116,12 @@ export default function Dashboard({
     return sum + (routeObj ? routeObj.caloriesBurned : 0);
   }, 0);
 
-  // If there's a workout completed today, let's also sum its calories!
-  const workoutCaloriesBurned = todaySession && todaySession.completed
-    ? (todaySession.caloriesBurned !== undefined && todaySession.caloriesBurned > 0
+  // If there's a workout session today, let's sum its calories (completed workout or completed sets in progress)
+  const workoutCaloriesBurned = todaySession
+    ? (todaySession.completed && todaySession.caloriesBurned !== undefined && todaySession.caloriesBurned > 0
         ? todaySession.caloriesBurned
-        : todaySession.exercises.reduce((sum, ex) => {
-            const completedSetsCount = ex.completedSets.filter(s => s.completed).length;
+        : (todaySession.exercises || []).reduce((sum, ex) => {
+            const completedSetsCount = (ex.completedSets || []).filter(s => s.completed).length;
             return sum + (completedSetsCount * (ex.caloriesBurnedPerSet || 5));
           }, 0))
     : 0;

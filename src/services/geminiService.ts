@@ -1629,6 +1629,8 @@ Si tu respuesta propone una comida, colación, batido, merienda, pre-entreno, po
 - "ingredients": lista de ingredientes con cantidades (ej: ["1 plátano mediano (~100g)", "30g proteína whey", "200ml agua o leche"])
 - "instructions": lista de pasos claros de preparación (ej: ["Colocar el plátano y la proteína en la licuadora", "Licuar a potencia media durante 30 segundos", "Beber 20 minutos antes de entrenar"])
 Si tu respuesta NO propone ninguna comida o receta concreta (por ejemplo, consultas de rutinas, motivación, dudas conceptuales), asigna "suggestedAction": null.
+8. Gasto calórico y rango de calorías por ejercicio:
+Si el usuario ha realizado ejercicio, rutinas o deportes hoy (revisa en la información de contexto 'ESTADO NUTRICIONAL Y BALANCE ENERGÉTICO' y 'DIRECTRIZ VITAL PARA EL COACH SOBRE EL RANGO DE CALORÍAS POR EJERCICIO'), su gasto calórico por actividad física se suma a su meta base, ampliando su presupuesto calórico disponible de hoy. NUNCA le digas que ha alcanzado o superado su límite si el gasto calórico adicional le deja calorías restantes disponibles. Reconoce su esfuerzo físico y utiliza el presupuesto total ampliado (Meta Base + Calorías quemadas) para orientarlo sobre cuánto más puede o debe comer.
 
 ${context ? `INFORMACIÓN DEL USUARIO Y ESTADO EN TIEMPO REAL:\n${context}` : ""}
 ${conversationContext}
