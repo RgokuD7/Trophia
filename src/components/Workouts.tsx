@@ -28,7 +28,7 @@ import { SPORTS_METS, getLocalDateString, formatFriendlyDate, isSameDay, calcula
 import WorkoutsOnboarding from "./WorkoutsOnboarding";
 import WorkoutsRoutineManager, { DAY_KEYS, DAY_LABEL_MAP } from "./WorkoutsRoutineManager";
 import ExerciseAiAdvisorModal from "./ExerciseAiAdvisorModal";
-import MuscleRecoveryVisualizer, { MuscleGroupId } from "./MuscleRecoveryVisualizer";
+import MuscleRecoveryVisualizer, { MuscleGroupId, getMuscleValue } from "./MuscleRecoveryVisualizer";
 
 export interface ExerciseGuideViewData {
   name: string;
@@ -639,14 +639,22 @@ export default function Workouts({
     }
   };
 
-  // Muscle recovery state
+  // Muscle recovery state with granular breakdown
   const [recovery, setRecovery] = useState<MuscleRecovery>({
-    chest: 85,
-    back: 90,
-    legs: 60,
-    shoulders: 75,
-    arms: 80,
-    core: 95,
+    chest: 100,
+    back: 100,
+    traps: 100,
+    shoulders: 100,
+    biceps: 100,
+    triceps: 100,
+    core: 100,
+    lowerBack: 100,
+    quads: 100,
+    hamstrings: 100,
+    glutes: 100,
+    calves: 100,
+    arms: 100,
+    legs: 100,
     lastUpdated: new Date().toISOString()
   });
 
@@ -745,10 +753,16 @@ export default function Workouts({
 
     let calculatedChest = 100;
     let calculatedBack = 100;
-    let calculatedLegs = 100;
+    let calculatedTraps = 100;
     let calculatedShoulders = 100;
-    let calculatedArms = 100;
+    let calculatedBiceps = 100;
+    let calculatedTriceps = 100;
     let calculatedCore = 100;
+    let calculatedLowerBack = 100;
+    let calculatedQuads = 100;
+    let calculatedHamstrings = 100;
+    let calculatedGlutes = 100;
+    let calculatedCalves = 100;
 
     workoutHistory.forEach(session => {
       const isCompleted = session.completed;
@@ -767,66 +781,149 @@ export default function Workouts({
         const allExNames = (session.exercises || []).map(e => (e.name || "").toLowerCase()).join(" ");
         const textToAnalyze = `${nameLower} ${allExNames}`;
 
+        // 1. CHEST (Pecho / Pectorales)
         if (
           textToAnalyze.includes("pecho") || textToAnalyze.includes("push") || 
-          textToAnalyze.includes("empuje") || textToAnalyze.includes("press") || 
-          textToAnalyze.includes("aperturas") || textToAnalyze.includes("fondos")
+          textToAnalyze.includes("empuje") || textToAnalyze.includes("banca") || 
+          textToAnalyze.includes("inclinado") || textToAnalyze.includes("aperturas") || 
+          textToAnalyze.includes("fondos") || textToAnalyze.includes("chest")
         ) {
           calculatedChest = Math.max(10, Math.round(calculatedChest - 55 * fatigueFactor));
-          calculatedShoulders = Math.max(15, Math.round(calculatedShoulders - 25 * fatigueFactor));
-          calculatedArms = Math.max(20, Math.round(calculatedArms - 20 * fatigueFactor));
+          calculatedTriceps = Math.max(15, Math.round(calculatedTriceps - 26 * fatigueFactor));
+          calculatedShoulders = Math.max(15, Math.round(calculatedShoulders - 22 * fatigueFactor));
         }
 
+        // 2. BACK / LATS (Espalda / Dorsales)
         if (
           textToAnalyze.includes("espalda") || textToAnalyze.includes("pull") || 
-          textToAnalyze.includes("jalón") || textToAnalyze.includes("remo") || 
-          textToAnalyze.includes("dominada") || textToAnalyze.includes("peso muerto")
+          textToAnalyze.includes("jalón") || textToAnalyze.includes("jalon") || 
+          textToAnalyze.includes("remo") || textToAnalyze.includes("dominada") || 
+          textToAnalyze.includes("lat") || textToAnalyze.includes("row")
         ) {
           calculatedBack = Math.max(10, Math.round(calculatedBack - 55 * fatigueFactor));
-          calculatedArms = Math.max(20, Math.round(calculatedArms - 28 * fatigueFactor));
+          calculatedBiceps = Math.max(15, Math.round(calculatedBiceps - 26 * fatigueFactor));
+          calculatedTraps = Math.max(20, Math.round(calculatedTraps - 22 * fatigueFactor));
         }
 
+        // 3. TRAPS (Trapecios)
         if (
-          textToAnalyze.includes("pierna") || textToAnalyze.includes("leg") || 
-          textToAnalyze.includes("squat") || textToAnalyze.includes("sentadilla") || 
-          textToAnalyze.includes("prensa") || textToAnalyze.includes("zancada")
+          textToAnalyze.includes("trapecio") || textToAnalyze.includes("shrug") || 
+          textToAnalyze.includes("encogimiento") || textToAnalyze.includes("al mentón") || 
+          textToAnalyze.includes("al menton")
         ) {
-          calculatedLegs = Math.max(10, Math.round(calculatedLegs - 60 * fatigueFactor));
+          calculatedTraps = Math.max(10, Math.round(calculatedTraps - 50 * fatigueFactor));
         }
 
+        // 4. SHOULDERS (Hombros / Deltoides)
         if (
           textToAnalyze.includes("hombro") || textToAnalyze.includes("militar") || 
-          textToAnalyze.includes("elevaciones") || textToAnalyze.includes("deltoid")
+          textToAnalyze.includes("elevaciones") || textToAnalyze.includes("deltoid") || 
+          textToAnalyze.includes("arnold") || textToAnalyze.includes("pájaros")
         ) {
-          calculatedShoulders = Math.max(10, Math.round(calculatedShoulders - 50 * fatigueFactor));
-          calculatedArms = Math.max(20, Math.round(calculatedArms - 15 * fatigueFactor));
+          calculatedShoulders = Math.max(10, Math.round(calculatedShoulders - 52 * fatigueFactor));
+          calculatedTriceps = Math.max(20, Math.round(calculatedTriceps - 18 * fatigueFactor));
         }
 
+        // 5. BICEPS (Bíceps)
         if (
-          textToAnalyze.includes("brazo") || textToAnalyze.includes("bíceps") || 
-          textToAnalyze.includes("biceps") || textToAnalyze.includes("tríceps") || 
-          textToAnalyze.includes("triceps") || textToAnalyze.includes("curl")
+          textToAnalyze.includes("bíceps") || textToAnalyze.includes("biceps") || 
+          textToAnalyze.includes("curl") || textToAnalyze.includes("martillo") || 
+          textToAnalyze.includes("predicador") || textToAnalyze.includes("chin-up")
         ) {
-          calculatedArms = Math.max(15, Math.round(calculatedArms - 45 * fatigueFactor));
+          calculatedBiceps = Math.max(10, Math.round(calculatedBiceps - 52 * fatigueFactor));
         }
 
+        // 6. TRICEPS (Tríceps)
+        if (
+          textToAnalyze.includes("tríceps") || textToAnalyze.includes("triceps") || 
+          textToAnalyze.includes("francés") || textToAnalyze.includes("frances") || 
+          textToAnalyze.includes("polea") || textToAnalyze.includes("patada") || 
+          textToAnalyze.includes("dips")
+        ) {
+          calculatedTriceps = Math.max(10, Math.round(calculatedTriceps - 52 * fatigueFactor));
+        }
+
+        // 7. QUADS (Cuádriceps)
+        if (
+          textToAnalyze.includes("cuádriceps") || textToAnalyze.includes("cuadriceps") || 
+          textToAnalyze.includes("sentadilla") || textToAnalyze.includes("squat") || 
+          textToAnalyze.includes("prensa") || textToAnalyze.includes("extensión") || 
+          textToAnalyze.includes("extension") || textToAnalyze.includes("hack") || 
+          textToAnalyze.includes("zancada") || textToAnalyze.includes("lunge")
+        ) {
+          calculatedQuads = Math.max(10, Math.round(calculatedQuads - 58 * fatigueFactor));
+          calculatedGlutes = Math.max(20, Math.round(calculatedGlutes - 28 * fatigueFactor));
+        }
+
+        // 8. HAMSTRINGS (Isquiotibiales / Femorales)
+        if (
+          textToAnalyze.includes("femoral") || textToAnalyze.includes("isquio") || 
+          textToAnalyze.includes("rumano") || textToAnalyze.includes("leg curl") || 
+          textToAnalyze.includes("stiff")
+        ) {
+          calculatedHamstrings = Math.max(10, Math.round(calculatedHamstrings - 58 * fatigueFactor));
+          calculatedGlutes = Math.max(20, Math.round(calculatedGlutes - 24 * fatigueFactor));
+        }
+
+        // 9. GLUTES (Glúteos)
+        if (
+          textToAnalyze.includes("glúteo") || textToAnalyze.includes("gluteo") || 
+          textToAnalyze.includes("hip thrust") || textToAnalyze.includes("patada de glúteo") || 
+          textToAnalyze.includes("puente") || textToAnalyze.includes("búlgara") || 
+          textToAnalyze.includes("bulgara")
+        ) {
+          calculatedGlutes = Math.max(10, Math.round(calculatedGlutes - 55 * fatigueFactor));
+        }
+
+        // 10. LOWER BACK (Zona Lumbar)
+        if (
+          textToAnalyze.includes("peso muerto") || textToAnalyze.includes("deadlift") || 
+          textToAnalyze.includes("hiperextension") || textToAnalyze.includes("buenos días") || 
+          textToAnalyze.includes("lumbar")
+        ) {
+          calculatedLowerBack = Math.max(10, Math.round(calculatedLowerBack - 55 * fatigueFactor));
+          calculatedHamstrings = Math.max(20, Math.round(calculatedHamstrings - 25 * fatigueFactor));
+          calculatedGlutes = Math.max(20, Math.round(calculatedGlutes - 25 * fatigueFactor));
+        }
+
+        // 11. CALVES (Pantorrillas / Gemelos)
+        if (
+          textToAnalyze.includes("gemelo") || textToAnalyze.includes("pantorrilla") || 
+          textToAnalyze.includes("calf") || textToAnalyze.includes("talones")
+        ) {
+          calculatedCalves = Math.max(10, Math.round(calculatedCalves - 55 * fatigueFactor));
+        }
+
+        // 12. CORE (Abdominales)
         if (
           textToAnalyze.includes("core") || textToAnalyze.includes("abdomen") || 
-          textToAnalyze.includes("plank") || textToAnalyze.includes("crunch") || 
+          textToAnalyze.includes("plank") || textToAnalyze.includes("plancha") || 
+          textToAnalyze.includes("crunch") || textToAnalyze.includes("rueda") || 
           textToAnalyze.includes("hiit")
         ) {
-          calculatedCore = Math.max(20, Math.round(calculatedCore - 35 * fatigueFactor));
+          calculatedCore = Math.max(20, Math.round(calculatedCore - 40 * fatigueFactor));
         }
       }
     });
 
+    const calculatedArms = Math.round((calculatedBiceps + calculatedTriceps) / 2);
+    const calculatedLegs = Math.round((calculatedQuads + calculatedHamstrings + calculatedGlutes) / 3);
+
     setRecovery({
       chest: calculatedChest,
       back: calculatedBack,
-      legs: calculatedLegs,
+      traps: calculatedTraps,
       shoulders: calculatedShoulders,
-      arms: calculatedArms,
+      biceps: calculatedBiceps,
+      triceps: calculatedTriceps,
       core: calculatedCore,
+      lowerBack: calculatedLowerBack,
+      quads: calculatedQuads,
+      hamstrings: calculatedHamstrings,
+      glutes: calculatedGlutes,
+      calves: calculatedCalves,
+      arms: calculatedArms,
+      legs: calculatedLegs,
       lastUpdated: new Date().toISOString()
     });
   }, [workoutHistory, initialTodayStr]);
@@ -3051,45 +3148,58 @@ export default function Workouts({
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               {[
-                { id: "chest" as MuscleGroupId, label: "Pecho / Empuje", value: recovery.chest, color: "from-blue-500 to-indigo-500" },
-                { id: "back" as MuscleGroupId, label: "Espalda / Tracción", value: recovery.back, color: "from-emerald-500 to-teal-500" },
-                { id: "legs" as MuscleGroupId, label: "Piernas (Glúteos/Cuádriceps)", value: recovery.legs, color: "from-orange-500 to-amber-500" },
-                { id: "shoulders" as MuscleGroupId, label: "Hombros", value: recovery.shoulders, color: "from-cyan-500 to-blue-500" },
-                { id: "arms" as MuscleGroupId, label: "Brazos (Bíceps/Tríceps)", value: recovery.arms, color: "from-purple-500 to-pink-500" },
-                { id: "core" as MuscleGroupId, label: "Core / Abdomen", value: recovery.core, color: "from-pink-500 to-rose-500" }
+                { id: "chest" as MuscleGroupId, label: "Pecho", color: "from-blue-500 to-indigo-500", group: "Empuje" },
+                { id: "shoulders" as MuscleGroupId, label: "Hombros", color: "from-cyan-500 to-blue-500", group: "Empuje" },
+                { id: "triceps" as MuscleGroupId, label: "Tríceps", color: "from-purple-500 to-indigo-500", group: "Empuje" },
+                
+                { id: "back" as MuscleGroupId, label: "Espalda / Dorsales", color: "from-emerald-500 to-teal-500", group: "Tirón" },
+                { id: "traps" as MuscleGroupId, label: "Trapecios", color: "from-teal-500 to-cyan-500", group: "Tirón" },
+                { id: "biceps" as MuscleGroupId, label: "Bíceps", color: "from-violet-500 to-purple-500", group: "Tirón" },
+
+                { id: "quads" as MuscleGroupId, label: "Cuádriceps", color: "from-orange-500 to-amber-500", group: "Pierna" },
+                { id: "hamstrings" as MuscleGroupId, label: "Femorales / Isquios", color: "from-amber-500 to-orange-500", group: "Pierna" },
+                { id: "glutes" as MuscleGroupId, label: "Glúteos", color: "from-rose-500 to-pink-500", group: "Pierna" },
+                { id: "calves" as MuscleGroupId, label: "Pantorrillas", color: "from-yellow-500 to-amber-500", group: "Pierna" },
+
+                { id: "core" as MuscleGroupId, label: "Abdominales / Core", color: "from-pink-500 to-rose-500", group: "Tronco" },
+                { id: "lowerBack" as MuscleGroupId, label: "Zona Lumbar", color: "from-emerald-500 to-teal-500", group: "Tronco" },
               ].map((muscle) => {
+                const val = getMuscleValue(recovery, muscle.id);
                 const isSelected = selectedRecoveryMuscle === muscle.id;
                 return (
                   <button 
                     key={muscle.id}
                     type="button"
                     onClick={() => setSelectedRecoveryMuscle(muscle.id)}
-                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden ${
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden ${
                       isSelected
                         ? "bg-white/[0.08] dark:bg-white/[0.06] border-emerald-500/60 ring-2 ring-emerald-500/30 shadow-lg"
                         : "bg-white dark:bg-[#161824] border-gray-200 dark:border-gray-800 hover:border-gray-400 dark:hover:border-gray-700 shadow-md"
                     }`}
                   >
-                    <div className="flex justify-between items-center text-xs mb-1.5">
-                      <span className="font-bold text-gray-900 dark:text-gray-200 truncate">{muscle.label}</span>
-                      <span className={`font-black font-mono ${
-                        muscle.value < 40 ? "text-rose-500 dark:text-rose-400" : muscle.value < 75 ? "text-amber-500 dark:text-amber-400" : "text-emerald-500 dark:text-emerald-400"
-                      }`}>{muscle.value}%</span>
+                    <div className="flex justify-between items-center text-xs mb-1">
+                      <div className="min-w-0 pr-1">
+                        <span className="font-bold text-gray-900 dark:text-gray-200 truncate block text-[11px]">{muscle.label}</span>
+                        <span className="text-[7.5px] uppercase tracking-wider text-gray-400 block font-mono">{muscle.group}</span>
+                      </div>
+                      <span className={`font-black font-mono shrink-0 text-xs ${
+                        val < 40 ? "text-rose-500 dark:text-rose-400" : val < 75 ? "text-amber-500 dark:text-amber-400" : "text-emerald-500 dark:text-emerald-400"
+                      }`}>{val}%</span>
                     </div>
 
                     {/* Progress bar */}
-                    <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-900 rounded-full overflow-hidden mb-2">
+                    <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-900 rounded-full overflow-hidden mb-1">
                       <motion.div
                         initial={{ width: 0 }}
-                        animate={{ width: `${muscle.value}%` }}
+                        animate={{ width: `${val}%` }}
                         className={`h-full bg-gradient-to-r ${muscle.color}`}
                       />
                     </div>
                     
-                    <span className="text-[8.5px] text-gray-400 dark:text-gray-500 block leading-tight">
-                      {muscle.value < 40 ? "🔥 Sobrecargado" : muscle.value < 75 ? "⚡ En recuperación" : "🔋 Listo para entrenar"}
+                    <span className="text-[8px] text-gray-400 dark:text-gray-500 block leading-tight font-medium">
+                      {val < 40 ? "🔥 Sobrecargado" : val < 75 ? "⚡ Regenerando" : "🔋 100% Listo"}
                     </span>
                   </button>
                 );

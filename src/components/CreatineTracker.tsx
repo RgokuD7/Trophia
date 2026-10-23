@@ -91,24 +91,6 @@ export default function CreatineTracker({
     setShowSetup(false);
   };
 
-  const handleFixToTwoDays = () => {
-    if (!profile || !onUpdateProfile) return;
-    const [year, month, day] = todayStr.split("-").map(Number);
-    const todayDate = new Date(year, month - 1, day);
-    const yesterdayDate = new Date(todayDate);
-    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-    const yesterdayStr = getLocalDateString(yesterdayDate);
-    const twoDays = [yesterdayStr, todayStr];
-    onUpdateProfile({
-      ...profile,
-      takesCreatine: true,
-      creatineHistory: twoDays,
-      lastCreatineIntake: todayStr,
-      creatineStartingMode: "new",
-    });
-    setShowSetup(false);
-  };
-
   const handleResetHistory = () => {
     if (!profile || !onUpdateProfile) return;
     onUpdateProfile({
@@ -422,31 +404,21 @@ export default function CreatineTracker({
               <p>
                 Configura tu punto de partida o ajusta tu historial de tomas:
               </p>
-              <div className="flex flex-col gap-2 pt-1">
+              <div className="flex gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={handleFixToTwoDays}
-                  className="w-full py-2.5 px-3 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold text-[10px] rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
+                  onClick={() => handleSetStartingMode("already_saturated")}
+                  className="flex-1 py-2 px-3 bg-white/10 hover:bg-white/15 text-white font-bold text-[10px] rounded-xl transition cursor-pointer"
                 >
-                  <Zap className="h-3.5 w-3.5" />
-                  <span>Ajustar a mis 2 días reales (ayer y hoy)</span>
+                  ⚡ Llevo semanas (100% saturado)
                 </button>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleSetStartingMode("already_saturated")}
-                    className="flex-1 py-2 px-3 bg-white/10 hover:bg-white/15 text-white font-bold text-[10px] rounded-xl transition cursor-pointer"
-                  >
-                    ⚡ Llevo semanas (100% saturado)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleResetHistory}
-                    className="flex-1 py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 font-bold text-[10px] rounded-xl transition cursor-pointer"
-                  >
-                    Empezar de 0
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleResetHistory}
+                  className="flex-1 py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 font-bold text-[10px] rounded-xl transition cursor-pointer"
+                >
+                  Empezar de 0
+                </button>
               </div>
             </motion.div>
           )}

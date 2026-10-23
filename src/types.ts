@@ -243,12 +243,21 @@ export interface WeeklyRoutinePlan {
 }
 
 export interface MuscleRecovery {
-  chest: number; // 0 to 100
-  back: number;
-  legs: number;
-  shoulders: number;
-  arms: number;
-  core: number;
+  chest: number; // 0 to 100 (Pecho / Pectorales)
+  back: number; // Espalda / Dorsales
+  legs: number; // Piernas (promedio global)
+  shoulders: number; // Hombros / Deltoides
+  arms: number; // Brazos (promedio global)
+  core: number; // Core / Abdomen
+  // Granular muscle groups
+  biceps?: number; // Bíceps braquial
+  triceps?: number; // Tríceps braquial
+  quads?: number; // Cuádriceps
+  hamstrings?: number; // Isquiotibiales / Femorales
+  glutes?: number; // Glúteos
+  calves?: number; // Pantorrillas / Gemelos
+  traps?: number; // Trapecios
+  lowerBack?: number; // Zona Lumbar / Espalda Baja
   lastUpdated: string; // ISO string
 }
 
