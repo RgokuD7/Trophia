@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Activity, Flame, Sparkles, ChevronRight, Layers } from "lucide-react";
 import { MuscleRecovery } from "../types";
+import DetailedMuscleSubAnatomy from "./DetailedMuscleSubAnatomy";
 
 export type MuscleGroupId =
   | "chest"
@@ -439,22 +440,55 @@ export default function MuscleRecoveryVisualizer({
                   />
                 </g>
 
-                {/* 5. CUÁDRICEPS / QUADS (Frontal thighs) */}
+                {/* 5. CUÁDRICEPS / QUADS (Separated into Vastus Lateralis, Rectus Femoris, Vastus Medialis) */}
                 <g onClick={() => handleSelect("quads")} className="cursor-pointer group">
-                  {/* Left Quad */}
+                  {/* Left Leg: Vastus Lateralis */}
                   <path
-                    d="M78 124 C68 136 64 162 66 182 C70 190 82 192 88 184 C92 172 94 150 92 126 Z"
+                    d="M66 130 C58 142 56 166 62 180 C68 180 72 165 70 145 Z"
                     fill="url(#grad-front-quads)"
                     stroke={selectedMuscleId === "quads" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "quads")).glowColor}
-                    strokeWidth={selectedMuscleId === "quads" ? "2.4" : "1.5"}
+                    strokeWidth={selectedMuscleId === "quads" ? "2.2" : "1.3"}
                     filter={getMuscleValue(recovery, "quads") < 40 ? "url(#fatiguePulseFront)" : undefined}
                   />
-                  {/* Right Quad */}
+                  {/* Left Leg: Rectus Femoris (Center) */}
                   <path
-                    d="M122 124 C132 136 136 162 134 182 C130 190 118 192 112 184 C108 172 106 150 108 126 Z"
+                    d="M72 126 C70 148 70 172 76 182 C82 172 82 148 80 126 Z"
                     fill="url(#grad-front-quads)"
                     stroke={selectedMuscleId === "quads" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "quads")).glowColor}
-                    strokeWidth={selectedMuscleId === "quads" ? "2.4" : "1.5"}
+                    strokeWidth={selectedMuscleId === "quads" ? "2.2" : "1.3"}
+                    filter={getMuscleValue(recovery, "quads") < 40 ? "url(#fatiguePulseFront)" : undefined}
+                  />
+                  {/* Left Leg: Vastus Medialis (Teardrop) */}
+                  <path
+                    d="M82 152 C82 168 84 182 89 182 C92 178 92 160 88 152 Z"
+                    fill="url(#grad-front-quads)"
+                    stroke={selectedMuscleId === "quads" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "quads")).glowColor}
+                    strokeWidth={selectedMuscleId === "quads" ? "2.2" : "1.3"}
+                    filter={getMuscleValue(recovery, "quads") < 40 ? "url(#fatiguePulseFront)" : undefined}
+                  />
+
+                  {/* Right Leg: Vastus Medialis (Teardrop) */}
+                  <path
+                    d="M118 152 C118 168 116 182 111 182 C108 178 108 160 112 152 Z"
+                    fill="url(#grad-front-quads)"
+                    stroke={selectedMuscleId === "quads" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "quads")).glowColor}
+                    strokeWidth={selectedMuscleId === "quads" ? "2.2" : "1.3"}
+                    filter={getMuscleValue(recovery, "quads") < 40 ? "url(#fatiguePulseFront)" : undefined}
+                  />
+                  {/* Right Leg: Rectus Femoris (Center) */}
+                  <path
+                    d="M128 126 C130 148 130 172 124 182 C118 172 118 148 120 126 Z"
+                    fill="url(#grad-front-quads)"
+                    stroke={selectedMuscleId === "quads" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "quads")).glowColor}
+                    strokeWidth={selectedMuscleId === "quads" ? "2.2" : "1.3"}
+                    filter={getMuscleValue(recovery, "quads") < 40 ? "url(#fatiguePulseFront)" : undefined}
+                  />
+                  {/* Right Leg: Vastus Lateralis */}
+                  <path
+                    d="M134 130 C142 142 144 166 138 180 C132 180 128 165 130 145 Z"
+                    fill="url(#grad-front-quads)"
+                    stroke={selectedMuscleId === "quads" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "quads")).glowColor}
+                    strokeWidth={selectedMuscleId === "quads" ? "2.2" : "1.3"}
                     filter={getMuscleValue(recovery, "quads") < 40 ? "url(#fatiguePulseFront)" : undefined}
                   />
                 </g>
@@ -568,22 +602,39 @@ export default function MuscleRecoveryVisualizer({
                   />
                 </g>
 
-                {/* 4. TRÍCEPS (Separated on posterior arm) */}
+                {/* 4. TRÍCEPS (Separated on posterior arm into lateral and long heads) */}
                 <g onClick={() => handleSelect("triceps")} className="cursor-pointer group">
-                  {/* Left Tricep */}
+                  {/* Left Tricep - Lateral Head */}
                   <path
-                    d="M48 80 C44 90 42 104 44 116 C46 120 50 122 53 116 C56 108 58 94 56 86 Z"
+                    d="M44 80 C40 88 41 98 44 110 C48 108 50 96 49 84 Z"
                     fill="url(#grad-back-triceps)"
                     stroke={selectedMuscleId === "triceps" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "triceps")).glowColor}
-                    strokeWidth={selectedMuscleId === "triceps" ? "2.4" : "1.4"}
+                    strokeWidth={selectedMuscleId === "triceps" ? "2.2" : "1.2"}
                     filter={getMuscleValue(recovery, "triceps") < 40 ? "url(#fatiguePulseBack)" : undefined}
                   />
-                  {/* Right Tricep */}
+                  {/* Left Tricep - Long Head */}
                   <path
-                    d="M152 80 C156 90 158 104 156 116 C154 120 150 122 147 116 C144 108 142 94 144 86 Z"
+                    d="M50 80 C50 94 48 108 53 118 C56 112 56 94 54 84 Z"
                     fill="url(#grad-back-triceps)"
                     stroke={selectedMuscleId === "triceps" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "triceps")).glowColor}
-                    strokeWidth={selectedMuscleId === "triceps" ? "2.4" : "1.4"}
+                    strokeWidth={selectedMuscleId === "triceps" ? "2.2" : "1.2"}
+                    filter={getMuscleValue(recovery, "triceps") < 40 ? "url(#fatiguePulseBack)" : undefined}
+                  />
+
+                  {/* Right Tricep - Long Head */}
+                  <path
+                    d="M150 80 C150 94 152 108 147 118 C144 112 144 94 146 84 Z"
+                    fill="url(#grad-back-triceps)"
+                    stroke={selectedMuscleId === "triceps" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "triceps")).glowColor}
+                    strokeWidth={selectedMuscleId === "triceps" ? "2.2" : "1.2"}
+                    filter={getMuscleValue(recovery, "triceps") < 40 ? "url(#fatiguePulseBack)" : undefined}
+                  />
+                  {/* Right Tricep - Lateral Head */}
+                  <path
+                    d="M156 80 C160 88 159 98 156 110 C152 108 150 96 151 84 Z"
+                    fill="url(#grad-back-triceps)"
+                    stroke={selectedMuscleId === "triceps" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "triceps")).glowColor}
+                    strokeWidth={selectedMuscleId === "triceps" ? "2.2" : "1.2"}
                     filter={getMuscleValue(recovery, "triceps") < 40 ? "url(#fatiguePulseBack)" : undefined}
                   />
                 </g>
@@ -624,42 +675,74 @@ export default function MuscleRecoveryVisualizer({
                   />
                 </g>
 
-                {/* 7. ISQUIOTIBIALES / FEMORALES (Hamstrings - Back of Thighs) */}
+                {/* 7. ISQUIOTIBIALES / FEMORALES (Separated into Biceps Femoris & Semitendinosus) */}
                 <g onClick={() => handleSelect("hamstrings")} className="cursor-pointer group">
-                  {/* Left Hamstring */}
+                  {/* Left Hamstring: Biceps Femoris (Outer) */}
                   <path
-                    d="M74 158 C84 160 88 178 86 192 C80 196 74 192 70 182 C68 172 70 162 74 158 Z"
+                    d="M71 158 C78 160 80 178 78 192 C74 194 70 186 68 174 C66 166 68 160 71 158 Z"
                     fill="url(#grad-back-hamstrings)"
                     stroke={selectedMuscleId === "hamstrings" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "hamstrings")).glowColor}
-                    strokeWidth={selectedMuscleId === "hamstrings" ? "2.4" : "1.4"}
+                    strokeWidth={selectedMuscleId === "hamstrings" ? "2.2" : "1.3"}
                     filter={getMuscleValue(recovery, "hamstrings") < 40 ? "url(#fatiguePulseBack)" : undefined}
                   />
-                  {/* Right Hamstring */}
+                  {/* Left Hamstring: Semitendinosus (Inner) */}
                   <path
-                    d="M126 158 C116 160 112 178 114 192 C120 196 126 192 130 182 C132 172 130 162 126 158 Z"
+                    d="M80 158 C86 160 87 178 85 192 C82 194 79 186 78 174 C77 166 78 160 80 158 Z"
                     fill="url(#grad-back-hamstrings)"
                     stroke={selectedMuscleId === "hamstrings" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "hamstrings")).glowColor}
-                    strokeWidth={selectedMuscleId === "hamstrings" ? "2.4" : "1.4"}
+                    strokeWidth={selectedMuscleId === "hamstrings" ? "2.2" : "1.3"}
+                    filter={getMuscleValue(recovery, "hamstrings") < 40 ? "url(#fatiguePulseBack)" : undefined}
+                  />
+
+                  {/* Right Hamstring: Semitendinosus (Inner) */}
+                  <path
+                    d="M120 158 C114 160 113 178 115 192 C118 194 121 186 122 174 C123 166 122 160 120 158 Z"
+                    fill="url(#grad-back-hamstrings)"
+                    stroke={selectedMuscleId === "hamstrings" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "hamstrings")).glowColor}
+                    strokeWidth={selectedMuscleId === "hamstrings" ? "2.2" : "1.3"}
+                    filter={getMuscleValue(recovery, "hamstrings") < 40 ? "url(#fatiguePulseBack)" : undefined}
+                  />
+                  {/* Right Hamstring: Biceps Femoris (Outer) */}
+                  <path
+                    d="M129 158 C122 160 120 178 122 192 C126 194 130 186 132 174 C134 166 132 160 129 158 Z"
+                    fill="url(#grad-back-hamstrings)"
+                    stroke={selectedMuscleId === "hamstrings" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "hamstrings")).glowColor}
+                    strokeWidth={selectedMuscleId === "hamstrings" ? "2.2" : "1.3"}
                     filter={getMuscleValue(recovery, "hamstrings") < 40 ? "url(#fatiguePulseBack)" : undefined}
                   />
                 </g>
 
-                {/* 8. PANTORRILLAS / GEMELOS (Calves - Gastrocnemius Back) */}
+                {/* 8. PANTORRILLAS / GEMELOS (Separated into medial & lateral heads) */}
                 <g onClick={() => handleSelect("calves")} className="cursor-pointer group">
+                  {/* Left Calf - Lateral & Medial heads */}
                   <path
-                    d="M72 196 C66 206 68 224 74 234 C78 236 82 232 84 220 C86 208 82 198 72 196 Z"
+                    d="M68 196 C64 204 65 218 69 226 C72 226 74 216 73 204 Z"
                     fill="url(#grad-back-calves)"
                     stroke={selectedMuscleId === "calves" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "calves")).glowColor}
-                    strokeWidth={selectedMuscleId === "calves" ? "2.2" : "1.3"}
-                    filter={getMuscleValue(recovery, "calves") < 40 ? "url(#fatiguePulseBack)" : undefined}
+                    strokeWidth={selectedMuscleId === "calves" ? "2" : "1.2"}
                   />
                   <path
-                    d="M128 196 C134 206 132 224 126 234 C122 236 118 232 116 220 C114 208 118 198 128 196 Z"
+                    d="M74 196 C74 206 75 220 78 228 C82 228 84 218 83 204 Z"
                     fill="url(#grad-back-calves)"
                     stroke={selectedMuscleId === "calves" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "calves")).glowColor}
-                    strokeWidth={selectedMuscleId === "calves" ? "2.2" : "1.3"}
-                    filter={getMuscleValue(recovery, "calves") < 40 ? "url(#fatiguePulseBack)" : undefined}
+                    strokeWidth={selectedMuscleId === "calves" ? "2" : "1.2"}
                   />
+                  <line x1="75" y1="228" x2="76" y2="238" stroke="#ffffff40" strokeWidth="2" strokeLinecap="round" />
+
+                  {/* Right Calf - Medial & Lateral heads */}
+                  <path
+                    d="M126 196 C126 206 125 220 122 228 C118 228 116 218 117 204 Z"
+                    fill="url(#grad-back-calves)"
+                    stroke={selectedMuscleId === "calves" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "calves")).glowColor}
+                    strokeWidth={selectedMuscleId === "calves" ? "2" : "1.2"}
+                  />
+                  <path
+                    d="M132 196 C136 204 135 218 131 226 C128 226 126 216 127 204 Z"
+                    fill="url(#grad-back-calves)"
+                    stroke={selectedMuscleId === "calves" ? "#ffffff" : getMuscleStatus(getMuscleValue(recovery, "calves")).glowColor}
+                    strokeWidth={selectedMuscleId === "calves" ? "2" : "1.2"}
+                  />
+                  <line x1="125" y1="228" x2="124" y2="238" stroke="#ffffff40" strokeWidth="2" strokeLinecap="round" />
                 </g>
               </svg>
             </motion.div>
@@ -725,6 +808,16 @@ export default function MuscleRecoveryVisualizer({
 
         <div className="flex items-center justify-between pt-1 border-t border-white/5 text-[9.5px] text-gray-400">
           <span>{activeMeta.description}</span>
+        </div>
+
+        {/* Micro-Anatomy Zoom Section */}
+        <div className="pt-2">
+          <DetailedMuscleSubAnatomy
+            muscleId={selectedMuscleId}
+            recoveryValue={activeValue}
+            glowColor={activeStatus.glowColor}
+            secondaryColor={activeStatus.secondaryColor}
+          />
         </div>
       </motion.div>
 
